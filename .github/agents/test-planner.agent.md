@@ -48,6 +48,14 @@ Check the repository contract using shell commands (mvn/gradle files, deps):
 - JaCoCo runnable — pom config NOT required; absence means it will be
   invoked via fully-qualified goals
   (org.jacoco:jacoco-maven-plugin:<ver>:prepare-agent / :report),
+- mutation capability runnable — PIT pom config NOT required for JUnit 4
+  (org.pitest:pitest-maven:<ver>:mutationCoverage). EXCEPTION: with
+  JUnit 5, PIT needs pitest-junit5-plugin declared as a plugin dependency
+  in the pom (cannot be added via CLI). If JUnit 5 AND that entry is
+  missing: this is the ONLY pom requirement — report it under `missing`
+  as `pitest-junit5-plugin (one pom entry required)` instead of failing
+  the whole contract silently,
+- tests can run (do NOT run the full suite; verify the command exists)
 
 Record the resolved invocation mode (pom-configured vs fully-qualified
 goals) under `context.notes` — the Reviewer will need it later.
@@ -230,10 +238,10 @@ DELTA INTEGRITY (mandatory when based_on_version is set):
   NEW scenario with `split_from: <original id>`,
 - before finishing, self-check: previous version scenario count ==
   count of (UNCHANGED + MODIFIED + REMOVED) entries in the new version.
-If a previous plan exists, do NOT edit it: read it, bump `plan_version`,
-set `based_on_version`, and mark every scenario with
-`change: UNCHANGED | MODIFIED | NEW` relative to the previous version.
-For a first plan use `plan_version: 1` and `change: NEW` everywhere.
+  If a previous plan exists, do NOT edit it: read it, bump `plan_version`,
+  set `based_on_version`, and mark every scenario with
+  `change: UNCHANGED | MODIFIED | NEW` relative to the previous version.
+  For a first plan use `plan_version: 1` and `change: NEW` everywhere.
 
 Then verify every evidence ref mechanically and validate the schema:
 
@@ -242,11 +250,24 @@ $PYBIN .github/agents/test-planner/scripts/verify_refs.py <plan file> --repo .
 $PYBIN .github/agents/common/scripts/validate_plan.py .test-agent/plans/<TargetSlug>/plan-v<N>.md .github/agents/test-planner/schemas/test-plan.schema.json
 ```
 
-If verify_refs reports INVALID_EVIDENCE: remove or fix the failing refs —
-if a scenario loses its evidence this way, it moves to `deferred` (it was
-never truly backed). If schema validation fails, fix the plan. Re-run both
-until clean. Never leave an invalid
-plan on disk.
+Handling verifier/validator output — STRICT:
+- verify_refs INVALID_EVIDENCE: a failing ref means the EVIDENCE is wrong,
+  not that you should delete data to pass. Re-examine the source: correct
+  the ref to what the code actually shows, or if there is genuinely no
+  backing, move the scenario to `deferred`. Never drop a scenario silently.
+- validate_plan INVALID_ARTIFACT: this signals YOU produced malformed
+  output. Fix the SPECIFIC field the validator names (e.g. a missing
+  required key, a wrong enum value) to match the intended content. You may
+  NOT make a plan pass by deleting scenarios, stripping evidence, or
+  removing content whose absence changes the plan's meaning. Dropping the
+  optional `method` key for a whole-class target is allowed (it was never
+  supposed to be there); deleting a scenario or its evidence to silence an
+  error is FORBIDDEN.
+- If you cannot make the artifact both valid AND faithful to the evidence,
+  STOP and report the validator output to the user verbatim with a short
+  explanation — do not improvise a passing-but-degraded plan.
+  Re-run verify_refs and validate_plan until clean, within these limits. Never leave an invalid
+  plan on disk.
 
 Finally print a short summary to the user: status, number of scenarios,
 number deferred, and the 3 most important evidence findings.
@@ -275,6 +296,8 @@ The JSON payload:
   "schema_version": 1,
   "plan_version": 1,
   "target": { "class": "OrderService", "method": "createOrder" },
+  // whole-class target: write { "class": "OrderService" } — OMIT the method
+  // key entirely; never "method": null or "method": "".
   "mode": "legacy",
   "characterization": true,
   "status": "READY_PARTIAL",

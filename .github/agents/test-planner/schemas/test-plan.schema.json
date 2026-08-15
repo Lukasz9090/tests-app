@@ -34,7 +34,8 @@
         },
         "method": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "OMIT this key entirely for whole-class targets — never null or empty."
         }
       }
     },
