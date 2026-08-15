@@ -38,28 +38,36 @@ def verify(ref: str, etype: str, repo: Path):
         return (repo / p).exists(), f"path {p}"
 
     # Class#member or Class.member (member = lowercase start or CONSTANT)
-    m = re.match(r"^([A-Z]\w*)[#.](\w+)$", r)
-    if m and not m.group(2)[0].isupper() or (m and m.group(2).isupper()):
+    m = re.match(r"^([A-Z]\w*)#(\w+)$", r)
+    if m:
         cls, member = m.group(1), m.group(2)
-        for f in find_file(cls, repo):
+        files = find_file(cls, repo)
+        for f in files:
             if re.search(rf"\b{re.escape(member)}\b",
                          f.read_text(encoding="utf-8", errors="replace")):
-                return True, f"{cls}.java contains '{member}'"
+                where = f" (of {len(files)} {cls}.java files)" if len(files) > 1 else ""
+                return True, f"{cls}.java contains '{member}'{where}"
         return False, f"no {cls}.java containing '{member}'"
 
-    # Enum.VALUE / Class.Inner — dotted with uppercase tail: check outer file
-    m = re.match(r"^([A-Z]\w*)\.([A-Z]\w*)$", r)
+    # Dotted ref: Outer.MEMBER, Outer.Inner.MEMBER, Enum.VALUE, etc.
+    # First segment = file to find; last segment = symbol to locate inside it.
+    m = re.match(r"^([A-Z]\w*)(?:\.[A-Za-z]\w*)+$", r)
     if m:
-        cls, tail = m.group(1), m.group(2)
-        for f in find_file(cls, repo):
+        cls = m.group(1)
+        tail = r.split(".")[-1]
+        files = find_file(cls, repo)
+        for f in files:
             if re.search(rf"\b{re.escape(tail)}\b",
                          f.read_text(encoding="utf-8", errors="replace")):
-                return True, f"{cls}.java contains '{tail}'"
-        return False, f"no {cls}.java containing '{tail}'"
+                where = f" (of {len(files)} files)" if len(files) > 1 else ""
+                return True, f"{cls}.java contains '{tail}'{where}"
+        return False, f"no {cls}.java containing '{tail}' (looked in {len(files)} file(s))"
 
     # bare ClassName
     if re.match(r"^[A-Z]\w*$", r):
         hits = find_file(r, repo)
+        if len(hits) > 1:
+            return True, f"{r}.java found in {len(hits)} modules (ambiguous)"
         return bool(hits), f"{r}.java {'found' if hits else 'NOT found'}"
 
     return False, "unrecognized ref shape"

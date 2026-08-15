@@ -1,6 +1,6 @@
 ---
 name: test-planner
-description:  Repo-agnostic Test Planner for Java repositories. Discovers the target class,
+description: Repo-agnostic Test Planner for Java repositories. Discovers the target class,
   collects evidence from the repository (existing tests, builders, fixtures,
   enums, usages), plans test scenarios with evidence-backed realistic data and
   writes a versioned test-plan.md. Does NOT generate test code.
@@ -58,6 +58,15 @@ Check the repository contract using shell commands (mvn/gradle files, deps):
 
 Record the resolved invocation mode (pom-configured vs fully-qualified
 goals) under `context.notes` — the Reviewer will need it later.
+
+MULTI-MODULE REPOS: the contract may be satisfied across pom hierarchy —
+JaCoCo/PIT/JUnit are often declared in a PARENT pom (<pluginManagement>,
+<dependencyManagement>) and inherited by module poms. Before reporting a
+missing plugin, check parent pom(s) up the <parent> chain, not only the
+module pom of the target. Record in context.notes which module owns the
+target and which pom provides the mutation/coverage config. If the target
+lives in module M, the Reviewer will need to scope runs to that module
+(e.g. `mvn -pl M -am ...`).
 
 If any check fails, write the plan file containing ONLY:
 
@@ -126,6 +135,9 @@ $PYBIN .github/agents/test-planner/scripts/build_context.py <ClassName[.method]>
 ```
 
 Then read its output: `.test-agent/context/<TargetSlug>/context-pack.md`.
+If build_context reports TARGET_AMBIGUOUS (same class name in multiple
+modules), STOP and ask the user which module's class is the target
+(qualify by package/module path) — never silently pick one.
 This pack (target, dependencies, existing tests, builders, enums, MANIFEST)
 is your PRIMARY and normally ONLY source of repository knowledge. The
 budget is enforced by the script, not by you.
@@ -221,10 +233,10 @@ DELTA INTEGRITY (mandatory when based_on_version is set):
   NEW scenario with `split_from: <original id>`,
 - before finishing, self-check: previous version scenario count ==
   count of (UNCHANGED + MODIFIED + REMOVED) entries in the new version.
-If a previous plan exists, do NOT edit it: read it, bump `plan_version`,
-set `based_on_version`, and mark every scenario with
-`change: UNCHANGED | MODIFIED | NEW` relative to the previous version.
-For a first plan use `plan_version: 1` and `change: NEW` everywhere.
+  If a previous plan exists, do NOT edit it: read it, bump `plan_version`,
+  set `based_on_version`, and mark every scenario with
+  `change: UNCHANGED | MODIFIED | NEW` relative to the previous version.
+  For a first plan use `plan_version: 1` and `change: NEW` everywhere.
 
 Then verify every evidence ref mechanically and validate the schema:
 
