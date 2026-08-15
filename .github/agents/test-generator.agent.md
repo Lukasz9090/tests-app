@@ -1,6 +1,7 @@
 ---
 name: test-generator
-description:   Test Generator (v0). Implements test scenarios from an approved test plan
+description: >
+  Test Generator (v0). Implements test scenarios from an approved test plan
   produced by the test-planner agent. Writes JUnit test code and a generation
   report. Does NOT plan scenarios, does NOT run tests, does NOT modify
   production code.

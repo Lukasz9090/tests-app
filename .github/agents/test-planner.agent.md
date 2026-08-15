@@ -1,6 +1,7 @@
 ---
 name: test-planner
-description: Repo-agnostic Test Planner for Java repositories. Discovers the target class,
+description: >
+  Repo-agnostic Test Planner for Java repositories. Discovers the target class,
   collects evidence from the repository (existing tests, builders, fixtures,
   enums, usages), plans test scenarios with evidence-backed realistic data and
   writes a versioned test-plan.md. Does NOT generate test code.
@@ -47,6 +48,14 @@ Check the repository contract using shell commands (mvn/gradle files, deps):
 - JaCoCo runnable — pom config NOT required; absence means it will be
   invoked via fully-qualified goals
   (org.jacoco:jacoco-maven-plugin:<ver>:prepare-agent / :report),
+- mutation capability runnable — PIT pom config NOT required for JUnit 4
+  (org.pitest:pitest-maven:<ver>:mutationCoverage). EXCEPTION: with
+  JUnit 5, PIT needs pitest-junit5-plugin declared as a plugin dependency
+  in the pom (cannot be added via CLI). If JUnit 5 AND that entry is
+  missing: this is the ONLY pom requirement — report it under `missing`
+  as `pitest-junit5-plugin (one pom entry required)` instead of failing
+  the whole contract silently,
+- tests can run (do NOT run the full suite; verify the command exists)
 
 Record the resolved invocation mode (pom-configured vs fully-qualified
 goals) under `context.notes` — the Reviewer will need it later.
@@ -60,13 +69,16 @@ target and which pom provides the mutation/coverage config. If the target
 lives in module M, the Reviewer will need to scope runs to that module
 (e.g. `mvn -pl M -am ...`).
 
-If any check fails, write the plan file containing ONLY:
+If any check fails, write the plan file (markdown container) whose single
+```json fence contains ONLY:
 
-```yaml
-schema_version: 1
-plan_version: 1
-status: UNSUPPORTED_REPOSITORY
-missing: [<failed items>]
+```json
+{
+  "schema_version": 1,
+  "plan_version": 1,
+  "status": "UNSUPPORTED_REPOSITORY",
+  "missing": ["<failed items>"]
+}
 ```
 
 and STOP. Do not improvise workarounds.
@@ -168,8 +180,9 @@ Design unit/integration test scenarios for the target:
 - do not duplicate scenarios already covered by existing tests — instead list
   those tests under `context.existing_tests`,
 - assign `priority`: high / medium / low,
-- add `implementation_hints` per scenario (test class/method/file path
-  following the repo's observed test conventions).
+- add `implementation_hints` per scenario as an OBJECT with keys
+  `test_class`, `test_method`, `test_file` (following the repo's observed
+  test conventions) — NOT a list of strings.
 
 Mode behavior:
 - `legacy`: evidence = implementation + repo artifacts. Set top-level
@@ -225,16 +238,16 @@ DELTA INTEGRITY (mandatory when based_on_version is set):
   NEW scenario with `split_from: <original id>`,
 - before finishing, self-check: previous version scenario count ==
   count of (UNCHANGED + MODIFIED + REMOVED) entries in the new version.
-  If a previous plan exists, do NOT edit it: read it, bump `plan_version`,
-  set `based_on_version`, and mark every scenario with
-  `change: UNCHANGED | MODIFIED | NEW` relative to the previous version.
-  For a first plan use `plan_version: 1` and `change: NEW` everywhere.
+If a previous plan exists, do NOT edit it: read it, bump `plan_version`,
+set `based_on_version`, and mark every scenario with
+`change: UNCHANGED | MODIFIED | NEW` relative to the previous version.
+For a first plan use `plan_version: 1` and `change: NEW` everywhere.
 
 Then verify every evidence ref mechanically and validate the schema:
 
 ```
 $PYBIN .github/agents/test-planner/scripts/verify_refs.py <plan file> --repo .
-$PYBIN .test-agent/scripts/validate_plan.py .test-agent/plans/<TargetSlug>/plan-v<N>.md
+$PYBIN .github/agents/common/scripts/validate_plan.py .test-agent/plans/<TargetSlug>/plan-v<N>.md .github/agents/test-planner/schemas/test-plan.schema.json
 ```
 
 If verify_refs reports INVALID_EVIDENCE: remove or fix the failing refs —
@@ -248,48 +261,72 @@ number deferred, and the 3 most important evidence findings.
 
 ## Plan format (contract — follow exactly)
 
-```yaml
-schema_version: 1
-plan_version: 1
-target:
-  class: OrderService
-  method: createOrder        # omit if whole class
-mode: legacy
-characterization: true       # only in legacy mode
-status: READY_PARTIAL
+Org policy blocks .json and .yaml files for Copilot, so the plan lives in a
+MARKDOWN CONTAINER: `.test-agent/plans/<TargetSlug>/plan-v<N>.md` with this
+structure:
 
-context:
-  source_roots: [...]
-  test_roots: [...]
-  related_classes: [...]
-  existing_tests: [...]
-  builders: [...]
-  fixtures: [...]
-  relevant_enums: [...]
-  notes: []                  # e.g. budget degradation
+1. a title line `# Test Plan: <Target>`,
+2. a SHORT human summary (status, scenario count, deferred count, key
+   findings) derived from the JSON — NOT the contract; on conflict JSON wins,
+3. EXACTLY ONE fenced code block starting with ```json — this block IS the
+   plan and the single source of truth.
 
-scenarios:
-  - id: TC01
-    change: NEW
-    description: active customer can create order
-    priority: high
-    confidence: 0.0          # filled by script
-    data:
-      customer:
-        source: existing_builder
-        ref: CustomerBuilder.activeBusiness
-    evidence:
-      - type: existing_test
-        ref: OrderServiceTest#createsOrderForActiveCustomer
-      - type: builder
-        ref: CustomerBuilder.activeBusiness
+Write strict, valid JSON inside the fence — double quotes, no trailing
+commas, no comments. Never put plan data only in the prose. Never create a
+second json fence. The `evidence_strength` and `confidence` fields are
+filled by compute_confidence.py — do not invent their values.
 
-deferred:
-  - id: TC07
-    description: PARTNER customer creates order
-    confidence: 0.0
-    reason: only enum value as evidence
-    question: "Is CustomerType=PARTNER a valid business state for creating an Order?"
+The JSON payload:
+
+```json
+{
+  "schema_version": 1,
+  "plan_version": 1,
+  "target": { "class": "OrderService", "method": "createOrder" },
+  "mode": "legacy",
+  "characterization": true,
+  "status": "READY_PARTIAL",
+  "context": {
+    "source_roots": ["..."], "test_roots": ["..."],
+    "related_classes": ["..."], "existing_tests": ["..."],
+    "builders": ["..."], "fixtures": ["..."],
+    "relevant_enums": ["..."], "notes": []
+  },
+  "scenarios": [
+    {
+      "id": "TC01",
+      "change": "NEW",
+      "description": "active customer can create order",
+      "priority": "high",
+      "evidence_strength": "strong",
+      "confidence": 0.0,
+      "data": {
+        "customer": { "source": "existing_builder", "ref": "CustomerBuilder.activeBusiness" }
+      },
+      "implementation_hints": {
+        "test_class": "OrderServiceTest",
+        "test_method": "shouldCreateOrderForActiveCustomer",
+        "test_file": "src/test/java/com/acme/OrderServiceTest.java"
+      },
+      "evidence": [
+        { "type": "existing_test", "ref": "OrderServiceTest#createsOrderForActiveCustomer" },
+        { "type": "builder", "ref": "CustomerBuilder.activeBusiness" }
+      ]
+    }
+  ],
+  "deferred": [
+    {
+      "id": "TC07",
+      "change": "NEW",
+      "description": "PARTNER customer creates order",
+      "evidence_strength": "weak",
+      "confidence": 0.0,
+      "reason": "only enum value as evidence",
+      "question": "Is CustomerType=PARTNER a valid business state for creating an Order?",
+      "evidence": [ { "type": "enum", "ref": "CustomerType.PARTNER" } ]
+    }
+  ]
+}
 ```
 
 ## Hard prohibitions
