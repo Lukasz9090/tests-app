@@ -1,7 +1,6 @@
 ---
 name: test-planner
-description: >
-  Repo-agnostic Test Planner for Java repositories. Discovers the target class,
+description:  Repo-agnostic Test Planner for Java repositories. Discovers the target class,
   collects evidence from the repository (existing tests, builders, fixtures,
   enums, usages), plans test scenarios with evidence-backed realistic data and
   writes a versioned test-plan.md. Does NOT generate test code.
