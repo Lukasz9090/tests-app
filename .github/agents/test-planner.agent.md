@@ -48,14 +48,7 @@ Check the repository contract using shell commands (mvn/gradle files, deps):
 - JaCoCo runnable — pom config NOT required; absence means it will be
   invoked via fully-qualified goals
   (org.jacoco:jacoco-maven-plugin:<ver>:prepare-agent / :report),
-- mutation capability runnable — PIT pom config NOT required for JUnit 4
-  (org.pitest:pitest-maven:<ver>:mutationCoverage). EXCEPTION: with
-  JUnit 5, PIT needs pitest-junit5-plugin declared as a plugin dependency
-  in the pom (cannot be added via CLI). If JUnit 5 AND that entry is
-  missing: this is the ONLY pom requirement — report it under `missing`
-  as `pitest-junit5-plugin (one pom entry required)` instead of failing
-  the whole contract silently,
-- tests can run (do NOT run the full suite; verify the command exists)
+
 
 Record the resolved invocation mode (pom-configured vs fully-qualified
 goals) under `context.notes` — the Reviewer will need it later.
