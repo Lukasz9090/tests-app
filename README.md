@@ -24,6 +24,12 @@ mvn spring-boot:run
 - `POST /api/appointments/{id}/reschedule`
 - `GET /api/appointments/availability?serviceOfferId=1&date=2026-08-13`
 - `GET /api/appointments/dashboard`
+### Powiadomienia
+- `GET /api/notifications`
+- `GET /api/notifications?customerEmail=john@example.com`
+- `GET /api/notifications?appointmentId=1`
+- `POST /api/notifications/appointments/{appointmentId}/reminder`
+- `POST /api/notifications/reminders/dispatch?withinHours=24`
 ## Reguly biznesowe
 - godziny pracy: 09:00-17:00,
 - wizyty tylko co 15 minut,
@@ -32,3 +38,4 @@ mvn spring-boot:run
 - maksymalnie 3 przyszle wizyty na klienta,
 - anulowanie tylko na ponad godzine przed terminem,
 - uslugi mozna wylaczyc tylko, jesli nie maja aktywnych przyszlych wizyt.
+- po utworzeniu/anulowaniu/przelozeniu wizyty tworzone sa automatyczne powiadomienia email.

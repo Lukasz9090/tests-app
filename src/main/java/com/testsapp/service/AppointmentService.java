@@ -33,9 +33,15 @@ public class AppointmentService {
     private static final Duration MAX_PLANNING_WINDOW = Duration.ofDays(90);
     private final AppointmentRepository appointmentRepository;
     private final ServiceOfferRepository serviceOfferRepository;
-    public AppointmentService(AppointmentRepository appointmentRepository, ServiceOfferRepository serviceOfferRepository) {
+    private final NotificationService notificationService;
+    public AppointmentService(
+            AppointmentRepository appointmentRepository,
+            ServiceOfferRepository serviceOfferRepository,
+            NotificationService notificationService
+    ) {
         this.appointmentRepository = appointmentRepository;
         this.serviceOfferRepository = serviceOfferRepository;
+        this.notificationService = notificationService;
     }
     public List<AppointmentResponse> listAppointments(String customerEmail, AppointmentStatus status) {
         List<Appointment> appointments = appointmentRepository.findAll();
@@ -67,7 +73,9 @@ public class AppointmentService {
                 price,
                 request.notes()
         );
-        return toResponse(appointmentRepository.save(appointment));
+        Appointment saved = appointmentRepository.save(appointment);
+        notificationService.sendAppointmentCreatedNotification(saved);
+        return toResponse(saved);
     }
     public AppointmentResponse cancel(long id) {
         Appointment appointment = getAppointmentOrThrow(id);
@@ -79,6 +87,7 @@ public class AppointmentService {
         }
         appointment.cancel();
         appointmentRepository.save(appointment);
+        notificationService.sendAppointmentCancelledNotification(appointment);
         return toResponse(appointment);
     }
     public AppointmentResponse reschedule(long id, RescheduleAppointmentRequest request) {
@@ -93,6 +102,7 @@ public class AppointmentService {
             throw new ApiException(HttpStatus.CONFLICT, "Wizyty bliskiej terminu nie mozna przelozyc.");
         }
         ServiceOffer offer = getActiveServiceOfferOrThrow(appointment.getServiceOfferId());
+        LocalDateTime previousStartTime = appointment.getStartTime();
         LocalDateTime newStart = normalizeStartTime(request.newStartTime());
         LocalDateTime newEnd = newStart.plusMinutes(offer.getDurationMinutes());
         validateTimeWindow(newStart, newEnd);
@@ -100,6 +110,7 @@ public class AppointmentService {
         BigDecimal newPrice = calculatePrice(offer, newStart);
         appointment.reschedule(newStart, newEnd, newPrice);
         appointmentRepository.save(appointment);
+        notificationService.sendAppointmentRescheduledNotification(appointment, previousStartTime);
         return toResponse(appointment);
     }
     public List<AvailabilitySlotResponse> availability(long serviceOfferId, LocalDate date) {

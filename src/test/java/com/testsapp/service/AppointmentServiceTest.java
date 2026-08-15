@@ -51,6 +51,9 @@ class AppointmentServiceTest {
     @Mock
     ServiceOfferRepository serviceOfferRepository;
 
+    @Mock
+    NotificationService notificationService;
+
     @InjectMocks
     AppointmentService appointmentService;
 
@@ -259,6 +262,7 @@ class AppointmentServiceTest {
         assertThat(result).isNotNull();
         assertThat(result.status()).isEqualTo(AppointmentStatus.SCHEDULED);
         assertThat(result.customerEmail()).isEqualTo("john@example.com");
+        verify(notificationService).sendAppointmentCreatedNotification(any(Appointment.class));
     }
 
     // TC08
