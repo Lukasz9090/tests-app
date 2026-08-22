@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import argparse
 import sys
-import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import _common as c
@@ -77,11 +76,16 @@ def main() -> int:
         fqcn, _ = c.target_fqcn(repo, plan)
         _, method = c.target_scope(plan)
         gate = c.gate_value(repo, GATE_KEY, args.gate)
-        jacoco = c.tool_version(repo, "jacoco", args.jacoco_version)
+        jacoco = c.tool_version(repo, "jacoco", args.jacoco_version, module)
 
         exec_file = c.module_dir(repo, module) / "target" / "jacoco.exec"
         if not exec_file.exists():
             raise c.CheckError(f"{exec_file} not found - run run_tests.py first")
+        if exec_file.stat().st_size == 0:
+            raise c.CheckError(
+                f"{exec_file} is empty - the tests ran without the JaCoCo agent, so any report "
+                "would be empty too; re-run run_tests.py and read its diagnosis"
+            )
 
         code, output = c.run(
             [c.mvn_executable(), "-B"]
@@ -90,14 +94,28 @@ def main() -> int:
             repo,
         )
         xml_path = c.module_dir(repo, module) / "target" / "site" / "jacoco" / "jacoco.xml"
+        if code != 0:
+            raise c.CheckError(
+                "jacoco:report failed (maven exit %s):\n%s" % (code, c.maven_error(output))
+            )
         if not xml_path.exists():
             raise c.CheckError(
-                "jacoco.xml not produced (maven exit %s). Tail:\n%s" % (code, output[-1200:])
+                "jacoco.xml not produced - check that XML is among the report formats.\n%s"
+                % c.maven_error(output)
+            )
+        if xml_path.stat().st_mtime < exec_file.stat().st_mtime:
+            raise c.CheckError(
+                f"{xml_path} is older than {exec_file.name} - stale report, the goal did not rewrite it"
             )
 
-        root = ET.parse(xml_path).getroot()
+        root = c.parse_xml(xml_path)
         package, klass = find_class(root, fqcn)
         if klass is None:
+            if not root.findall("package"):
+                raise c.CheckError(
+                    f"{xml_path} contains no packages - the report has no execution data "
+                    "(agent not attached, or the exec file belongs to another module)"
+                )
             raise c.CheckError(f"{fqcn} absent from jacoco.xml - wrong module or class never loaded")
 
         scope = f"{fqcn}.{method}" if method else fqcn

@@ -42,9 +42,9 @@ def parse_surefire(reports: Path) -> list:
         return results
     for xml in sorted(reports.glob("TEST-*.xml")):
         try:
-            root = ET.parse(xml).getroot()
-        except ET.ParseError:
-            continue
+            root = c.parse_xml(xml)
+        except (c.CheckError, ET.ParseError):
+            continue  # one unreadable surefire file must not sink the whole check
         for case in root.iter("testcase"):
             klass = case.get("classname", "")
             name = case.get("name", "")
@@ -98,15 +98,19 @@ def main() -> int:
         if not tests:
             raise c.CheckError("no test classes resolved from the generation report")
 
-        jacoco = c.tool_version(repo, "jacoco", args.jacoco_version)
-        reports_dir = c.module_dir(repo, module) / "target" / "surefire-reports"
+        jacoco = c.tool_version(repo, "jacoco", args.jacoco_version, module)
+        target_dir = c.module_dir(repo, module) / "target"
+        reports_dir = target_dir / "surefire-reports"
+        exec_file = target_dir / "jacoco.exec"
+        # surefire matches -Dtest most reliably on simple class names; PIT gets the FQCNs
+        selectors = sorted({name.split(".")[-1] for name in tests})
         command = (
             [c.mvn_executable(), "-B"]
             + c.module_args(module, also_make=True)
             + [
                 "-DfailIfNoTests=false",
                 "-Dsurefire.failIfNoSpecifiedTests=false",
-                f"-Dtest={','.join(tests)}",
+                f"-Dtest={','.join(selectors)}",
                 f"org.jacoco:jacoco-maven-plugin:{jacoco}:prepare-agent",
                 "test",
             ]
@@ -116,6 +120,7 @@ def main() -> int:
         output = ""
         for _ in range(max(1, args.repeat)):
             shutil.rmtree(reports_dir, ignore_errors=True)
+            exec_file.unlink(missing_ok=True)
             code, output = c.run(command, repo)
             runs.append(parse_surefire(reports_dir))
 
@@ -137,8 +142,26 @@ def main() -> int:
 
         if not results:
             raise c.CheckError(
-                "no surefire reports produced; maven exited %s. Tail:\n%s" % (code, output[-1500:])
+                "no surefire reports produced; maven exited %s:\n%s" % (code, c.maven_error(output))
             )
+
+        executed = sum(1 for r in results if r["status"] != "SKIPPED")
+        if not executed:
+            raise c.CheckError(
+                f"surefire ran 0 tests for -Dtest={','.join(selectors)} - check the class "
+                f"names in the generation report and the module ({module or 'root'})"
+            )
+        if not exec_file.exists() or exec_file.stat().st_size == 0:
+            pom = c.hardcoded_arg_line(repo, module)
+            hint = (
+                f"{pom} pins surefire <argLine> without @{{argLine}}, which overrides the "
+                "property prepare-agent sets - the tests ran WITHOUT the JaCoCo agent. Fix the "
+                "pom: <argLine>@{argLine} ...</argLine>"
+                if pom
+                else "prepare-agent did not attach; verify the surefire configuration and that "
+                f"the exec file is expected at {exec_file}"
+            )
+            raise c.CheckError(f"{executed} tests ran but {exec_file.name} is missing/empty. {hint}")
 
         flaky = sorted(set().union(*(failed_ids(r) for r in runs)) - set.intersection(*(failed_ids(r) for r in runs))) if len(runs) > 1 else []
         failures = [r for r in results if r["status"] in ("FAILED", "ERROR")]

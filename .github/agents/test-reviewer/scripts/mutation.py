@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import argparse
 import sys
-import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import _common as c
@@ -55,7 +54,7 @@ def main() -> int:
         fqcn, _ = c.target_fqcn(repo, plan)
         _, method = c.target_scope(plan)
         gate = c.gate_value(repo, GATE_KEY, args.gate)
-        pit = c.tool_version(repo, "pit", args.pit_version)
+        pit = c.tool_version(repo, "pit", args.pit_version, module)
 
         tests = (
             [t.strip() for t in args.tests.split(",") if t.strip()]
@@ -95,12 +94,12 @@ def main() -> int:
                     "from the CLI)"
                 )
             else:
-                reason = "mutations.xml not produced (maven exit %s). Tail:\n%s" % (code, output[-1200:])
+                reason = "mutations.xml not produced (maven exit %s):\n%s" % (code, c.maven_error(output))
             c.finish(repo, args.slug, name, "Check: mutation",
                      [reason[:300]], {"status": "SKIPPED_UNAVAILABLE", "reason": reason}, 2)
             return c.fail(reason)
 
-        root = ET.parse(xml_path).getroot()
+        root = c.parse_xml(xml_path)
         killed = 0
         survivors = []
         total = 0

@@ -13,6 +13,7 @@ import os
 import re
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 JSON_FENCE = re.compile(r"```json\s*\n(.*?)\n```", re.S)
@@ -23,7 +24,11 @@ DEFAULT_GATES = {
     "branch_coverage_target_scope": 0.80,
     "mutation_score_target_scope": 0.70,
 }
-DEFAULT_VERSIONS = {"jacoco": "0.8.12", "pit": "1.17.4"}
+# Both tools must be able to READ the class files the project was compiled with.
+# JaCoCo 0.8.15 is the first release with official Java 26 (class file major 70)
+# support; older ones fail the report goal outright. Override per repo under
+# `tooling` in project-profile.md when the build targets an older JDK.
+DEFAULT_VERSIONS = {"jacoco": "0.8.15", "pit": "1.25.9"}
 
 
 class CheckError(Exception):
@@ -93,6 +98,25 @@ def write_container(path: Path, title: str, summary: list, data: dict) -> None:
     path.write_text("\n".join(lines), encoding="utf-8")
 
 
+def parse_xml(path: Path):
+    """Parse a report XML defensively.
+
+    JaCoCo emits a DOCTYPE pointing at report.dtd; some parsers refuse to
+    continue without the DTD, so it is stripped. An empty or truncated file is
+    reported as an environment failure with its first bytes, never as a crash.
+    """
+    raw = path.read_bytes()
+    if not raw.strip():
+        raise CheckError(f"{path} is empty - the maven goal produced no report")
+    text = raw.decode("utf-8-sig", errors="replace").lstrip()
+    text = re.sub(r"<!DOCTYPE[^>\[]*(\[[^\]]*\])?[^>]*>", "", text, count=1)
+    try:
+        return ET.fromstring(text)
+    except ET.ParseError as exc:
+        head = " ".join(text[:200].split())
+        raise CheckError(f"cannot parse {path}: {exc} | starts with: {head}") from exc
+
+
 # ------------------------------------------------------------------ maven ---
 
 
@@ -125,6 +149,71 @@ def run(cmd: list, cwd: Path) -> tuple:
     return proc.returncode, (proc.stdout or "") + (proc.stderr or "")
 
 
+JDK_HINTS = (
+    (
+        "unsupported class file major version",
+        "the plugin is older than the JDK that compiled these classes - pin a newer version "
+        "under tooling in project-profile.md (or build with an older --release)",
+    ),
+    (
+        "incompatible version",
+        "the exec file was written by a different JaCoCo version than the report goal - pin one "
+        "version under tooling in project-profile.md and delete target/jacoco.exec",
+    ),
+    (
+        "invalid execution data",
+        "the exec file is corrupt - delete target/jacoco.exec and re-run run_tests.py",
+    ),
+    (
+        "missing execution data",
+        "no exec file - the tests ran without the agent; re-run run_tests.py and read its diagnosis",
+    ),
+)
+
+
+STOP_MARKERS = (
+    "For more information about the errors",
+    "To see the full stack trace",
+    "Re-run Maven using the -X switch",
+    "Re-run Maven with the -e switch",
+    "[Help 1] http",
+)
+
+
+def maven_error(output: str, limit: int = 12) -> str:
+    """Pull the real failure out of maven's output.
+
+    A blind tail is useless: maven ends every failed build with generic [Help 1]
+    boilerplate and the JVM appends its own warnings after that, so the actual
+    MojoExecutionException scrolls out of view. Note the message itself ends with
+    "-> [Help 1]", so that suffix is stripped rather than treated as a stop mark.
+    """
+    lines = [line.rstrip() for line in output.splitlines()]
+    start = next((i for i, line in enumerate(lines) if "Failed to execute goal" in line), None)
+    if start is None:
+        picked = [
+            line
+            for line in lines
+            if line.startswith("[ERROR]") and not any(m in line for m in STOP_MARKERS)
+        ][:limit] or lines[-limit:]
+    else:
+        picked = []
+        for line in lines[start:]:
+            if any(marker in line for marker in STOP_MARKERS) or line.strip() == "[ERROR]":
+                break
+            picked.append(line)
+            if len(picked) >= limit:
+                break
+    text = "\n".join(line.strip() for line in picked if line.strip())
+    text = text.replace(" -> [Help 1]", "")
+    lowered = text.lower()
+    for marker, hint in JDK_HINTS:
+        if marker in lowered:
+            text += f"\nHINT: {hint}"
+            break
+    return text or output[-800:]
+
+
 def module_args(module: str | None, also_make: bool = False) -> list:
     if not module:
         return []
@@ -136,6 +225,24 @@ def module_args(module: str | None, also_make: bool = False) -> list:
 
 def module_dir(repo: Path, module: str | None) -> Path:
     return repo / module if module else repo
+
+
+def hardcoded_arg_line(repo: Path, module: str | None) -> Path | None:
+    """Find a pom that pins surefire's <argLine> without preserving @{argLine}.
+
+    That single line silently disables JaCoCo: prepare-agent only sets the
+    argLine PROPERTY, and an explicit <argLine> in the pom wins over it, so the
+    tests run without the agent and the exec file stays empty.
+    """
+    candidates = [module_dir(repo, module) / "pom.xml", repo / "pom.xml"]
+    for pom in candidates:
+        if not pom.exists():
+            continue
+        text = pom.read_text(encoding="utf-8", errors="replace")
+        for match in re.finditer(r"<argLine>(.*?)</argLine>", text, re.S):
+            if "@{argLine}" not in match.group(1) and "${argLine}" not in match.group(1):
+                return pom
+    return None
 
 
 def resolve_module(plan: dict, override: str | None) -> str | None:
@@ -171,11 +278,36 @@ def gate_value(repo: Path, key: str, override=None) -> float:
     return float(gates.get(key, DEFAULT_GATES[key]))
 
 
-def tool_version(repo: Path, tool: str, override=None) -> str:
+PLUGIN_ARTIFACT = {"jacoco": "jacoco-maven-plugin", "pit": "pitest-maven"}
+
+
+def pom_plugin_version(repo: Path, module: str | None, artifact_id: str) -> str | None:
+    """Version declared for a plugin in the module pom or the root pom, if any."""
+    pattern = re.compile(
+        r"<artifactId>\s*%s\s*</artifactId>\s*<version>\s*([^<\s]+)\s*</version>" % re.escape(artifact_id)
+    )
+    for pom in (module_dir(repo, module) / "pom.xml", repo / "pom.xml"):
+        if not pom.exists():
+            continue
+        text = re.sub(r"\s+", " ", pom.read_text(encoding="utf-8", errors="replace"))
+        match = pattern.search(text)
+        if match and not match.group(1).startswith("${"):
+            return match.group(1)
+    return None
+
+
+def tool_version(repo: Path, tool: str, override=None, module: str | None = None) -> str:
+    """CLI flag > project-profile.md > version declared in the pom > agent default.
+
+    The pom wins over the default on purpose: prepare-agent and report must run
+    the same JaCoCo version, otherwise the report goal rejects the exec file.
+    """
     if override:
         return str(override)
     tooling = profile(repo).get("tooling", {})
-    return str(tooling.get(f"{tool}_version", DEFAULT_VERSIONS[tool]))
+    if f"{tool}_version" in tooling:
+        return str(tooling[f"{tool}_version"])
+    return pom_plugin_version(repo, module, PLUGIN_ARTIFACT[tool]) or DEFAULT_VERSIONS[tool]
 
 
 # ------------------------------------------------------------------- java ---

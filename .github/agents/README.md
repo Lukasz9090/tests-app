@@ -1,10 +1,8 @@
 # Test Agent — PoC (copilot-cli)
 
-Trzy agenty z architektury: 
-**Test Planner** (plan z evidence), 
-**Test Generator** (kod testów)  
-**Test Reviewer** (uruchomienie, metryki, decyzja). 
-Orchestrator jest kolejnym krokiem — na razie agenty uruchamia się ręcznie, po kolei.
+Trzy agenty z architektury: **Test Planner** (plan z evidence), **Test Generator**
+(kod testów) i **Test Reviewer** (uruchomienie, metryki, decyzja). Orchestrator
+jest kolejnym krokiem — na razie agenty uruchamia się ręcznie, po kolei.
 
 ## Instalacja w repozytorium docelowym
 
@@ -163,12 +161,17 @@ i na minimum 2 różnych repo — to weryfikuje repo-agnostyczność.
     "branch_coverage_target_scope": 0.80,
     "mutation_score_target_scope": 0.70
   },
-  "tooling": { "jacoco_version": "0.8.12", "pit_version": "1.17.4" }
+  "tooling": { "jacoco_version": "0.8.15", "pit_version": "1.25.9" }
 }
 ```
 
 Brak pliku = defaulty agentów. Skrypty Reviewera przyjmują też `--gate`,
 `--jacoco-version`, `--pit-version` i `--module` jako nadpisanie ad hoc.
+
+Wersja pluginu rozstrzygana jest w kolejności: **flaga CLI → project-profile.md →
+wersja z poma → default agenta**. Musi być na tyle nowa, żeby przeczytać class
+files Twojego JDK — inaczej `jacoco:report` kończy się `Unsupported class file
+major version NN` (NN−44 = wersja Javy; np. 70 = Java 26, wymaga JaCoCo ≥ 0.8.15).
 
 ## Znane uproszczenia PoC (świadome)
 
