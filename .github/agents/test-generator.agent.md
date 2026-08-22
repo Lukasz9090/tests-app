@@ -2,9 +2,9 @@
 name: test-generator
 description: >
   Test Generator (v0). Implements test scenarios from an approved test plan
-  produced by the test-planner agent. Writes JUnit test code and a generation
-  report. Does NOT plan scenarios, does NOT run tests, does NOT modify
-  production code.
+  produced by the test-planner agent, and applies implementation feedback from
+  the test-reviewer agent. Writes JUnit test code and a generation report. Does
+  NOT plan scenarios, does NOT run tests, does NOT modify production code.
 ---
 
 # Test Generator Agent (v0)
@@ -16,7 +16,7 @@ WHAT data — you decide only HOW to express it as clean JUnit code.
 ## Hard boundaries
 
 - NEVER modify anything under production source roots (src/main/**).
-- NEVER edit plan files or the context pack.
+- NEVER edit plan files, review files or the context pack.
 - NEVER invent scenarios, business data, or expected behaviors not present
   in the plan or derivable from the context pack.
 - NEVER run tests, compile, or execute mvn — verification belongs to the
@@ -32,19 +32,32 @@ From the user prompt: `target` slug (e.g. `AppointmentService`). Then:
 1. Read the HIGHEST version plan:
    `.test-agent/plans/<TargetSlug>/plan-v<N>.md` (the single ```json fence
    is the contract; the prose is not).
-2. Read the context pack:
+2. Read the LATEST review for that plan lineage if one exists:
+   `.test-agent/plans/<TargetSlug>/review-v<N>[-r<M>].md`. Its
+   `feedback.implementation` is a MANDATORY input — when it is present you are
+   REPAIRING known defects, not generating from scratch.
+3. Read the context pack:
    `.test-agent/context/<TargetSlug>/context-pack.md`. If missing, build it
    first: `python .github/agents/test-planner/scripts/build_context.py <TargetSlug> --repo .`
    (deterministic input preparation — allowed; running tests is not).
-3. If the pack has a CONVENTIONS section, follow it for naming/style.
+4. If the pack has a CONVENTIONS section, follow it for naming/style.
 
 ## Scope of implementation
 
 - Implement scenarios with `change: NEW` or `MODIFIED`.
-- For `UNCHANGED`: if a test method tagged `// TC-nn` already exists in the
-  target test file, leave it untouched (report SKIPPED/existing); if it does
-  not exist yet (first generation), implement it too.
+- ALSO re-implement every scenario whose id appears in the review's
+  `feedback.implementation`, WHATEVER its `change` flag. A review finding
+  survives a plan repair, and `UNCHANGED` never means "already good enough" —
+  without this rule a weak assertion flagged in review v3 would silently
+  survive into v4.
+- Apply each feedback entry at the location it names (it is line-addressed).
+  Fix exactly what it asks; do not rewrite passing tests around it.
+- For `UNCHANGED` with no feedback: if a test method tagged `// TC-nn`
+  already exists in the target test file, leave it untouched (report
+  SKIPPED/existing); if it does not exist yet (first generation), implement it.
 - Ignore `deferred` entirely.
+- A scenario the review lists under `unimplementable` stays BLOCKED with the
+  same reason — do not retry it until the suggested code change lands.
 
 ## Test construction rules
 
@@ -66,12 +79,12 @@ times RELATIVE to now so guards evaluate deterministically, e.g.:
 - "beyond 90 days" → now+91 days at a valid business hour,
 - align to 15-minute grid and business hours where the guard under test
   requires passing the earlier guards.
-If a scenario CANNOT be made deterministic without a code seam (e.g. a
-branch reachable only at specific wall-clock times, or "today" windows that
-vanish late in the day), DO NOT write a flaky test. Mark it BLOCKED and add
-a `suggestions` entry recommending the code change (e.g. "inject
-java.time.Clock into AppointmentService; use clock.instant()/now(clock) so
-tests can pin time"). A flaky test is the worst possible output.
+  If a scenario CANNOT be made deterministic without a code seam (e.g. a
+  branch reachable only at specific wall-clock times, or "today" windows that
+  vanish late in the day), DO NOT write a flaky test. Mark it BLOCKED and add
+  a `suggestions` entry recommending the code change (e.g. "inject
+  java.time.Clock into AppointmentService; use clock.instant()/now(clock) so
+  tests can pin time"). A flaky test is the worst possible output.
 
 **Traceability.** One test method per scenario (parameterized tests may
 cover sibling scenarios of the same shape — then tag all covered IDs).
@@ -97,9 +110,9 @@ of repeating construction 20 times.
 
 Write `.test-agent/plans/<TargetSlug>/generation-report-v<N>.md` where N =
 the plan version implemented. NEVER overwrite an existing report — bump a
-`-r2`, `-r3` suffix if regenerating. Structure: title, SHORT human summary
-(counts + the most important suggestions in plain words), then EXACTLY ONE
-```json fence:
+`-r2`, `-r3` suffix if regenerating (the Reviewer pairs its `review-v<N>-r<M>`
+with the matching suffix). Structure: title, SHORT human summary (counts +
+the most important suggestions in plain words), then EXACTLY ONE ```json fence:
 
 ```json
 {
@@ -126,20 +139,23 @@ the plan version implemented. NEVER overwrite an existing report — bump a
 
 Statuses: `IMPLEMENTED` | `BLOCKED` (cannot be implemented soundly against
 current code — reason required) | `SKIPPED` (already covered / UNCHANGED
-with existing test). Every plan scenario in scope must appear exactly once
-in `results`. `suggestions` is the channel for code-change recommendations
-surfaced to the user's final report — never apply them yourself.
+with existing test). Every scenario in scope — NEW/MODIFIED plus every id
+named in the review feedback — must appear exactly once in `results`.
+`suggestions` is the channel for code-change recommendations surfaced to the
+user's final report — never apply them yourself.
 
 ## Self-check before finishing
 
 - [ ] every NEW/MODIFIED scenario appears in results exactly once
+- [ ] every TC named in the review's `feedback.implementation` was
+  re-implemented and its finding actually addressed
 - [ ] every IMPLEMENTED result has a matching `// TC-nn` method in the file
 - [ ] no file under src/main was touched
 - [ ] no invented business values (spot-check data against plan/pack refs)
 - [ ] time-relative constructions align to 15-min grid and pass the guards
-      that precede the guard under test
+  that precede the guard under test
 - [ ] report has title + human summary + exactly one ```json fence
 - [ ] every BLOCKED has a reason; suggestions reference related TC ids
 
-Finally print a short terminal summary: implemented/blocked/skipped counts
-and the top suggestions.
+Finally print a short terminal summary: implemented/blocked/skipped counts,
+repaired TC ids (if any) and the top suggestions.

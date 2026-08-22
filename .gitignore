@@ -34,3 +34,10 @@ build/
 
 ### agents ###
 .test-agent
+
+#przed uruchomieniem planowania testow dla NotificationService
+#Aug 15, 2026	508.47	$5.08	0	$0.00
+#po utworzeniu planowania testow dla NotificationService
+#Aug 15, 2026	555.21	$5.55	0	$0.00
+#po utworzeniu testow na podstawie planu
+#Aug 15, 2026	580.08	$5.80	0	$0.00
