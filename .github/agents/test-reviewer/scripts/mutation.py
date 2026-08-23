@@ -20,11 +20,15 @@ import _common as c
 
 GATE_KEY = "mutation_score_target_scope"
 KILLED = {"KILLED", "TIMED_OUT", "MEMORY_ERROR"}
+# Matched against the EXTRACTED error only, never the whole log: PIT prints its
+# plugin inventory on every run ("Detect missing JUnit5 plugin", "Adding
+# org.pitest:pitest-junit5-plugin to SUT classpath"), so scanning the full output
+# diagnoses a missing junit5 plugin on runs that have one.
 UNAVAILABLE_MARKERS = (
-    "pitest-junit5-plugin",
     "no test framework",
     "unknown test framework",
     "unable to determine test framework",
+    "missing junit5 plugin",
     "found 0 tests",
     "no tests found",
 )
@@ -42,6 +46,8 @@ def main() -> int:
     parser.add_argument("--pit-version", default=None)
     parser.add_argument("--provider", choices=["pit", "descartes"], default="pit")
     parser.add_argument("--tests", default=None, help="explicit comma-separated test classes")
+    parser.add_argument("--history", action="store_true",
+                        help="keep a PIT history file - needs the arcmutate history plugin (PIT 1.20+)")
     args = parser.parse_args()
 
     repo = Path(args.repo).resolve()
@@ -50,7 +56,7 @@ def main() -> int:
     try:
         _, plan = c.load_plan(repo, args.slug)
         _, report = c.load_report(repo, args.slug, plan.get("plan_version", 1))
-        module = c.resolve_module(plan, args.module)
+        module = c.resolve_module(repo, plan, args.module)
         fqcn, _ = c.target_fqcn(repo, plan)
         _, method = c.target_scope(plan)
         gate = c.gate_value(repo, GATE_KEY, args.gate)
@@ -64,37 +70,59 @@ def main() -> int:
         if not tests:
             raise c.CheckError("no test classes resolved from the generation report")
 
-        history = c.checks_dir(repo, args.slug) / "pit-history.bin"
+        # Incremental history moved to the commercial arcmutate plugin; passing the
+        # flags without it fails the run outright ("History has been enabled but no
+        # history plugin has been installed"). Opt in only when that plugin exists.
+        history_args = []
+        if args.history:
+            history = c.checks_dir(repo, args.slug) / "pit-history.bin"
+            history_args = [f"-DhistoryInputFile={history}", f"-DhistoryOutputFile={history}"]
         command = (
             [c.mvn_executable(), "-B"]
             + c.module_args(module)
             + [
                 f"org.pitest:pitest-maven:{pit}:mutationCoverage",
+                # both spellings: bare properties work when the pom leaves targetClasses
+                # unset, the pit.* ones when the pom uses ${pit.targetClasses} indirection.
+                # A literal value inside <configuration> always wins over -D, so a pom that
+                # hardcodes a package makes narrow scoping impossible - reported below.
                 f"-DtargetClasses={fqcn}",
                 f"-DtargetTests={','.join(tests)}",
+                f"-Dpit.targetClasses={fqcn}",
+                f"-Dpit.targetTests={','.join(tests)}",
                 "-DoutputFormats=XML",
                 "-DtimestampedReports=false",
-                f"-DhistoryInputFile={history}",
-                f"-DhistoryOutputFile={history}",
             ]
+            + history_args
         )
         if args.provider == "descartes":
             command.append("-Dfeatures=+CLASSLIMIT(limit[1])")
             command.append("-DmutationEngine=descartes")
 
         code, output = c.run(command, repo)
+        log = c.write_log(repo, args.slug, f"mutation-r{args.iteration}", command, output)
         xml_path = c.module_dir(repo, module) / "target" / "pit-reports" / "mutations.xml"
 
         if not xml_path.exists():
-            lowered = output.lower()
+            failure = c.maven_error(output)
+            lowered = failure.lower()
+            if xml_path.parent.exists():
+                reason = (
+                    f"pit-reports exists but mutations.xml does not - add XML to <outputFormats> "
+                    f"in the pom (a literal value there overrides -DoutputFormats); full log: {log}"
+                )
+                c.finish(repo, args.slug, name, "Check: mutation",
+                         [reason[:300]], {"status": "SKIPPED_UNAVAILABLE", "reason": reason}, 2)
+                return c.fail(reason)
             if any(marker in lowered for marker in UNAVAILABLE_MARKERS):
                 reason = (
                     "PIT could not run the tests - with JUnit 5 the pitest-junit5-plugin "
                     "must be declared as a plugin dependency in the pom (it cannot be added "
-                    "from the CLI)"
+                    f"from the CLI); full log: {log}"
                 )
             else:
-                reason = "mutations.xml not produced (maven exit %s):\n%s" % (code, c.maven_error(output))
+                reason = "mutations.xml not produced (maven exit %s, full log: %s):\n%s" % (
+                    code, log, failure)
             c.finish(repo, args.slug, name, "Check: mutation",
                      [reason[:300]], {"status": "SKIPPED_UNAVAILABLE", "reason": reason}, 2)
             return c.fail(reason)

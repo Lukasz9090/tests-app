@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Compile and run the generated tests, collecting JaCoCo execution data.
 
-This is the ONLY check script that builds the project. It always attaches the
-JaCoCo agent, so coverage.py can report from the resulting jacoco.exec without
-running the tests a second time.
+This is the ONLY check script that builds the project. It makes sure the JaCoCo
+agent is attached exactly ONCE - injected as a fully-qualified goal only when the
+pom does not already bind prepare-agent - so coverage.py can report from the
+resulting jacoco.exec without running the tests a second time.
 
 Usage:
   python run_tests.py <TargetSlug> --repo . [--module M] [--iteration 1]
@@ -80,6 +81,8 @@ def main() -> int:
     parser.add_argument("--tests", default=None, help="explicit comma-separated test classes")
     parser.add_argument("--no-existing", action="store_true", help="do not include the plan's existing tests")
     parser.add_argument("--jacoco-version", default=None)
+    parser.add_argument("--force-agent", action="store_true",
+                        help="inject prepare-agent even when the pom already binds it (risks a duplicate agent)")
     args = parser.parse_args()
 
     repo = Path(args.repo).resolve()
@@ -89,7 +92,7 @@ def main() -> int:
     try:
         _, plan = c.load_plan(repo, args.slug)
         _, report = c.load_report(repo, args.slug, plan.get("plan_version", 1))
-        module = c.resolve_module(plan, args.module)
+        module = c.resolve_module(repo, plan, args.module)
         tests = (
             [t.strip() for t in args.tests.split(",") if t.strip()]
             if args.tests
@@ -104,6 +107,9 @@ def main() -> int:
         exec_file = target_dir / "jacoco.exec"
         # surefire matches -Dtest most reliably on simple class names; PIT gets the FQCNs
         selectors = sorted({name.split(".")[-1] for name in tests})
+        bound_pom = None if args.force_agent else c.pom_binds_jacoco_agent(repo, module)
+        agent_goal = [] if bound_pom else [f"org.jacoco:jacoco-maven-plugin:{jacoco}:prepare-agent"]
+        agent_source = f"pom-bound ({bound_pom})" if bound_pom else f"cli goal ({jacoco})"
         command = (
             [c.mvn_executable(), "-B"]
             + c.module_args(module, also_make=True)
@@ -111,9 +117,9 @@ def main() -> int:
                 "-DfailIfNoTests=false",
                 "-Dsurefire.failIfNoSpecifiedTests=false",
                 f"-Dtest={','.join(selectors)}",
-                f"org.jacoco:jacoco-maven-plugin:{jacoco}:prepare-agent",
-                "test",
             ]
+            + agent_goal
+            + ["test"]
         )
 
         runs = []
@@ -123,6 +129,7 @@ def main() -> int:
             exec_file.unlink(missing_ok=True)
             code, output = c.run(command, repo)
             runs.append(parse_surefire(reports_dir))
+        log = c.write_log(repo, args.slug, f"tests-r{args.iteration}", command, output)
 
         compiler_errors = [
             f"{Path(m.group(1)).name}:{m.group(2)} {m.group(4).strip()}"
@@ -142,14 +149,16 @@ def main() -> int:
 
         if not results:
             raise c.CheckError(
-                "no surefire reports produced; maven exited %s:\n%s" % (code, c.maven_error(output))
+                "no surefire reports produced; maven exited %s (full log: %s):\n%s"
+                % (code, log, c.maven_error(output))
             )
 
         executed = sum(1 for r in results if r["status"] != "SKIPPED")
         if not executed:
             raise c.CheckError(
                 f"surefire ran 0 tests for -Dtest={','.join(selectors)} - check the class "
-                f"names in the generation report and the module ({module or 'root'})"
+                f"names in the generation report and the module ({module or 'root'}); "
+                f"full log: {log}"
             )
         if not exec_file.exists() or exec_file.stat().st_size == 0:
             pom = c.hardcoded_arg_line(repo, module)
@@ -158,8 +167,8 @@ def main() -> int:
                 "property prepare-agent sets - the tests ran WITHOUT the JaCoCo agent. Fix the "
                 "pom: <argLine>@{argLine} ...</argLine>"
                 if pom
-                else "prepare-agent did not attach; verify the surefire configuration and that "
-                f"the exec file is expected at {exec_file}"
+                else f"agent source was {agent_source}; if pom-bound, its execution may be in an "
+                f"inactive profile - re-run with --force-agent. Expected exec at {exec_file}"
             )
             raise c.CheckError(f"{executed} tests ran but {exec_file.name} is missing/empty. {hint}")
 
@@ -174,10 +183,12 @@ def main() -> int:
             "skipped": sum(1 for r in results if r["status"] == "SKIPPED"),
             "failures": failures,
             "flaky": flaky,
+            "jacoco_agent": agent_source,
         }
         summary = [
             f"{data['total']} tests, {data['failed']} failed, {data['skipped']} skipped",
             f"flaky across {len(runs)} runs: {', '.join(flaky) if flaky else 'none'}",
+            f"jacoco agent: {agent_source}",
         ]
         if failures:
             phases = {f.get("failure_phase") for f in failures}

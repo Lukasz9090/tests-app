@@ -72,7 +72,7 @@ def main() -> int:
 
     try:
         _, plan = c.load_plan(repo, args.slug)
-        module = c.resolve_module(plan, args.module)
+        module = c.resolve_module(repo, plan, args.module)
         fqcn, _ = c.target_fqcn(repo, plan)
         _, method = c.target_scope(plan)
         gate = c.gate_value(repo, GATE_KEY, args.gate)
@@ -87,16 +87,35 @@ def main() -> int:
                 "would be empty too; re-run run_tests.py and read its diagnosis"
             )
 
-        code, output = c.run(
+        command = (
             [c.mvn_executable(), "-B"]
             + c.module_args(module)
-            + [f"org.jacoco:jacoco-maven-plugin:{jacoco}:report"],
-            repo,
+            + [f"org.jacoco:jacoco-maven-plugin:{jacoco}:report"]
         )
+        code, output = c.run(command, repo)
+        log = c.write_log(repo, args.slug, f"coverage-r{args.iteration}", command, output)
+        notes = []
+
+        # The agent version may come from the pom (it runs during the build), but the
+        # REPORT must also be able to ANALYZE the class files. A newer JaCoCo reads an
+        # older exec file fine, so one retry with the agent default beats failing.
+        newest = c.DEFAULT_VERSIONS["jacoco"]
+        if (
+            code != 0
+            and "unsupported class file major version" in output.lower()
+            and jacoco != newest
+        ):
+            notes.append(f"retried report with {newest}: {jacoco} cannot analyze these class files")
+            command = command[:-1] + [f"org.jacoco:jacoco-maven-plugin:{newest}:report"]
+            code, output = c.run(command, repo)
+            log = c.write_log(repo, args.slug, f"coverage-r{args.iteration}", command, output)
+            jacoco = newest
+
         xml_path = c.module_dir(repo, module) / "target" / "site" / "jacoco" / "jacoco.xml"
         if code != 0:
             raise c.CheckError(
-                "jacoco:report failed (maven exit %s):\n%s" % (code, c.maven_error(output))
+                "jacoco:report failed (maven exit %s, full log: %s):\n%s"
+                % (code, log, c.maven_error(output))
             )
         if not xml_path.exists():
             raise c.CheckError(
@@ -172,11 +191,14 @@ def main() -> int:
             "gate": gate,
             "gated_on": "branch" if sum(branch) else "line",
             "uncovered": uncovered[:60],
+            "jacoco_version": jacoco,
         }
+        if notes:
+            data["notes"] = notes
         summary = [
             f"{scope}: branch {branch_ratio:.0%}, line {line_ratio:.0%} (gate {gate:.0%})",
             f"uncovered lines: {', '.join(str(u['line']) for u in uncovered[:12]) or 'none'}",
-        ]
+        ] + notes
         return c.finish(repo, args.slug, name, "Check: coverage", summary, data, 0 if passed else 1)
 
     except c.CheckError as exc:

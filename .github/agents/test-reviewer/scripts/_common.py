@@ -120,6 +120,21 @@ def parse_xml(path: Path):
 # ------------------------------------------------------------------ maven ---
 
 
+def write_log(repo: Path, slug: str, name: str, command: list, output: str) -> Path:
+    """Keep the full maven output next to the check result.
+
+    Terminals truncate, error messages are summaries, and re-running a failed
+    maven goal to see what it said costs minutes. The log is the ground truth.
+    """
+    path = checks_dir(repo, slug) / f"maven-{name}.log"
+    path.write_text(
+        "$ " + " ".join(str(part) for part in command) + "\n\n" + output,
+        encoding="utf-8",
+        errors="replace",
+    )
+    return path
+
+
 def mvn_executable() -> str:
     return "mvn.cmd" if os.name == "nt" else "mvn"
 
@@ -245,15 +260,53 @@ def hardcoded_arg_line(repo: Path, module: str | None) -> Path | None:
     return None
 
 
-def resolve_module(plan: dict, override: str | None) -> str | None:
-    """--module wins; otherwise best-effort read of context.notes written by the Planner."""
+def is_module(repo: Path, candidate: str) -> bool:
+    """A real maven module is a subdirectory of the repo that owns a pom.xml."""
+    if not candidate or candidate in (".", "./"):
+        return False
+    path = repo / candidate
+    return path.is_dir() and (path / "pom.xml").exists()
+
+
+def pom_binds_jacoco_agent(repo: Path, module: str | None) -> Path | None:
+    """Return the pom that already binds jacoco's prepare-agent to the build.
+
+    Adding a fully-qualified prepare-agent goal on top of such a pom puts TWO
+    -javaagent switches on the forked JVM; the second premain then dies with
+    "duplicate class definition for java.lang.$JaCoCo" and surefire reports
+    "The forked VM terminated without properly saying goodbye" before running a
+    single test. The runnable contract means: inject the agent only when the pom
+    does not already do it.
+    """
+    for pom in (module_dir(repo, module) / "pom.xml", repo / "pom.xml"):
+        if not pom.exists():
+            continue
+        text = re.sub(r"\s+", " ", pom.read_text(encoding="utf-8", errors="replace"))
+        if "jacoco-maven-plugin" in text and "prepare-agent" in text:
+            return pom
+    return None
+
+
+def resolve_module(repo: Path, plan: dict, override: str | None) -> str | None:
+    """--module wins; otherwise read context.notes, but only accept a REAL module.
+
+    The notes are prose written by the Planner, so a phrase like "single module
+    Maven project" used to yield `-pl Maven` and maven answered "Could not find
+    the selected project in the reactor". Every candidate is now checked against
+    the filesystem; anything that is not a directory with a pom.xml is ignored.
+    """
     if override:
-        return override
-    for note in plan.get("context", {}).get("notes", []) or []:
-        match = re.search(r"module[\s:=]+([\w\-./]+)", str(note), re.I)
-        if match:
+        if not is_module(repo, override):
+            raise CheckError(f"--module {override}: no {override}/pom.xml under {repo}")
+        return override.strip().rstrip("/")
+    context = plan.get("context", {})
+    explicit = context.get("module")
+    if explicit and is_module(repo, str(explicit)):
+        return str(explicit).strip().rstrip("/")
+    for note in context.get("notes", []) or []:
+        for match in re.finditer(r"module[\s:=]+([\w\-./]+)", str(note), re.I):
             candidate = match.group(1).strip().rstrip("/")
-            if candidate not in ("", ".", "./"):
+            if is_module(repo, candidate):
                 return candidate
     return None
 

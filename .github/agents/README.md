@@ -81,10 +81,20 @@ Trzy skrypty, wołane przez agenta etapowo (drogie dopiero po tanich):
 <venv-python> .github/agents/test-reviewer/scripts/mutation.py  <Target> --repo .
 ```
 
-- `run_tests.py` — **jedyny krok, który buduje projekt**; zawsze dopina agenta
-  JaCoCo, więc `coverage.py` raportuje z gotowego `jacoco.exec` bez ponownego
-  uruchamiania testów. Rozróżnia błąd kompilacji od oblanego testu oraz błąd
-  **w asercji** od błędu **przed asercją** (`failure_phase`).
+- `run_tests.py` — **jedyny krok, który buduje projekt**; dba o to, żeby agent
+  JaCoCo był dopięty **dokładnie raz**, więc `coverage.py` raportuje z gotowego
+  `jacoco.exec` bez ponownego uruchamiania testów. Rozróżnia błąd kompilacji od
+  oblanego testu oraz błąd **w asercji** od błędu **przed asercją**
+  (`failure_phase`).
+
+  > **Dlaczego „dokładnie raz":** jeśli pom już binduje `prepare-agent`, a skrypt
+  > dołoży fully-qualified goal, forkowana JVM dostaje dwa `-javaagent` i pada na
+  > `LinkageError: duplicate class definition for java.lang.$JaCoCo` — surefire
+  > raportuje wtedy „forked VM terminated without properly saying goodbye" i zero
+  > uruchomionych testów. Skrypt wykrywa binding w pomie i wtedy NIE wstrzykuje
+  > swojego agenta (`--force-agent` wymusza, gdy execution siedzi w nieaktywnym
+  > profilu). Konsekwencja dla kontraktu „runnable": fully-qualified goals są
+  > uzupełnieniem konfiguracji poma, nigdy jej duplikatem.
 - `coverage.py` — cel `jacoco:report` wołany bezpośrednio (bez kompilacji);
   zakres = metoda targetu, jeśli plan ją wskazuje, inaczej klasa; zwraca
   konkretne niepokryte linie, nie sam procent.
