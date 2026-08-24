@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import time
 from pathlib import Path
 
 import _common as c
@@ -87,16 +88,18 @@ def main() -> int:
                 "would be empty too; re-run run_tests.py and read its diagnosis"
             )
 
-        report_dir = c.checks_dir(repo, args.slug) / "jacoco-report"
+        # dataFile HAS a user property, outputDirectory does NOT (it defaults to
+        # ${project.reporting.outputDirectory}/jacoco and cannot be set from the CLI),
+        # so the exec file is pinned and the report is discovered afterwards.
         command = (
             [c.mvn_executable(), "-B"]
             + c.module_args(module)
             + [
                 f"org.jacoco:jacoco-maven-plugin:{jacoco}:report",
                 f"-Djacoco.dataFile={exec_file}",
-                f"-Djacoco.outputDirectory={report_dir}",
             ]
         )
+        started = time.time() - 2
         code, output = c.run(command, repo)
         log = c.write_log(repo, args.slug, f"coverage-r{args.iteration}", command, output)
         notes = []
@@ -116,24 +119,23 @@ def main() -> int:
                 else part
                 for part in command
             ]
+            started = time.time() - 2
             code, output = c.run(command, repo)
             log = c.write_log(repo, args.slug, f"coverage-r{args.iteration}", command, output)
             jacoco = newest
 
-        xml_path = report_dir / "jacoco.xml"
+        produced = c.recent_files(c.module_dir(repo, module), "**/jacoco.xml", started)
+        xml_path = produced[-1] if produced else None
         if code != 0:
             raise c.CheckError(
                 "jacoco:report failed (maven exit %s, full log: %s):\n%s"
                 % (code, log, c.maven_error(output))
             )
-        if not xml_path.exists():
+        if xml_path is None:
             raise c.CheckError(
-                "jacoco.xml not produced - check that XML is among the report formats.\n%s"
-                % c.maven_error(output)
-            )
-        if xml_path.stat().st_mtime < exec_file.stat().st_mtime:
-            raise c.CheckError(
-                f"{xml_path} is older than {exec_file.name} - stale report, the goal did not rewrite it"
+                "no jacoco.xml written under %s by this run - check that XML is among the "
+                "report formats configured for the plugin. Full log: %s\n%s"
+                % (c.module_dir(repo, module), log, c.maven_error(output))
             )
 
         root = c.parse_xml(xml_path)
@@ -199,6 +201,7 @@ def main() -> int:
             "line_ratio": line_ratio,
             "gate": gate,
             "gated_on": "branch" if sum(branch) else "line",
+            "report": str(xml_path),
             "uncovered": uncovered[:60],
             "jacoco_version": jacoco,
         }
