@@ -287,7 +287,28 @@ def pom_binds_jacoco_agent(repo: Path, module: str | None) -> Path | None:
     return None
 
 
-def resolve_module(repo: Path, plan: dict, override: str | None) -> str | None:
+def module_for_target(repo: Path, target_file: Path) -> str | None:
+    """Derive the Maven module from the target's own location.
+
+    The nearest ancestor directory that owns a pom.xml IS the module, whatever
+    the plan says. This is the fallback that makes multi-module repos work even
+    when the Planner recorded no module: reports live under <module>/target, and
+    looking for them at the repo root finds nothing while maven exits 0.
+    """
+    try:
+        current = target_file.resolve().parent
+        repo = repo.resolve()
+    except OSError:
+        return None
+    while current != repo and repo in current.parents:
+        if (current / "pom.xml").exists():
+            return current.relative_to(repo).as_posix()
+        current = current.parent
+    return None
+
+
+def resolve_module(repo: Path, plan: dict, override: str | None,
+                   target_file: Path | None = None) -> str | None:
     """--module wins; otherwise read context.notes, but only accept a REAL module.
 
     The notes are prose written by the Planner, so a phrase like "single module
@@ -308,6 +329,8 @@ def resolve_module(repo: Path, plan: dict, override: str | None) -> str | None:
             candidate = match.group(1).strip().rstrip("/")
             if is_module(repo, candidate):
                 return candidate
+    if target_file is not None:
+        return module_for_target(repo, target_file)
     return None
 
 
@@ -361,6 +384,24 @@ def tool_version(repo: Path, tool: str, override=None, module: str | None = None
     if f"{tool}_version" in tooling:
         return str(tooling[f"{tool}_version"])
     return pom_plugin_version(repo, module, PLUGIN_ARTIFACT[tool]) or DEFAULT_VERSIONS[tool]
+
+
+def recent_files(root: Path, pattern: str, since: float) -> list:
+    """Files matching a glob that were written by the run we just made.
+
+    Never trust a fixed path for maven output: multi-module layouts, custom
+    reportsDirectory and aggregator roots all move it. Search, then filter by
+    modification time so stale artefacts from earlier runs cannot be mistaken
+    for fresh ones.
+    """
+    found = []
+    for path in root.rglob(pattern):
+        try:
+            if path.stat().st_mtime >= since:
+                found.append(path)
+        except OSError:
+            continue
+    return sorted(found)
 
 
 # ------------------------------------------------------------------- java ---

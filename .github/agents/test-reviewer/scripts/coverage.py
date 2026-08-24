@@ -72,13 +72,13 @@ def main() -> int:
 
     try:
         _, plan = c.load_plan(repo, args.slug)
-        module = c.resolve_module(repo, plan, args.module)
-        fqcn, _ = c.target_fqcn(repo, plan)
+        fqcn, target_file = c.target_fqcn(repo, plan)
+        module = c.resolve_module(repo, plan, args.module, target_file)
         _, method = c.target_scope(plan)
         gate = c.gate_value(repo, GATE_KEY, args.gate)
         jacoco = c.tool_version(repo, "jacoco", args.jacoco_version, module)
 
-        exec_file = c.module_dir(repo, module) / "target" / "jacoco.exec"
+        exec_file = c.checks_dir(repo, args.slug) / "jacoco.exec"
         if not exec_file.exists():
             raise c.CheckError(f"{exec_file} not found - run run_tests.py first")
         if exec_file.stat().st_size == 0:
@@ -87,10 +87,15 @@ def main() -> int:
                 "would be empty too; re-run run_tests.py and read its diagnosis"
             )
 
+        report_dir = c.checks_dir(repo, args.slug) / "jacoco-report"
         command = (
             [c.mvn_executable(), "-B"]
             + c.module_args(module)
-            + [f"org.jacoco:jacoco-maven-plugin:{jacoco}:report"]
+            + [
+                f"org.jacoco:jacoco-maven-plugin:{jacoco}:report",
+                f"-Djacoco.dataFile={exec_file}",
+                f"-Djacoco.outputDirectory={report_dir}",
+            ]
         )
         code, output = c.run(command, repo)
         log = c.write_log(repo, args.slug, f"coverage-r{args.iteration}", command, output)
@@ -106,12 +111,16 @@ def main() -> int:
             and jacoco != newest
         ):
             notes.append(f"retried report with {newest}: {jacoco} cannot analyze these class files")
-            command = command[:-1] + [f"org.jacoco:jacoco-maven-plugin:{newest}:report"]
+            command = [
+                f"org.jacoco:jacoco-maven-plugin:{newest}:report" if "jacoco-maven-plugin" in part
+                else part
+                for part in command
+            ]
             code, output = c.run(command, repo)
             log = c.write_log(repo, args.slug, f"coverage-r{args.iteration}", command, output)
             jacoco = newest
 
-        xml_path = c.module_dir(repo, module) / "target" / "site" / "jacoco" / "jacoco.xml"
+        xml_path = report_dir / "jacoco.xml"
         if code != 0:
             raise c.CheckError(
                 "jacoco:report failed (maven exit %s, full log: %s):\n%s"

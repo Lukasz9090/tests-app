@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import time
 from pathlib import Path
 
 import _common as c
@@ -56,8 +57,8 @@ def main() -> int:
     try:
         _, plan = c.load_plan(repo, args.slug)
         _, report = c.load_report(repo, args.slug, plan.get("plan_version", 1))
-        module = c.resolve_module(repo, plan, args.module)
-        fqcn, _ = c.target_fqcn(repo, plan)
+        fqcn, target_file = c.target_fqcn(repo, plan)
+        module = c.resolve_module(repo, plan, args.module, target_file)
         _, method = c.target_scope(plan)
         gate = c.gate_value(repo, GATE_KEY, args.gate)
         pit = c.tool_version(repo, "pit", args.pit_version, module)
@@ -99,11 +100,13 @@ def main() -> int:
             command.append("-Dfeatures=+CLASSLIMIT(limit[1])")
             command.append("-DmutationEngine=descartes")
 
+        started = time.time() - 2
         code, output = c.run(command, repo)
         log = c.write_log(repo, args.slug, f"mutation-r{args.iteration}", command, output)
-        xml_path = c.module_dir(repo, module) / "target" / "pit-reports" / "mutations.xml"
+        found = c.recent_files(c.module_dir(repo, module), "**/mutations.xml", started)
+        xml_path = found[-1] if found else c.module_dir(repo, module) / "target" / "pit-reports" / "mutations.xml"
 
-        if not xml_path.exists():
+        if not found:
             failure = c.maven_error(output)
             lowered = failure.lower()
             if xml_path.parent.exists():

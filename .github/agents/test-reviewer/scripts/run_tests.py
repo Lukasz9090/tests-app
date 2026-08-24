@@ -15,8 +15,8 @@ from __future__ import annotations
 
 import argparse
 import re
-import shutil
 import sys
+import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -37,11 +37,9 @@ def failure_phase(failure_type: str) -> str:
     return "assertion" if any(marker in lowered for marker in ASSERTION_MARKERS) else "setup"
 
 
-def parse_surefire(reports: Path) -> list:
+def parse_surefire(report_files) -> list:
     results = []
-    if not reports.exists():
-        return results
-    for xml in sorted(reports.glob("TEST-*.xml")):
+    for xml in report_files:
         try:
             root = c.parse_xml(xml)
         except (c.CheckError, ET.ParseError):
@@ -92,7 +90,8 @@ def main() -> int:
     try:
         _, plan = c.load_plan(repo, args.slug)
         _, report = c.load_report(repo, args.slug, plan.get("plan_version", 1))
-        module = c.resolve_module(repo, plan, args.module)
+        fqcn, target_file = c.target_fqcn(repo, plan)
+        module = c.resolve_module(repo, plan, args.module, target_file)
         tests = (
             [t.strip() for t in args.tests.split(",") if t.strip()]
             if args.tests
@@ -102,9 +101,10 @@ def main() -> int:
             raise c.CheckError("no test classes resolved from the generation report")
 
         jacoco = c.tool_version(repo, "jacoco", args.jacoco_version, module)
-        target_dir = c.module_dir(repo, module) / "target"
-        reports_dir = target_dir / "surefire-reports"
-        exec_file = target_dir / "jacoco.exec"
+        search_root = c.module_dir(repo, module)
+        # Pin the exec file instead of hunting for it: -Djacoco.destFile works for
+        # a pom-bound execution too, so both invocation modes land in one known place.
+        exec_file = c.checks_dir(repo, args.slug) / "jacoco.exec"
         # surefire matches -Dtest most reliably on simple class names; PIT gets the FQCNs
         selectors = sorted({name.split(".")[-1] for name in tests})
         bound_pom = None if args.force_agent else c.pom_binds_jacoco_agent(repo, module)
@@ -117,6 +117,7 @@ def main() -> int:
                 "-DfailIfNoTests=false",
                 "-Dsurefire.failIfNoSpecifiedTests=false",
                 f"-Dtest={','.join(selectors)}",
+                f"-Djacoco.destFile={exec_file}",
             ]
             + agent_goal
             + ["test"]
@@ -124,11 +125,13 @@ def main() -> int:
 
         runs = []
         output = ""
+        report_files = []
         for _ in range(max(1, args.repeat)):
-            shutil.rmtree(reports_dir, ignore_errors=True)
+            started = time.time() - 2  # filesystem mtime granularity slack
             exec_file.unlink(missing_ok=True)
             code, output = c.run(command, repo)
-            runs.append(parse_surefire(reports_dir))
+            report_files = c.recent_files(search_root, "target/surefire-reports/TEST-*.xml", started)
+            runs.append(parse_surefire(report_files))
         log = c.write_log(repo, args.slug, f"tests-r{args.iteration}", command, output)
 
         compiler_errors = [
@@ -149,8 +152,9 @@ def main() -> int:
 
         if not results:
             raise c.CheckError(
-                "no surefire reports produced; maven exited %s (full log: %s):\n%s"
-                % (code, log, c.maven_error(output))
+                "no surefire reports written under %s (maven exited %s). In a multi-module "
+                "repo the reports live in <module>/target - resolved module: %s. Full log: %s\n%s"
+                % (search_root, code, module or "(repo root)", log, c.maven_error(output))
             )
 
         executed = sum(1 for r in results if r["status"] != "SKIPPED")
@@ -184,6 +188,9 @@ def main() -> int:
             "failures": failures,
             "flaky": flaky,
             "jacoco_agent": agent_source,
+            "module": module,
+            "exec_file": str(exec_file),
+            "report_files": [str(f) for f in report_files],
         }
         summary = [
             f"{data['total']} tests, {data['failed']} failed, {data['skipped']} skipped",
