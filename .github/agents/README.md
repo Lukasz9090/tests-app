@@ -11,11 +11,10 @@ jest kolejnym krokiem — na razie agenty uruchamia się ręcznie, po kolei.
    ```
    .test-agent/
    ```
-3. Bootstrap środowiska skryptów (jednorazowo, Windows/Linux/macOS):
-   ```
-   python .github/agents/common/scripts/setup.py
-   ```
-   (tworzy venv w `.test-agent/.venv` i instaluje jsonschema)
+
+Nie ma kroku trzeciego: wszystkie skrypty używają wyłącznie biblioteki
+standardowej Pythona (3.8+), więc działają na systemowym interpreterze — bez
+venva, bez `pip install`.
 
 ## Struktura
 
@@ -33,13 +32,12 @@ jest kolejnym krokiem — na razie agenty uruchamia się ręcznie, po kolei.
 │   ├── scripts/  _common.py, run_tests.py, coverage.py, mutation.py
 │   └── schemas/  review.schema.json
 └── common/
-    └── scripts/  md_payload.py, validate_plan.py, setup.py   # współdzielone
+    └── scripts/  md_payload.py, validate_plan.py             # współdzielone
 .test-agent/                    # RUNTIME (gitignore):
 ├── plans/<Target>/             #   plan-vN.md, generation-report-vN.md, review-vN-rM.md
 ├── context/<Target>/           #   context-pack.md
 ├── checks/<Target>/            #   tests-rM.md, coverage-rM.md, mutation-rM.md, jacoco.exec, pit-history.bin
-├── project-profile.md          #   progi i wersje narzędzi (opcjonalny)
-└── .venv/
+└── project-profile.md          #   progi i wersje narzędzi (opcjonalny)
 ```
 
 ## Pipeline (deterministyczna kanapka)
@@ -76,9 +74,9 @@ w `feedback.implementation`, niezależnie od flagi `change`.
 Trzy skrypty, wołane przez agenta etapowo (drogie dopiero po tanich):
 
 ```bash
-<venv-python> .github/agents/test-reviewer/scripts/run_tests.py <Target> --repo . --repeat 2
-<venv-python> .github/agents/test-reviewer/scripts/coverage.py  <Target> --repo .
-<venv-python> .github/agents/test-reviewer/scripts/mutation.py  <Target> --repo .
+python .github/agents/test-reviewer/scripts/run_tests.py <Target> --repo . --repeat 2
+python .github/agents/test-reviewer/scripts/coverage.py  <Target> --repo .
+python .github/agents/test-reviewer/scripts/mutation.py  <Target> --repo .
 ```
 
 - `run_tests.py` — **jedyny krok, który buduje projekt**; dba o to, żeby agent
@@ -98,9 +96,10 @@ Trzy skrypty, wołane przez agenta etapowo (drogie dopiero po tanich):
 - `coverage.py` — cel `jacoco:report` wołany bezpośrednio (bez kompilacji);
   zakres = metoda targetu, jeśli plan ją wskazuje, inaczej klasa; zwraca
   konkretne niepokryte linie, nie sam procent.
-- `mutation.py` — PIT z `targetClasses`/`targetTests` i plikiem historii
-  (kolejne iteracje pomijają niezmienione mutanty); zwraca survivorów
-  z linią i mutatorem.
+- `mutation.py` — PIT z `targetClasses`/`targetTests`; zwraca survivorów
+  z linią i mutatorem. Flaga `--history` (domyślnie wyłączona) włącza plik
+  historii — w PIT ≥ 1.20 wymaga komercyjnego pluginu arcmutate, bez niego run
+  kończy się błędem „History has been enabled but no history plugin".
 
 Exit code'y są rozłączne: `0` = bramka spełniona, `1` = defekt jakościowy
 (repair), `2` = check się nie wykonał → `BLOCKED`, nigdy „passed".
@@ -112,19 +111,25 @@ być zabugowany, decyduje człowiek) | `BLOCKED`.
 
 ## Weryfikacja ręczna (niezależnie od agenta)
 
-`<venv-python>` to interpreter z venv utworzonego przez setup.py:
-- Windows: `.test-agent\.venv\Scripts\python.exe`
-- Linux/macOS: `.test-agent/.venv/bin/python`
-
 ```bash
-<venv-python> .github/agents/test-planner/scripts/compute_confidence.py .test-agent/plans/<Target>/plan-v<N>.md --write
-<venv-python> .github/agents/test-planner/scripts/verify_refs.py .test-agent/plans/<Target>/plan-v<N>.md --repo .
-<venv-python> .github/agents/common/scripts/validate_plan.py .test-agent/plans/<Target>/plan-v<N>.md .github/agents/test-planner/schemas/test-plan.schema.json
-<venv-python> .github/agents/common/scripts/validate_plan.py .test-agent/plans/<Target>/generation-report-v<N>.md .github/agents/test-generator/schemas/generation-report.schema.json
-<venv-python> .github/agents/common/scripts/validate_plan.py .test-agent/plans/<Target>/review-v<N>-r<M>.md .github/agents/test-reviewer/schemas/review.schema.json
+python .github/agents/test-planner/scripts/compute_confidence.py .test-agent/plans/<Target>/plan-v<N>.md --write
+python .github/agents/test-planner/scripts/verify_refs.py .test-agent/plans/<Target>/plan-v<N>.md --repo .
+python .github/agents/common/scripts/validate_plan.py .test-agent/plans/<Target>/plan-v<N>.md .github/agents/test-planner/schemas/test-plan.schema.json
+python .github/agents/common/scripts/validate_plan.py .test-agent/plans/<Target>/generation-report-v<N>.md .github/agents/test-generator/schemas/generation-report.schema.json
+python .github/agents/common/scripts/validate_plan.py .test-agent/plans/<Target>/review-v<N>-r<M>.md .github/agents/test-reviewer/schemas/review.schema.json
 ```
 
-Exit code walidatora: 0 = artefakt poprawny, 1 = INVALID_ARTIFACT.
+Exit code walidatora: 0 = artefakt poprawny, 1 = INVALID_ARTIFACT (wypisuje
+wszystkie naruszenia ze ścieżkami, np. `$.scenarios[3].evidence[0]: unexpected
+property 'note'`), 2 = błędny schemat lub złe wywołanie.
+
+`validate_plan.py` implementuje podzbiór JSON Schema 2020-12 używany przez te
+schematy (type, required, properties, additionalProperties, items, minItems,
+minimum/maximum, minLength, pattern, enum, const, allOf/anyOf/oneOf/not,
+if/then/else, lokalny `$ref`) — **bez żadnych zależności**, nic nie trzeba
+instalować. Poprawność sprawdzona jednorazowo, poza repo, przez porównanie
+werdyktów z referencyjną implementacją na 5000 mutacji planu i review: 100%
+zgodności.
 
 ## Jak ocenić, czy Planner działa dobrze (checklista PoC)
 

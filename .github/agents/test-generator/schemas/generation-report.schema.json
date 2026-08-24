@@ -41,6 +41,13 @@
         "type": "string"
       }
     },
+    "notes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Run-level facts the Reviewer must see, e.g. a context pack rebuilt because the plan recorded no path."
+    },
     "results": {
       "type": "array",
       "minItems": 1,

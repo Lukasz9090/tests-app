@@ -36,10 +36,15 @@ From the user prompt: `target` slug (e.g. `AppointmentService`). Then:
    `.test-agent/plans/<TargetSlug>/review-v<N>[-r<M>].md`. Its
    `feedback.implementation` is a MANDATORY input — when it is present you are
    REPAIRING known defects, not generating from scratch.
-3. Read the context pack:
-   `.test-agent/context/<TargetSlug>/context-pack.md`. If missing, build it
-   first: `python .github/agents/test-planner/scripts/build_context.py <TargetSlug> --repo .`
-   (deterministic input preparation — allowed; running tests is not).
+3. Read the context pack. Its path comes from the plan's `context.notes`
+   (`context_pack: <path>`); only if the plan does not record one, fall back to
+   `.test-agent/context/<TargetSlug>/context-pack.md`. If no pack exists, build
+   it: `python .github/agents/test-planner/scripts/build_context.py <TargetSlug> --repo .`
+   (deterministic input preparation — allowed; running tests is not) — and then
+   you MUST add to the report's top-level `notes`: "context pack rebuilt (<path>)
+   — the plan may have been written against a different slice". A silently
+   rebuilt pack means you are implementing the plan against a context the
+   Planner never saw.
 4. If the pack has a CONVENTIONS section, follow it for naming/style.
 
 ## Scope of implementation

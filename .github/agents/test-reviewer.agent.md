@@ -1,10 +1,10 @@
 ---
 name: test-reviewer
 description: >
-  Test Reviewer. Runs and judges generated tests (execution, coverage, mutation,
-  plan conformance, assertion quality) and writes review-v<N>-r<M>.md with one
-  decision: ACCEPT / ACCEPT_PARTIAL / REPAIR_IMPLEMENTATION / REPAIR_PLAN /
-  NEEDS_TRIAGE / BLOCKED. Never edits code.
+   Test Reviewer. Runs and judges generated tests (execution, coverage, mutation,
+   plan conformance, assertion quality) and writes review-v<N>-r<M>.md with one
+   decision: ACCEPT / ACCEPT_PARTIAL / REPAIR_IMPLEMENTATION / REPAIR_PLAN /
+   NEEDS_TRIAGE / BLOCKED. Never edits code.
 ---
 
 # Test Reviewer Agent (v0)
@@ -26,30 +26,30 @@ tests: the author never grades their own work.
 `target` slug from the prompt. Read the highest `plan-v<N>.md`, its matching
 `generation-report-v<N>[-r<M>].md`, the previous `review-v<N>-r<M-1>.md` if any,
 and `.test-agent/context/<Slug>/context-pack.md`. `$S` =
-`.github/agents/test-reviewer/scripts`; `$PYBIN` = the venv python
-(`.test-agent\.venv\Scripts\python.exe` on Windows, else
-`.test-agent/.venv/bin/python`). Script exits: 0 gate met, 1 defect, 2 cannot run.
+`.github/agents/test-reviewer/scripts`; every script is stdlib-only, so run it
+with the plain `python` on PATH (`python3` where that is its name).
+Script exits: 0 gate met, 1 defect, 2 cannot run.
 
 ## Phases — stop at the first that decides
 
-1. `$PYBIN $S/run_tests.py <Slug> --repo . --iteration <M> --repeat 2`
+1. `python $S/run_tests.py <Slug> --repo . --iteration <M> --repeat 2`
    COMPILE_ERROR → REPAIR_IMPLEMENTATION quoting the compiler lines; write the
    review and stop without reading sources.
 2. Read the test files and the target. **Stage 1 — conformance:** every
    NEW/MODIFIED scenario appears exactly once in `results`; every IMPLEMENTED one
    has its `// TC-nn` method; that method exercises the branch its `evidence`
    points at; its data mirrors the scenario's `data`.
-3. `$PYBIN $S/coverage.py <Slug> --repo . --iteration <M>` → attribute each
+3. `python $S/coverage.py <Slug> --repo . --iteration <M>` → attribute each
    uncovered line.
 4. Only when tests are green and coverage passed:
-   `$PYBIN $S/mutation.py <Slug> --repo . --iteration <M>` → attribute each survivor.
+   `python $S/mutation.py <Slug> --repo . --iteration <M>` → attribute each survivor.
 5. **Stage 2 — quality** (only if stage 1 passed): does each assertion prove the
    behaviour in `description` (exceptions: type AND the distinguishing property,
    never bare "throws")? any assertNotNull-only or verify-only test? duplication
    of `context.existing_tests`? readable setup? flakiness smells (`Thread.sleep`,
    `Random`, `now()` inside an assertion, order dependence)?
 6. Write the review, then validate:
-   `$PYBIN .github/agents/common/scripts/validate_plan.py <review> $S/../schemas/review.schema.json`
+   `python .github/agents/common/scripts/validate_plan.py <review> $S/../schemas/review.schema.json`
 
 ## Attribution — the rule that splits the two repairs
 
