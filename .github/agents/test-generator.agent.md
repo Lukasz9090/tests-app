@@ -35,7 +35,15 @@ From the user prompt: `target` slug (e.g. `AppointmentService`). Then:
 2. Read the LATEST review for that plan lineage if one exists:
    `.test-agent/plans/<TargetSlug>/review-v<N>[-r<M>].md`. Its
    `feedback.implementation` is a MANDATORY input — when it is present you are
-   REPAIRING known defects, not generating from scratch.
+   REPAIRING known defects, not generating from scratch. "Lineage" spans plan
+   versions, not just the current one: if the highest plan version has no review
+   yet — you are the FIRST generation after a REPAIR_PLAN — fall back to the
+   highest review of the PREVIOUS plan version and treat its still-open
+   `feedback.implementation` as mandatory. A defect flagged against plan v<N-1>
+   does not vanish because the plan bumped to v<N>; without this a weak assertion
+   caught in one review would silently die at the next plan repair. The
+   orchestrator also names that review path explicitly when it dispatches you —
+   honour it either way.
 3. Read the context pack. Its path comes from the plan's `context.notes`
    (`context_pack: <path>`); only if the plan does not record one, fall back to
    `.test-agent/context/<TargetSlug>/context-pack.md`. If no pack exists, build
