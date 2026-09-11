@@ -5,6 +5,9 @@ description: >
    plan conformance, assertion quality) and writes review-v<N>-r<M>.md with one
    decision: ACCEPT / ACCEPT_PARTIAL / REPAIR_IMPLEMENTATION / REPAIR_PLAN /
    NEEDS_TRIAGE / BLOCKED. Never edits code.
+model: GPT-5.4 mini (copilot)
+user-invocable: false
+tools: ['read_file', 'file_search', 'grep_search', 'run_in_terminal', 'get_terminal_output', 'create_file']
 ---
 
 # Test Reviewer Agent (v0)

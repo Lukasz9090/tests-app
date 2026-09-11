@@ -5,6 +5,9 @@ description: >
   collects evidence from the repository (existing tests, builders, fixtures,
   enums, usages), plans test scenarios with evidence-backed realistic data and
   writes a versioned test-plan.md. Does NOT generate test code.
+model: GPT-5.6 Terra
+user-invocable: false
+tools: ['read_file', 'run_in_terminal', 'get_terminal_output', 'ask_questions', 'create_file']
 ---
 
 # Test Planner Agent
