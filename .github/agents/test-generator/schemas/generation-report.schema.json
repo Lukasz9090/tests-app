@@ -36,10 +36,11 @@
     },
     "test_files": {
       "type": "array",
-      "minItems": 1,
+      "minItems": 0,
       "items": {
         "type": "string"
-      }
+      },
+      "description": "May legitimately be empty when every scenario was SKIPPED or OBSOLETE — a run with nothing to implement touches no file. `results` still accounts for every scenario."
     },
     "notes": {
       "type": "array",
@@ -67,8 +68,10 @@
             "enum": [
               "IMPLEMENTED",
               "BLOCKED",
-              "SKIPPED"
-            ]
+              "SKIPPED",
+              "OBSOLETE"
+            ],
+            "description": "SKIPPED = nothing to do, the scenario stays covered (plan says implementation: COVERED, or an untouched `// TC-nn` method already exists). OBSOLETE = the plan marked the scenario change: REMOVED and a test for it still exists — it is a DELETION CANDIDATE reported to the human, never deleted here."
           },
           "test_method": {
             "type": "string"
@@ -107,6 +110,25 @@
               "required": [
                 "test_method"
               ]
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "status"
+              ],
+              "properties": {
+                "status": {
+                  "const": "OBSOLETE"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "reason",
+                "test_method"
+              ],
+              "errorMessage": "OBSOLETE must name the existing test method that is now a deletion candidate (`test_method`) and why the behaviour is gone (`reason`) — otherwise nobody can act on it."
             }
           }
         ]

@@ -54,10 +54,12 @@
       "enum": [
         "READY",
         "READY_PARTIAL",
+        "COMPLETE",
         "NEEDS_CLARIFICATION",
         "BLOCKED",
         "UNSUPPORTED_REPOSITORY"
-      ]
+      ],
+      "description": "COMPLETE = the plan is valid and every scenario is already implemented (implementation: COVERED) or REMOVED, so there is nothing to generate. It is a success state, not a cancellation."
     },
     "missing": {
       "type": "array",
@@ -185,6 +187,22 @@
       "if": {
         "properties": {
           "status": {
+            "const": "COMPLETE"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "target",
+          "mode",
+          "scenarios"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
             "const": "UNSUPPORTED_REPOSITORY"
           }
         }
@@ -197,6 +215,29 @@
     },
     {
       "if": {
+        "required": [
+          "based_on_version"
+        ]
+      },
+      "then": {
+        "properties": {
+          "scenarios": {
+            "items": {
+              "required": [
+                "change",
+                "implementation"
+              ]
+            }
+          }
+        },
+        "errorMessage": "a revision (based_on_version is set) must state BOTH axes on every scenario: `change` (did the scenario definition change?) and `implementation` (does a test for it already exist?). Never encode 'already implemented' as change: REMOVED."
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "mode"
+        ],
         "properties": {
           "mode": {
             "const": "legacy"
@@ -260,7 +301,21 @@
             "MODIFIED",
             "NEW",
             "REMOVED"
-          ]
+          ],
+          "description": "Delta of the SCENARIO DEFINITION against based_on_version — nothing else. REMOVED means the BEHAVIOUR is no longer to be tested and any test for it is a deletion candidate; it NEVER means 'already implemented' or 'nothing to do' — that is `implementation`."
+        },
+        "implementation": {
+          "enum": [
+            "PENDING",
+            "COVERED",
+            "BLOCKED"
+          ],
+          "description": "Implementation state, ORTHOGONAL to `change`. PENDING = no test exists yet (default when absent). COVERED = a test exists and passes; `covered_by` names it. BLOCKED = the generator could not implement it soundly (reason lives in the generation report)."
+        },
+        "covered_by": {
+          "type": "string",
+          "minLength": 3,
+          "description": "Required when implementation is COVERED: TestClass#method or path/File.java:NN-MM."
         },
         "split_from": {
           "type": "string",
@@ -269,7 +324,7 @@
         },
         "change_reason": {
           "type": "string",
-          "description": "Required in spirit for REMOVED: why this scenario is dropped."
+          "description": "Mandatory for REMOVED: why the behaviour ceased to exist. 'Already covered/implemented/passing' is NOT a removal reason — use implementation: COVERED instead."
         },
         "description": {
           "type": "string",
@@ -327,7 +382,66 @@
           ],
           "description": "Rule-based evidence strength (script-free v0 flow)."
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": [
+              "change"
+            ],
+            "properties": {
+              "change": {
+                "const": "REMOVED"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "change_reason"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "change"
+            ],
+            "properties": {
+              "change": {
+                "const": "REMOVED"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "change_reason": {
+                "not": {
+                  "pattern": "(?i)cover|already|exist|implement|passing|green|no work|done|nothing to"
+                }
+              }
+            },
+            "errorMessage": "MISLABELLED_REMOVED: change_reason describes a scenario that is already tested, which is NOT a removal. REMOVED is only for a behaviour that ceased to exist (deleted code path, withdrawn requirement) and whose test should be deleted. Set change to UNCHANGED/MODIFIED and implementation: COVERED with covered_by instead."
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "implementation"
+            ],
+            "properties": {
+              "implementation": {
+                "const": "COVERED"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "covered_by"
+            ],
+            "errorMessage": "implementation: COVERED must name the test that covers it in `covered_by` (TestClass#method or path:lines) — an unverifiable 'already covered' claim is how a scenario silently leaves the plan's scope."
+          }
+        }
+      ]
     },
     "deferredScenario": {
       "type": "object",
@@ -378,7 +492,20 @@
             "MODIFIED",
             "NEW",
             "REMOVED"
-          ]
+          ],
+          "description": "Same meaning as on a scenario: definition delta only. Never 'already implemented'."
+        },
+        "implementation": {
+          "enum": [
+            "PENDING",
+            "COVERED",
+            "BLOCKED"
+          ],
+          "description": "Normally PENDING — deferred means not planned for implementation. COVERED only when a test already exists for a scenario that is being deferred anyway; `covered_by` then names it."
+        },
+        "covered_by": {
+          "type": "string",
+          "minLength": 3
         },
         "change_reason": {
           "type": "string"

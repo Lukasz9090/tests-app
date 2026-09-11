@@ -39,9 +39,22 @@ Script exits: 0 gate met, 1 defect, 2 cannot run.
    COMPILE_ERROR → REPAIR_IMPLEMENTATION quoting the compiler lines; write the
    review and stop without reading sources.
 2. Read the test files and the target. **Stage 1 — conformance:** every
-   NEW/MODIFIED scenario appears exactly once in `results`; every IMPLEMENTED one
+   scenario of the plan appears exactly once in `results`; every IMPLEMENTED one
    has its `// TC-nn` method; that method exercises the branch its `evidence`
    points at; its data mirrors the scenario's `data`.
+   The plan states two independent flags per scenario — `change` (definition
+   delta) and `implementation` (does a test exist?) — and each must hold against
+   the files you just read:
+   - `implementation: COVERED` → the test named in `covered_by` must EXIST and
+     be green in the run from phase 1. A COVERED claim with no such test is a
+     scenario that silently left the pipeline's scope: REPAIR_PLAN.
+   - `change: REMOVED` → the reason must be a vanished behaviour. A scenario
+     removed because it is "already covered / already implemented / passing" is
+     a MISLABEL, not a removal — REPAIR_PLAN, quoting the `change_reason`. Check
+     this even when everything else is green: it costs nothing and it is the one
+     defect that makes a human delete working tests.
+   - a `SKIPPED`/`OBSOLETE` result must match the plan's flags for that id, not
+     the generator's convenience.
 3. `python $S/coverage.py <Slug> --repo . --iteration <M>` → attribute each
    uncovered line.
 4. Only when tests are green and coverage passed:

@@ -8,6 +8,13 @@ enum, const, uniqueItems, allOf/anyOf/oneOf/not, if/then/else and local $ref
 ($defs). Anything else in a schema is ignored rather than guessed at, so a
 schema using an unsupported keyword still validates the parts it can.
 
+One non-standard extension: a schema node may carry `errorMessage` (a string).
+When that node produces any violation, the generated messages are replaced by
+it. Constraints like `not: {pattern: ...}` are otherwise reported as "must NOT
+match the 'not' schema", which tells the agent that wrote the artifact nothing
+about what to write instead — and an unactionable error is how a defect gets
+"fixed" by deleting the field.
+
 Usage:
   validate_plan.py <artifact.md|artifact.json> <schema.json>
 
@@ -204,6 +211,10 @@ def validate(instance, schema, root=None, path="$") -> list:
         branch = "then" if not validate(instance, schema["if"], root, path) else "else"
         if branch in schema:
             errors += validate(instance, schema[branch], root, path)
+
+    # --- custom message -----------------------------------------------------
+    if errors and isinstance(schema.get("errorMessage"), str):
+        return [f"{path}: {schema['errorMessage']}"]
 
     return errors
 

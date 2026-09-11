@@ -37,6 +37,11 @@ opaque, pass it through unchanged. `mode` — `legacy` (default) / `spec-driven`
     - `DONE` → `orchestrate.py ledger <slug> --repo . --outcome DONE`, stop this
       target. For `ACCEPT_PARTIAL` also surface the review's `unimplementable` and
       `suggestions` (code seams that would unblock the rest — recommend, never apply).
+      When `DONE` came from a `COMPLETE` plan or an empty `plan.scenarios_in_scope`,
+      report it to the user as **already implemented — nothing left to generate**,
+      with the count. Never relay it as removed, dropped or cancelled: the plan's
+      `covered_by` refs are the proof the tests exist, and "removed" would send the
+      user looking for work that is already done.
     - `ESCALATE` → `orchestrate.py ledger <slug> --repo . --outcome ESCALATED`,
       stop this target, show the user the `reason` and the blocking artifact's own
       words (don't paraphrase a fix into existence).
@@ -51,7 +56,11 @@ it to complete, then log its phase and run `state` again. The role's own agent
 profile selects its configured model. Extra, per role:
 
 - **planner** — pass `mode` and `spec`; `dispatch.based_on_version` set means a
-  revision. If the planner stops on its legacy **freshness guard**, do NOT
+  revision. Pass `dispatch.prior_generation_report_path` and
+  `dispatch.prior_review_path` whenever they are non-null: they are how the
+  planner learns which scenarios THIS pipeline already implemented (its Phase
+  2.5). Without them it re-derives coverage by grepping and mislabels its own
+  finished work. If the planner stops on its legacy **freshness guard**, do NOT
   confirm — escalate.
 - **generator** — if `dispatch.prior_review_path` or `dispatch.carry_review_path`
   is non-null, name it and state its `feedback.implementation` is mandatory. (The

@@ -74,20 +74,32 @@ From the user prompt: `target` slug (e.g. `AppointmentService`). Then:
 
 ## Scope of implementation
 
-- Implement scenarios with `change: NEW` or `MODIFIED`.
+A scenario carries TWO independent flags and you must read BOTH: `change`
+(did the scenario definition move?) and `implementation` (does a test already
+exist?). Absent `implementation` means `PENDING`. Decide from this table:
+
+| `implementation` | `change` | what you do |
+|---|---|---|
+| PENDING / BLOCKED | NEW, MODIFIED | implement it -> `IMPLEMENTED` (or `BLOCKED` with a reason) |
+| PENDING | UNCHANGED | implement it if no `// TC-nn` method exists yet (first generation); otherwise leave it -> `SKIPPED` |
+| COVERED | any | leave the test exactly as it is -> `SKIPPED`, note `already covered by <covered_by>` |
+| any | REMOVED | the BEHAVIOUR is gone. Do NOT implement. If a test for it exists -> `OBSOLETE` naming that method + a `suggestions` entry recommending deletion. **Never delete a test file or method yourself.** |
+
 - ALSO re-implement every scenario whose id appears in the review's
-  `feedback.implementation`, WHATEVER its `change` flag. A review finding
-  survives a plan repair, and `UNCHANGED` never means "already good enough" —
-  without this rule a weak assertion flagged in review v3 would silently
-  survive into v4.
+  `feedback.implementation`, WHATEVER its flags — feedback overrides the table
+  above, `COVERED` included. A review finding survives a plan repair, and
+  neither `UNCHANGED` nor `COVERED` means "already good enough": without this
+  rule a weak assertion flagged in review v3 would silently survive into v4.
 - Apply each feedback entry at the location it names (it is line-addressed).
   Fix exactly what it asks; do not rewrite passing tests around it.
-- For `UNCHANGED` with no feedback: if a test method tagged `// TC-nn`
-  already exists in the target test file, leave it untouched (report
-  SKIPPED/existing); if it does not exist yet (first generation), implement it.
 - Ignore `deferred` entirely.
 - A scenario the review lists under `unimplementable` stays BLOCKED with the
   same reason — do not retry it until the suggested code change lands.
+- If the whole plan resolves to SKIPPED/OBSOLETE, that is a legitimate run:
+  write the report with `test_files: []`, every scenario accounted for, and say
+  in the summary that the scenarios are ALREADY IMPLEMENTED. Never restate a
+  covered scenario as removed, dropped or cancelled — the plan's `covered_by`
+  is the proof that the work exists.
 
 ## Test construction rules
 
@@ -156,6 +168,9 @@ the most important suggestions in plain words), then EXACTLY ONE ```json fence:
     { "id": "TC07", "status": "IMPLEMENTED",
       "test_method": "create_shouldThrowConflict_whenStartTimeIsBeforeMinimumNotice",
       "notes": "time constructed relative to now(); deterministic" },
+    { "id": "TC08", "status": "SKIPPED",
+      "test_method": "create_shouldRejectPastStartTime",
+      "notes": "plan says implementation: COVERED by AppointmentServiceTests#create_shouldRejectPastStartTime - left untouched" },
     { "id": "TC09", "status": "BLOCKED",
       "reason": "business-hours guard depends on wall-clock via LocalDateTime.now(); no Clock seam — any fixed construction is flaky near 09:00/17:00" }
   ],
@@ -168,15 +183,22 @@ the most important suggestions in plain words), then EXACTLY ONE ```json fence:
 ```
 
 Statuses: `IMPLEMENTED` | `BLOCKED` (cannot be implemented soundly against
-current code — reason required) | `SKIPPED` (already covered / UNCHANGED
-with existing test). Every scenario in scope — NEW/MODIFIED plus every id
-named in the review feedback — must appear exactly once in `results`.
+current code — reason required) | `SKIPPED` (nothing to do: the plan says
+`implementation: COVERED`, or `UNCHANGED` with an existing `// TC-nn` method)
+| `OBSOLETE` (the plan says `change: REMOVED` and a test still exists —
+`reason` and `test_method` required; you recommend the deletion, you never
+perform it). EVERY scenario of the plan — not only the ones you touched —
+appears exactly once in `results`, so the report is a complete ledger: a
+missing id is indistinguishable from a forgotten one.
 `suggestions` is the channel for code-change recommendations surfaced to the
 user's final report — never apply them yourself.
 
 ## Self-check before finishing
 
-- [ ] every NEW/MODIFIED scenario appears in results exactly once
+- [ ] every scenario of the plan appears in results exactly once, with the
+  status the two-flag table dictates
+- [ ] no scenario is reported as removed or dropped when the plan says it is
+  COVERED: `SKIPPED` means "done", `OBSOLETE` means "delete this"
 - [ ] every TC named in the review's `feedback.implementation` was
   re-implemented and its finding actually addressed
 - [ ] every IMPLEMENTED result has a matching `// TC-nn` method in the file

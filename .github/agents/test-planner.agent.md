@@ -96,6 +96,27 @@ Escape hatch: if the pack demonstrably lacks something you need, read AT MOST 5
 extra files and list each under `context.notes` with the reason. If 5 is not
 enough, stop with `BLOCKED`.
 
+### Phase 2.5 — read the implementation state (revisions only)
+
+Skip this on plan-v1. Otherwise, BEFORE classifying anything, list
+`.test-agent/plans/<TargetSlug>/generation-report-v*.md` and `review-v*-r*.md`
+and build a map `TC id → IMPLEMENTED | BLOCKED | SKIPPED` from the newest
+generation report of each plan version, corrected by the newest review: a
+scenario whose finding is still open in `feedback.implementation` is NOT
+covered — it is `PENDING` with a known defect.
+
+That map, not a grep of the test files, is what fills `implementation` in
+Phase 6. **Tests this pipeline wrote in an earlier round are your own output,
+not foreign evidence.** If you rediscover them by grepping you will file your
+own work under `context.existing_tests` as somebody else's, and then have no
+honest way to say "done" — which is exactly how a finished scenario ends up
+mislabelled. Only tests with no TC id behind them are `existing_tests`.
+
+Record in `context.notes`:
+`implementation_state: <newest report path> (+ <newest review path>)`.
+The orchestrator also names these paths when it dispatches you; if it named a
+path you did not find, say so rather than planning without it.
+
 ### Phase 3 — collect evidence
 
 Every scenario and every value it needs gets evidence entries. Allowed types
@@ -150,7 +171,11 @@ source.
 
 Status: all pass → `READY` (with empty `deferred`); some deferred →
 `READY_PARTIAL`; none pass outside interactive → `BLOCKED`; unresolved conflict
-or unanswered question → `NEEDS_CLARIFICATION`.
+or unanswered question → `NEEDS_CLARIFICATION`. And, taking precedence over
+`READY`: every scenario already `COVERED` or `REMOVED`, nothing left `PENDING`,
+`deferred` empty → `COMPLETE` — the plan is valid and there is simply nothing
+left to generate. `COMPLETE` is a SUCCESS state that stops the pipeline; it is
+never a way to say a target was cancelled or abandoned.
 
 ### Phase 6 — write, verify, validate
 
@@ -160,6 +185,32 @@ Location: `.test-agent/plans/<TargetSlug>/plan-v<N>.md` (`<TargetSlug>` =
 and write `plan-v<N+1>.md` with `based_on_version: N`. NEVER edit or delete an
 existing plan file.
 
+TWO INDEPENDENT AXES. Every scenario carries both, and neither may stand in for
+the other:
+
+| field | answers | values |
+|---|---|---|
+| `change` | did the scenario DEFINITION change vs `based_on_version`? | `NEW` / `MODIFIED` / `UNCHANGED` / `REMOVED` |
+| `implementation` | does a test for it already exist? | `PENDING` / `COVERED` / `BLOCKED` |
+
+`REMOVED` means the BEHAVIOUR ceased to be worth testing — the code path was
+deleted, the requirement was withdrawn, the scenario turned out to be wrong —
+and any test that implements it is now a DELETION CANDIDATE. Its
+`change_reason` is mandatory and must name that cause.
+
+> `REMOVED` NEVER means "already implemented", "already covered by a passing
+> test", "no work needed" or "nothing to generate". Those are
+> `implementation: COVERED` (with `covered_by` naming the test), and the
+> `change` axis stays `UNCHANGED` or `MODIFIED`. If you are reaching for
+> `REMOVED` for any reason other than the behaviour ceasing to exist, it is the
+> wrong flag — and a human reading your plan will conclude those tests should be
+> deleted. Choose the label by what it MEANS, never by what it happens to make
+> the Generator skip.
+
+A scenario the Generator finished is `UNCHANGED` + `COVERED` + `covered_by`. A
+scenario the Generator could not implement is `BLOCKED` and keeps its reason.
+On plan-v1 everything is `NEW` + `PENDING` unless Phase 2.5 proved otherwise.
+
 DELTA INTEGRITY (whenever `based_on_version` is set):
 - IDs are stable forever — never renumber; new scenarios take the next free
   number after the highest ever used, `deferred` included,
@@ -167,7 +218,8 @@ DELTA INTEGRITY (whenever `based_on_version` is set):
   `MODIFIED` or `REMOVED` (+ `change_reason`) — silent drops are forbidden,
 - splitting: the original keeps its ID, becomes `MODIFIED`, narrowed to ONE
   behaviour; each extracted behaviour is `NEW` with `split_from: <id>`,
-- self-check before finishing: previous count == UNCHANGED + MODIFIED + REMOVED.
+- self-check before finishing: previous count == UNCHANGED + MODIFIED + REMOVED,
+  and every scenario has an `implementation` value backed by Phase 2.5.
 
 Then:
 
@@ -181,14 +233,19 @@ response: fix the named field or ref to match what the repository actually
 shows. `INVALID_EVIDENCE` means the ref is wrong — correct it, or move the
 scenario to `deferred` if nothing backs it; making a ref pass by making it
 vaguer produces a worse artifact. `INVALID_ARTIFACT` names a path such as
-`$.scenarios[3].evidence[0]` — fix that field. Dropping the optional `method`
-key for a whole-class target is allowed; deleting scenarios or stripping
+`$.scenarios[3].evidence[0]` — fix that field. `MISLABELLED_REMOVED` means you
+used the `change` axis to say something about the implementation axis: re-read
+TWO INDEPENDENT AXES above and set `implementation` instead — do NOT reword
+`change_reason` to slip past the check, that hides the defect rather than fixing
+it. Dropping the optional `method` key for a whole-class target is allowed; deleting scenarios or stripping
 evidence to silence an error is FORBIDDEN. If you cannot make the plan both
 valid AND faithful, STOP and report the tool output verbatim rather than leaving
 a passing-but-degraded plan.
 
-Finally print: status, scenario count, deferred count, the 3 most important
-evidence findings.
+Finally print: the scoreboard line, status, deferred count, and the 3 most
+important evidence findings. When status is `COMPLETE`, say in plain words that
+the scenarios are IMPLEMENTED — never "removed", "dropped" or "no longer
+planned".
 
 ## Plan format (contract)
 
@@ -198,6 +255,18 @@ the JSON (prose is not the contract; on conflict JSON wins), then EXACTLY ONE
 fenced ```json block — that block IS the plan. Strict JSON: double quotes, no
 trailing commas, no comments, never a second fence. `evidence_strength` and
 `confidence` are filled by the script — do not invent them.
+
+The summary MUST open with one scoreboard line counted off the JSON you just
+wrote, both axes, in this shape:
+
+```
+scenarios: 11 — change: 0 new / 0 modified / 11 unchanged / 0 removed | implementation: 0 pending / 11 covered / 0 blocked | deferred: 0
+```
+
+A reader who stops after that line must not be misled, and if your prose and
+the JSON disagree, the JSON is what you fix — a revision that reads "nothing
+left to do" in prose while the JSON says the scenarios were dropped is a defect
+even though both files parse.
 
 ```json
 {
@@ -217,6 +286,7 @@ trailing commas, no comments, never a second fence. `evidence_strength` and
     {
       "id": "TC01",
       "change": "NEW",
+      "implementation": "PENDING",
       "description": "active customer can create order",
       "priority": "high",
       "evidence_strength": "strong",
@@ -232,6 +302,33 @@ trailing commas, no comments, never a second fence. `evidence_strength` and
       "evidence": [
         { "type": "existing_test", "ref": "OrderServiceTest#createsOrderForActiveCustomer" },
         { "type": "builder", "ref": "src/test/java/com/acme/CustomerBuilder.java:42" }
+      ]
+    },
+    {
+      "id": "TC02",
+      "change": "UNCHANGED",
+      "implementation": "COVERED",
+      "covered_by": "OrderServiceTest#shouldRejectBlockedCustomer",
+      "description": "blocked customer cannot create an order",
+      "priority": "high",
+      "evidence_strength": "strong",
+      "confidence": 0.0,
+      "evidence": [
+        { "type": "existing_test", "ref": "src/test/java/com/acme/OrderServiceTest.java:88-97" }
+      ]
+    },
+    {
+      "id": "TC03",
+      "change": "REMOVED",
+      "implementation": "COVERED",
+      "covered_by": "OrderServiceTest#shouldApplyLoyaltyDiscount",
+      "change_reason": "the loyalty-discount branch was deleted from OrderService in commit 4f1c2ab; the test now asserts a behaviour the code no longer has",
+      "description": "loyalty discount applied to a repeat customer",
+      "priority": "low",
+      "evidence_strength": "strong",
+      "confidence": 0.0,
+      "evidence": [
+        { "type": "usage", "ref": "src/main/java/com/acme/OrderService.java:51-60" }
       ]
     }
   ],
@@ -258,6 +355,9 @@ never `null` or `""`.
 - Never invent business values, IDs, IBANs, names or amounts without evidence.
 - Never carry knowledge from other repositories or from training data about
   "typical" domain objects.
+- Never mark a scenario `REMOVED` because a test for it already exists, is
+  passing, or was just generated — that is `implementation: COVERED`. `REMOVED`
+  is reserved for a behaviour that ceased to exist.
 - Never write or modify test/production code.
 - Never run the full test suite or full mutation analysis.
 - Never resolve a spec-vs-code conflict on your own.

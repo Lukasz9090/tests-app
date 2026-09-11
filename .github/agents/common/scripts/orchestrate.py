@@ -43,6 +43,11 @@ from md_payload import load_payload, save_payload  # noqa: E402
 
 PLAN_STATUS_STOP = {"BLOCKED", "NEEDS_CLARIFICATION", "UNSUPPORTED_REPOSITORY"}
 PLAN_STATUS_GO = {"READY", "READY_PARTIAL"}
+# COMPLETE = valid plan, nothing left to implement. A success state, routed
+# straight to DONE: dispatching a generator against it can only produce an
+# empty report, which is both a wasted round and an artifact that violates
+# generation-report.schema.json (results/minItems).
+PLAN_STATUS_COMPLETE = "COMPLETE"
 DECISION_ACCEPT = {"ACCEPT", "ACCEPT_PARTIAL"}
 DECISION_STOP = {"NEEDS_TRIAGE", "BLOCKED"}
 
@@ -97,6 +102,27 @@ def _review_iterations(directory: Path, n: int) -> list[int]:
     return _versions(directory, re.compile(rf"review-v{n}-r(\d+)\.md$"))
 
 
+def scenarios_in_scope(plan: dict) -> list[str]:
+    """Ids the generator still has work on.
+
+    Two independent axes live on a scenario: `change` (did the definition move?)
+    and `implementation` (does a test exist?). Out of scope means COVERED — the
+    test is written — or REMOVED — the behaviour is gone, so the test is a
+    deletion candidate the human decides on, not generation work. Absent
+    `implementation` means PENDING, which keeps plan-v1 (all NEW) in scope.
+    """
+    ids = []
+    for scenario in plan.get("scenarios", []) or []:
+        if not isinstance(scenario, dict):
+            continue
+        if scenario.get("implementation", "PENDING") == "COVERED":
+            continue
+        if scenario.get("change") == "REMOVED":
+            continue
+        ids.append(scenario.get("id"))
+    return ids
+
+
 def compute_state(repo: Path, slug: str, impl_cap: int, plan_cap: int) -> dict:
     directory = plan_dir(repo, slug)
     plan_versions = _versions(directory, re.compile(r"plan-v(\d+)\.md$"))
@@ -130,6 +156,12 @@ def compute_state(repo: Path, slug: str, impl_cap: int, plan_cap: int) -> dict:
         out["reason"] = f"plan-v{n}.md is unparseable: {plan['__error__']}"
         return out
 
+    if status == PLAN_STATUS_COMPLETE:
+        out["next_action"] = "DONE"
+        out["reason"] = (f"plan v{n} is COMPLETE: every scenario is already implemented "
+                         f"(implementation: COVERED) or REMOVED; nothing left to generate")
+        return out
+
     if status in PLAN_STATUS_STOP:
         out["next_action"] = "ESCALATE"
         out["reason"] = f"planner returned status {status}; needs a human decision"
@@ -140,12 +172,23 @@ def compute_state(repo: Path, slug: str, impl_cap: int, plan_cap: int) -> dict:
         out["reason"] = f"unrecognized plan status {status!r}"
         return out
 
+    in_scope = scenarios_in_scope(plan)
+    out["plan"]["scenarios_in_scope"] = in_scope
+
     gen_iters = _gen_iterations(directory, n)
     rev_iters = _review_iterations(directory, n)
     gen_m = gen_iters[-1] if gen_iters else 0
     rev_m = rev_iters[-1] if rev_iters else 0
 
     if gen_m == 0:
+        if not in_scope:
+            # Belt and braces for a planner that wrote READY instead of COMPLETE:
+            # with nothing PENDING there is no generation to dispatch, and an
+            # empty generation report is not a valid artifact.
+            out["next_action"] = "DONE"
+            out["reason"] = (f"plan v{n} is {status} but no scenario is in scope "
+                             f"(all COVERED or REMOVED); nothing to generate")
+            return out
         out["next_action"] = "GENERATE"
         out["dispatch"] = {"agent": "test-generator", "plan_version": n, "iteration": 1,
                            "report_path": str(gen_report_path(directory, n, 1)),
@@ -218,6 +261,10 @@ def compute_state(repo: Path, slug: str, impl_cap: int, plan_cap: int) -> dict:
             # weak-assertion finding from v{n} silently dies when the generator
             # later looks only for a review of v{n+1} (which won't exist yet).
             "carry_review_path": str(r_path) if impl_feedback else None,
+            # The planner classifies `implementation` from these, not from a
+            # grep of the test files — see test-planner Phase 2.5.
+            "prior_generation_report_path": str(gen_report_path(directory, n, gen_m)),
+            "prior_review_path": str(r_path),
         }
         out["reason"] = f"reviewer asked to repair the plan; writing plan v{n + 1}"
         return out
