@@ -9,19 +9,19 @@ weights using a noisy-OR combination:
 Duplicate (type, ref) pairs count once. Result rounded to 2 decimals.
 
 Usage:
-    compute_confidence.py <plan.md>            # print per-scenario table
-    compute_confidence.py <plan.md> --write    # also write values into file
+    tc_compute_confidence.py <plan.md>            # print per-scenario table
+    tc_compute_confidence.py <plan.md> --write    # also write values into file
 """
 
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "common" / "scripts"))
-from md_payload import load_payload, save_payload
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from tc_md_payload import load_payload, save_payload
 
 # Evidence weights (see architecture doc, section 8).
 # human_decision > existing_test > builder/fixture > usage > enum/constraint
-# Exactly the types test-plan.schema.json allows. Weighting a type the schema
+# Exactly the types tc-test-plan.schema.json allows. Weighting a type the schema
 # rejects is dead code that suggests the planner may use it.
 WEIGHTS = {
     "human_decision": 0.95,

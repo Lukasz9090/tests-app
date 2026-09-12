@@ -2,11 +2,11 @@
 """Run PIT on the target class only and report the surviving mutants.
 
 Invokes the mutationCoverage goal directly: nothing is compiled here, PIT reuses
-the classes built by run_tests.py and drives the tests itself. A history file is
+the classes built by tc_run_tests.py and drives the tests itself. A history file is
 kept per target so later repair iterations skip unchanged mutants.
 
 Usage:
-  python mutation.py <TargetSlug> --repo . [--module M] [--iteration 1]
+  python tc_mutation.py <TargetSlug> --repo . [--module M] [--iteration 1]
                      [--gate 0.7] [--provider pit|descartes]
 """
 
@@ -17,7 +17,7 @@ import sys
 import time
 from pathlib import Path
 
-import _common as c
+import tc_common as c
 
 GATE_KEY = "mutation_score_target_scope"
 KILLED = {"KILLED", "TIMED_OUT", "MEMORY_ERROR"}

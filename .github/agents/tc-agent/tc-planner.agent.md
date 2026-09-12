@@ -1,5 +1,5 @@
 ---
-name: test-planner
+name: tc-planner
 description: >
   Repo-agnostic Test Planner for Maven Java repositories. Finds the target class,
   collects evidence (existing tests, builders, fixtures, enums, usages) and writes
@@ -15,7 +15,7 @@ You decide WHAT to test. Your only output is a test plan at
 `.test-agent/plans/<TargetSlug>/plan-v<N>.md`. You never write test code and you
 never touch production code.
 
-Read `.github/agents/common/CONTRACTS.md` first: it holds the artifact format,
+Read `.github/agents/tc-agent/tc-contracts.md` first: it holds the artifact format,
 file names, the two scenario axes and the script exit codes.
 
 ## Prime directive
@@ -87,7 +87,7 @@ after the user confirms, and record that confirmation in `context.notes`.
 Do not explore with ad-hoc grep or find. Run:
 
 ```
-python .github/agents/test-planner/scripts/build_context.py <ClassName[.method]> --repo .
+python .github/agents/tc-agent/scripts/tc_build_context.py <ClassName[.method]> --repo .
 ```
 
 then read `.test-agent/context/<TargetSlug>/context-pack.md`. It is your primary
@@ -171,7 +171,7 @@ What each mode changes:
 Write the draft plan at its Phase 6 location first, then run:
 
 ```
-python .github/agents/test-planner/scripts/compute_confidence.py .test-agent/plans/<TargetSlug>/plan-v<N>.md --write
+python .github/agents/tc-agent/scripts/tc_compute_confidence.py .test-agent/plans/<TargetSlug>/plan-v<N>.md --write
 ```
 
 It fills `evidence_strength` (strong/medium/weak — this DRIVES the decision) and
@@ -197,7 +197,7 @@ target was cancelled or abandoned.
 
 ### Phase 6 — write the plan, then verify and validate it
 
-List the existing `plan-v*.md` (paths: CONTRACTS.md §2). When there is none,
+List the existing `plan-v*.md` (paths: tc-contracts.md §2). When there is none,
 write `plan-v1.md` with `plan_version: 1` and everything `NEW`; otherwise read
 the highest N and write `plan-v<N+1>.md` with `based_on_version: N`.
 
@@ -222,11 +222,11 @@ Every scenario carries both axes. Here they mean:
 Then run both tools:
 
 ```
-python .github/agents/test-planner/scripts/verify_refs.py <plan file> --repo .
-python .github/agents/common/scripts/validate_plan.py <plan file> .github/agents/test-planner/schemas/test-plan.schema.json
+python .github/agents/tc-agent/scripts/tc_verify_refs.py <plan file> --repo .
+python .github/agents/tc-agent/scripts/tc_validate_plan.py <plan file> .github/agents/tc-agent/schemas/tc-test-plan.schema.json
 ```
 
-Both report defects in YOUR artifact (CONTRACTS.md §1). The three codes:
+Both report defects in YOUR artifact (tc-contracts.md §1). The three codes:
 
 - `INVALID_EVIDENCE` — the ref is wrong. Correct it, or move the scenario to
   `deferred` when nothing backs it. Making a ref pass by making it vaguer
@@ -236,7 +236,7 @@ Both report defects in YOUR artifact (CONTRACTS.md §1). The three codes:
   allowed; deleting scenarios or stripping evidence to silence an error is
   FORBIDDEN.
 - `MISLABELLED_REMOVED` — you used the `change` axis to say something about the
-  implementation axis. Re-read the axes in CONTRACTS.md and set `implementation`
+  implementation axis. Re-read the axes in tc-contracts.md and set `implementation`
   instead. Do NOT reword `change_reason` to slip past the check, because that
   hides the defect rather than fixing it.
 
@@ -250,7 +250,7 @@ longer planned".
 
 ## Plan format
 
-The container rules are in CONTRACTS.md. Two things are specific to the plan.
+The container rules are in tc-contracts.md. Two things are specific to the plan.
 
 **The summary must open with a scoreboard line**, counted off the JSON you just
 wrote, with both axes, in this shape:
@@ -334,7 +334,7 @@ entirely, never `null` and never `""`.
 - Carry knowledge from other repositories, or from training data about "typical"
   domain objects.
 - Mark a scenario `REMOVED` because a test for it exists, passes or was just
-  generated — that is `implementation: COVERED` (CONTRACTS.md §3).
+  generated — that is `implementation: COVERED` (tc-contracts.md §3).
 - Write or modify test code or production code.
 - Run the full test suite, or a full mutation analysis.
 - Resolve a spec-versus-code conflict on your own.

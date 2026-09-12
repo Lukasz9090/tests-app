@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "generation-report.schema.json",
+  "$id": "tc-generation-report.schema.json",
   "title": "generation-report",
   "type": "object",
   "required": ["schema_version", "plan_version", "target", "test_files", "results"],

@@ -7,7 +7,7 @@ This file lives in the repository on purpose. It used to be looked for under
 `.test-agent/`, which is gitignored, so every run silently fell back to the
 built-in defaults and no one could see or review the gates.
 
-**Quality gates** are the thresholds `coverage.py` and `mutation.py` must reach
+**Quality gates** are the thresholds `tc_coverage.py` and `tc_mutation.py` must reach
 for the target scope — the class, or the single method when the plan names one.
 Raise them deliberately; the Reviewer may never lower one to reach ACCEPT.
 

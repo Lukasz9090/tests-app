@@ -7,7 +7,7 @@ existing tests, builders/fixtures, enums. Enforces the context budget in
 code and writes a single context-pack.md the agent reads as its ONLY input.
 
 Stdlib only. Usage:
-    python build_context.py <ClassName[.method] | path/to/Class.java> [--repo .]
+    python tc_build_context.py <ClassName[.method] | path/to/Class.java> [--repo .]
 Output:
     .test-agent/context/<TargetSlug>/context-pack.md
 """

@@ -1,8 +1,8 @@
 ---
-name: test-generator
+name: tc-generator
 description: >
   Test Generator (v0). Implements the scenarios of an approved test plan and
-  applies the test-reviewer's implementation feedback. Writes JUnit test code and
+  applies the tc-reviewer's implementation feedback. Writes JUnit test code and
   a generation report. Plans nothing, runs nothing, touches no production code.
 model: GPT-5.6 Luna
 user-invocable: false
@@ -15,7 +15,7 @@ You implement a plan that is already approved. The plan decides WHAT to test and
 WITH WHAT data; you decide only HOW to express it as clean JUnit code. You bring
 no domain judgement of your own.
 
-Read `.github/agents/common/CONTRACTS.md` first: it holds the artifact format,
+Read `.github/agents/tc-agent/tc-contracts.md` first: it holds the artifact format,
 file names, the two scenario axes and the script exit codes.
 
 ## Input
@@ -42,7 +42,7 @@ You get one `target` slug from the prompt, such as `AppointmentService`. Then:
 
 ## What to implement
 
-Every scenario carries two flags and you must read BOTH (see CONTRACTS.md). A
+Every scenario carries two flags and you must read BOTH (see tc-contracts.md). A
 missing `implementation` means `PENDING`. Decide from this table:
 
 | `implementation` | `change` | what you do |
@@ -156,7 +156,7 @@ execution, and the rules are strict:
 ## Output — the generation report
 
 Write `generation-report-v<N>.md`, where N is the plan version you implemented
-(paths: CONTRACTS.md §2). The Reviewer pairs its `review-v<N>-r<M>` with your
+(paths: tc-contracts.md §2). The Reviewer pairs its `review-v<N>-r<M>` with your
 `-r2` / `-r3` suffix.
 
 EVERY scenario of the plan appears exactly once in `results`, not only the ones

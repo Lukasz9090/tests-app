@@ -6,12 +6,12 @@ and an agent follows an example far more literally than a schema. When a schema
 changes and the example does not, every agent is then instructed to produce an
 artifact that will be rejected — and the first thing to notice is a live run.
 
-This also validates `project-profile.md`, which the Reviewer reads for its
+This also validates `tc-project-profile.md`, which the Reviewer reads for its
 quality gates. A malformed profile silently reverts to the built-in defaults, so
 "it parses" is not something to find out during a review.
 
 Usage:
-    python .github/agents/common/tools/check_examples.py [--repo .]
+    python .github/agents/tc-agent/tools/tc_check_examples.py [--repo .]
 
 Exit codes:
     0 — every example and the profile validate
@@ -28,11 +28,11 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve()
-AGENTS = HERE.parents[2]
-sys.path.insert(0, str(AGENTS / "common" / "scripts"))
+TC = HERE.parents[1]
+sys.path.insert(0, str(TC / "scripts"))
 
 try:
-    import validate_plan as vp
+    import tc_validate_plan as vp
 except ImportError as exc:  # pragma: no cover - environment problem
     print(f"CANNOT_RUN: {exc}", file=sys.stderr)
     sys.exit(2)
@@ -41,9 +41,9 @@ FENCE = re.compile(r"^```json\s*\n(.*?)\n```", re.S | re.M)
 
 # Which schema the example in each file must satisfy.
 EXPECTED = {
-    "test-planner.agent.md": AGENTS / "test-planner" / "schemas" / "test-plan.schema.json",
-    "test-generator.agent.md": AGENTS / "test-generator" / "schemas" / "generation-report.schema.json",
-    "common/project-profile.md": AGENTS / "common" / "schemas" / "project-profile.schema.json",
+    "tc-planner.agent.md": TC / "schemas" / "tc-test-plan.schema.json",
+    "tc-generator.agent.md": TC / "schemas" / "tc-generation-report.schema.json",
+    "tc-project-profile.md": TC / "schemas" / "tc-project-profile.schema.json",
 }
 
 
@@ -63,7 +63,7 @@ def main() -> int:
     checked = 0
 
     for relative, schema_path in sorted(EXPECTED.items()):
-        source = AGENTS / relative
+        source = TC / relative
         if not source.is_file():
             print(f"CANNOT_RUN: {source} is missing", file=sys.stderr)
             return 2

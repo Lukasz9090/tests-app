@@ -3,11 +3,11 @@
 
 This is the ONLY check script that builds the project. It makes sure the JaCoCo
 agent is attached exactly ONCE - injected as a fully-qualified goal only when the
-pom does not already bind prepare-agent - so coverage.py can report from the
+pom does not already bind prepare-agent - so tc_coverage.py can report from the
 resulting jacoco.exec without running the tests a second time.
 
 Usage:
-  python run_tests.py <TargetSlug> --repo . [--module M] [--iteration 1]
+  python tc_run_tests.py <TargetSlug> --repo . [--module M] [--iteration 1]
                       [--repeat 2] [--tests A,B] [--no-existing]
 """
 
@@ -20,7 +20,7 @@ import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-import _common as c
+import tc_common as c
 
 COMPILER_ERROR = re.compile(r"^\[ERROR\]\s+(.+?\.java):\[(\d+),(\d+)\]\s+(.*)$", re.M)
 ASSERTION_MARKERS = (

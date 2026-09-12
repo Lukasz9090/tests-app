@@ -13,11 +13,11 @@ otherwise reported as "should not be valid under the given schema", which tells
 the agent that wrote the artifact nothing about what to write instead — and an
 unactionable error is how a defect gets "fixed" by deleting the field.
 
-The artifact is read through md_payload, the single fence reader shared by every
+The artifact is read through tc_md_payload, the single fence reader shared by every
 script, so a file that one tool accepts is accepted by all of them.
 
 Usage:
-  validate_plan.py <artifact.md|artifact.json> <schema.json>
+  tc_validate_plan.py <artifact.md|artifact.json> <schema.json>
 
 Exit 0 = artifact valid. Exit 1 = INVALID_ARTIFACT, with every violation listed,
 not just the first. Exit 2 = the check could not run (missing schema, or
@@ -31,7 +31,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from md_payload import payload as read_payload  # noqa: E402
+from tc_md_payload import payload as read_payload  # noqa: E402
 
 
 def _validator(schema: dict):
@@ -41,7 +41,7 @@ def _validator(schema: dict):
     except ImportError as exc:
         raise RuntimeError(
             "this check needs the jsonschema library: pip install -r "
-            ".github/agents/requirements.txt (or pip install jsonschema)"
+            ".github/agents/tc-agent/tc-requirements.txt (or pip install jsonschema)"
         ) from exc
     return Draft202012Validator(schema)
 
@@ -98,7 +98,7 @@ def custom_message(schema: dict, error) -> str | None:
 def validate(instance, schema: dict) -> list:
     """Human-readable violations, empty list = valid.
 
-    Kept as a function because check_examples.py validates in-process.
+    Kept as a function because tc_check_examples.py validates in-process.
     """
     violations = []
     for error in _validator(schema).iter_errors(instance):

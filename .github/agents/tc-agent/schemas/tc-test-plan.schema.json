@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "test-plan.schema.json",
+  "$id": "tc-test-plan.schema.json",
   "title": "test-plan",
   "type": "object",
   "required": ["schema_version", "plan_version", "status"],
@@ -83,7 +83,7 @@
         "properties": {
           "scenarios": { "items": { "required": ["evidence_strength"] } }
         },
-        "errorMessage": "every scenario of a READY / READY_PARTIAL plan needs `evidence_strength`, which is filled by compute_confidence.py. A plan without it skipped Phase 5, so nothing decided whether a scenario belongs in `scenarios` or in `deferred`."
+        "errorMessage": "every scenario of a READY / READY_PARTIAL plan needs `evidence_strength`, which is filled by tc_compute_confidence.py. A plan without it skipped Phase 5, so nothing decided whether a scenario belongs in `scenarios` or in `deferred`."
       }
     },
     {

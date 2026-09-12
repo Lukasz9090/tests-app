@@ -6,7 +6,7 @@ Emits the concrete uncovered lines/branches, which is what the Reviewer's
 attribution rule consumes - the percentage alone is not actionable.
 
 Usage:
-  python coverage.py <TargetSlug> --repo . [--module M] [--iteration 1] [--gate 0.8]
+  python tc_coverage.py <TargetSlug> --repo . [--module M] [--iteration 1] [--gate 0.8]
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ import sys
 import time
 from pathlib import Path
 
-import _common as c
+import tc_common as c
 
 GATE_KEY = "branch_coverage_target_scope"
 
@@ -81,11 +81,11 @@ def main() -> int:
 
         exec_file = c.checks_dir(repo, args.slug) / "jacoco.exec"
         if not exec_file.exists():
-            raise c.CheckError(f"{exec_file} not found - run run_tests.py first")
+            raise c.CheckError(f"{exec_file} not found - run tc_run_tests.py first")
         if exec_file.stat().st_size == 0:
             raise c.CheckError(
                 f"{exec_file} is empty - the tests ran without the JaCoCo agent, so any report "
-                "would be empty too; re-run run_tests.py and read its diagnosis"
+                "would be empty too; re-run tc_run_tests.py and read its diagnosis"
             )
 
         # dataFile HAS a user property, outputDirectory does NOT (it defaults to

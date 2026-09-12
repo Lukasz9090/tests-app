@@ -12,7 +12,7 @@ trail is recomputed from files every call, so a lost ledger (git clean) never
 corrupts control flow; `state` reconstructs it from the versioned artifacts.
 
 Standard library only; run with the plain `python` on PATH (`python3` where that
-is its name). Only validate_plan.py needs a dependency (jsonschema).
+is its name). Only tc_validate_plan.py needs a dependency (jsonschema).
 
 Subcommands
 -----------
@@ -42,14 +42,14 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from md_payload import load_payload, save_payload  # noqa: E402
+from tc_md_payload import load_payload, save_payload  # noqa: E402
 
 PLAN_STATUS_STOP = {"BLOCKED", "NEEDS_CLARIFICATION", "UNSUPPORTED_REPOSITORY"}
 PLAN_STATUS_GO = {"READY", "READY_PARTIAL"}
 # COMPLETE = valid plan, nothing left to implement. A success state, routed
 # straight to DONE: dispatching a generator against it can only produce an
 # empty report, which is both a wasted round and an artifact that violates
-# generation-report.schema.json (results/minItems).
+# tc-generation-report.schema.json (results/minItems).
 PLAN_STATUS_COMPLETE = "COMPLETE"
 DECISION_ACCEPT = {"ACCEPT", "ACCEPT_PARTIAL"}
 DECISION_STOP = {"NEEDS_TRIAGE", "BLOCKED"}
@@ -259,7 +259,7 @@ def compute_state(repo: Path, slug: str, impl_cap: int, plan_cap: int) -> dict:
 
     if not plan_versions:
         out["next_action"] = "PLAN"
-        out["dispatch"] = {"agent": "test-planner", "plan_version": 1}
+        out["dispatch"] = {"agent": "tc-planner", "plan_version": 1}
         out["reason"] = "no plan on disk; plan the target first"
         return out
 
@@ -330,7 +330,7 @@ def compute_state(repo: Path, slug: str, impl_cap: int, plan_cap: int) -> dict:
         # version blind and the finding dies between two valid artifacts.
         carry, _ = open_feedback_review(directory, n - 1) if n > 1 else (None, None)
         out["next_action"] = "GENERATE"
-        out["dispatch"] = {"agent": "test-generator", "plan_version": n, "iteration": 1,
+        out["dispatch"] = {"agent": "tc-generator", "plan_version": n, "iteration": 1,
                            "report_path": rel(gen_report_path(directory, n, 1), repo),
                            "prior_review_path": None,
                            "carry_review_path": rel(carry, repo) if carry else None}
@@ -341,7 +341,7 @@ def compute_state(repo: Path, slug: str, impl_cap: int, plan_cap: int) -> dict:
 
     if rev_m < gen_m:
         out["next_action"] = "REVIEW"
-        out["dispatch"] = {"agent": "test-reviewer", "plan_version": n, "iteration": gen_m,
+        out["dispatch"] = {"agent": "tc-reviewer", "plan_version": n, "iteration": gen_m,
                            "review_path": rel(review_path(directory, n, gen_m), repo)}
         out["reason"] = f"generation iteration {gen_m} is awaiting review"
         return out
@@ -386,7 +386,7 @@ def compute_state(repo: Path, slug: str, impl_cap: int, plan_cap: int) -> dict:
             return out
         out["next_action"] = "GENERATE"
         out["dispatch"] = {
-            "agent": "test-generator", "plan_version": n, "iteration": gen_m + 1,
+            "agent": "tc-generator", "plan_version": n, "iteration": gen_m + 1,
             "report_path": rel(gen_report_path(directory, n, gen_m + 1), repo),
             "prior_review_path": rel(r_path, repo),  # carries feedback.implementation forward
         }
@@ -401,13 +401,13 @@ def compute_state(repo: Path, slug: str, impl_cap: int, plan_cap: int) -> dict:
             return out
         out["next_action"] = "PLAN"
         out["dispatch"] = {
-            "agent": "test-planner", "plan_version": n + 1, "based_on_version": n,
+            "agent": "tc-planner", "plan_version": n + 1, "based_on_version": n,
             # CRITICAL: implementation findings must survive the plan bump, or a
             # weak-assertion finding from v{n} silently dies when the generator
             # later looks only for a review of v{n+1} (which won't exist yet).
             "carry_review_path": rel(r_path, repo) if impl_feedback else None,
             # The planner classifies `implementation` from these, not from a
-            # grep of the test files — see test-planner Phase 2.5.
+            # grep of the test files — see tc-planner Phase 2.5.
             "prior_generation_report_path": rel(gen_report_path(directory, n, gen_m), repo),
             "prior_review_path": rel(r_path, repo),
         }
@@ -450,7 +450,7 @@ def ledger_write(repo: Path, slug: str, payload: dict) -> None:
     title = f"# Orchestration Ledger: {slug}\n"
     summary = (f"Run {payload.get('status', '?')}; {len(payload.get('history', []))} step(s) recorded. "
                f"This file is an audit trail — control flow is recomputed from the versioned "
-               f"artifacts by `orchestrate.py state`, never from here.\n\n")
+               f"artifacts by `tc_orchestrate.py state`, never from here.\n\n")
     if path.is_file():
         _, original = load_payload(path)
         save_payload(path, payload, original)

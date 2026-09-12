@@ -21,14 +21,16 @@ an example.
 
 | artifact | schema |
 |---|---|
-| `plan-v<N>.md` | `test-planner/schemas/test-plan.schema.json` |
-| `generation-report-v<N>[-r<M>].md` | `test-generator/schemas/generation-report.schema.json` |
-| `review-v<N>-r<M>.md` | `test-reviewer/schemas/review.schema.json` |
+| `plan-v<N>.md` | `$SCH/tc-test-plan.schema.json` |
+| `generation-report-v<N>[-r<M>].md` | `$SCH/tc-generation-report.schema.json` |
+| `review-v<N>-r<M>.md` | `$SCH/tc-review.schema.json` |
+
+`$SCH` = `.github/agents/tc-agent/schemas`, `$C` = `.github/agents/tc-agent/scripts`.
 
 Validate before you finish:
 
 ```
-python .github/agents/common/scripts/validate_plan.py <file> <schema>
+python .github/agents/tc-agent/scripts/tc_validate_plan.py <file> <schema>
 ```
 
 The tool reports defects in YOUR artifact, and there is one correct answer: fix
@@ -73,9 +75,9 @@ a person who reads `REMOVED` will delete a working test.
 ## 4. Scripts
 
 Run every script with the plain `python` on PATH (`python3` where that is its
-name). There is one dependency, `jsonschema`, used by `validate_plan.py`:
-`pip install -r .github/agents/requirements.txt`. Everything else is standard
-library, so there is no virtualenv to set up.
+name). There is one dependency, `jsonschema`, used by `tc_validate_plan.py`:
+`pip install -r .github/agents/tc-agent/tc-requirements.txt`. Everything else
+is standard library, so there is no virtualenv to set up.
 
 This pipeline supports **Maven only**. Every check script drives `mvn`.
 

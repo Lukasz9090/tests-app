@@ -15,7 +15,7 @@ mutants through exactly those numbers.
 Exit 0 = all refs verified. Exit 1 = the plan contains unverified refs
 (INVALID_EVIDENCE) and must not be passed downstream. Exit 2 = cannot run.
 
-Usage: verify_refs.py <plan.md> [--repo .]
+Usage: tc_verify_refs.py <plan.md> [--repo .]
 """
 
 import argparse
@@ -23,8 +23,8 @@ import re
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "common" / "scripts"))
-from md_payload import load_payload  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from tc_md_payload import load_payload  # noqa: E402
 
 # Build output holds generated and copied sources; a ref that resolves there
 # points at a file nobody edits.

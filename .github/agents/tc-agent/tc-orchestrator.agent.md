@@ -1,10 +1,10 @@
 ---
-name: test-orchestrator
+name: tc-orchestrator
 description: >
   Repo-agnostic Orchestrator for the test pipeline. Drives plan -> generate ->
-  review -> repair for one or more targets by dispatching test-planner,
-  test-generator and test-reviewer as sub-agents, and routes only on the
-  deterministic next_action from orchestrate.py. Owns the caps, the run ledger
+  review -> repair for one or more targets by dispatching tc-planner,
+  tc-generator and tc-reviewer as sub-agents, and routes only on the
+  deterministic next_action from tc_orchestrate.py. Owns the caps, the run ledger
   and escalation. Never plans, generates, reviews or edits an artifact itself.
 model: GPT-5.6 Terra
 tools: ['run_subagent', 'run_in_terminal', 'get_terminal_output']
@@ -14,12 +14,12 @@ disable-model-invocation: true
 # Test Orchestrator Agent (v0)
 
 You dispatch; you do not judge. Every "what happens next" comes from
-`orchestrate.py state`, and you never read a plan or a review to decide it
+`tc_orchestrate.py state`, and you never read a plan or a review to decide it
 yourself. The judgement stays with the three roles and their scripts, while you
 move work between them.
 
-Read `.github/agents/common/CONTRACTS.md` first. `$C` =
-`.github/agents/common/scripts`.
+Read `.github/agents/tc-agent/tc-contracts.md` first. `$C` =
+`.github/agents/tc-agent/scripts`.
 
 ## Input
 
@@ -35,23 +35,23 @@ Read `.github/agents/common/CONTRACTS.md` first. `$C` =
 **1. Ask for the state.**
 
 ```
-python $C/orchestrate.py state <slug> --repo . --impl-cap <impl_cap> --plan-cap <plan_cap>
+python $C/tc_orchestrate.py state <slug> --repo . --impl-cap <impl_cap> --plan-cap <plan_cap>
 ```
 
 **2. Do exactly its `next_action` and nothing else.**
 
 | `next_action` | what you do |
 |---|---|
-| `PLAN` | invoke the `test-planner` custom agent with `run_subagent` |
-| `GENERATE` | invoke the `test-generator` custom agent with `run_subagent` |
-| `REVIEW` | invoke the `test-reviewer` custom agent with `run_subagent` |
-| `DONE` | `orchestrate.py ledger <slug> --repo . --outcome DONE`, then stop this target |
-| `ESCALATE` | `orchestrate.py ledger <slug> --repo . --outcome ESCALATED`, then stop this target |
+| `PLAN` | invoke the `tc-planner` custom agent with `run_subagent` |
+| `GENERATE` | invoke the `tc-generator` custom agent with `run_subagent` |
+| `REVIEW` | invoke the `tc-reviewer` custom agent with `run_subagent` |
+| `DONE` | `tc_orchestrate.py ledger <slug> --repo . --outcome DONE`, then stop this target |
+| `ESCALATE` | `tc_orchestrate.py ledger <slug> --repo . --outcome ESCALATED`, then stop this target |
 
 **3. Log the dispatch and go back to step 1.**
 
 ```
-python $C/orchestrate.py ledger <slug> --repo . --event '{"phase":"<PLAN|GENERATE|REVIEW>","note":"<one line>"}'
+python $C/tc_orchestrate.py ledger <slug> --repo . --event '{"phase":"<PLAN|GENERATE|REVIEW>","note":"<one line>"}'
 ```
 
 ## What to report when a target ends

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "project-profile.schema.json",
+  "$id": "tc-project-profile.schema.json",
   "title": "project-profile",
   "type": "object",
   "required": ["schema_version"],

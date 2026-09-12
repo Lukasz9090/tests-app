@@ -1,4 +1,4 @@
-"""Shared helpers for the test-reviewer check scripts.
+"""Shared helpers for the tc-reviewer check scripts.
 
 Standard library only. Exit-code convention used by every check script:
   0 - check ran, gate satisfied
@@ -16,8 +16,8 @@ import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "common" / "scripts"))
-from md_payload import load_payload as _load_payload  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from tc_md_payload import load_payload as _load_payload  # noqa: E402
 
 PACKAGE = re.compile(r"^\s*package\s+([\w.]+)\s*;", re.M)
 VERSION_SUFFIX = re.compile(r"-v(\d+)(?:-r(\d+))?\.md$")
@@ -29,7 +29,7 @@ DEFAULT_GATES = {
 # Both tools must be able to READ the class files the project was compiled with.
 # JaCoCo 0.8.15 is the first release with official Java 26 (class file major 70)
 # support; older ones fail the report goal outright. Override per repo under
-# `tooling` in project-profile.md when the build targets an older JDK.
+# `tooling` in tc-project-profile.md when the build targets an older JDK.
 DEFAULT_VERSIONS = {"jacoco": "0.8.15", "pit": "1.25.9"}
 
 
@@ -179,20 +179,20 @@ JDK_HINTS = (
     (
         "unsupported class file major version",
         "the plugin is older than the JDK that compiled these classes - pin a newer version "
-        "under tooling in project-profile.md (or build with an older --release)",
+        "under tooling in tc-project-profile.md (or build with an older --release)",
     ),
     (
         "incompatible version",
         "the exec file was written by a different JaCoCo version than the report goal - pin one "
-        "version under tooling in project-profile.md and delete target/jacoco.exec",
+        "version under tooling in tc-project-profile.md and delete target/jacoco.exec",
     ),
     (
         "invalid execution data",
-        "the exec file is corrupt - delete target/jacoco.exec and re-run run_tests.py",
+        "the exec file is corrupt - delete target/jacoco.exec and re-run tc_run_tests.py",
     ),
     (
         "missing execution data",
-        "no exec file - the tests ran without the agent; re-run run_tests.py and read its diagnosis",
+        "no exec file - the tests ran without the agent; re-run tc_run_tests.py and read its diagnosis",
     ),
 )
 
@@ -349,8 +349,8 @@ def resolve_module(repo: Path, plan: dict, override: str | None,
 
 
 PROFILE_PATHS = (
-    Path(".github") / "agents" / "common" / "project-profile.md",   # committed config
-    Path(".test-agent") / "project-profile.md",                     # legacy location
+    Path(".github") / "agents" / "tc-agent" / "tc-project-profile.md",  # committed config
+    Path(".test-agent") / "project-profile.md",                          # legacy location
 )
 
 
@@ -416,7 +416,7 @@ def pom_plugin_version(repo: Path, module: str | None, artifact_id: str) -> str 
 
 
 def tool_version(repo: Path, tool: str, override=None, module: str | None = None) -> str:
-    """CLI flag > project-profile.md > version declared in the pom > agent default.
+    """CLI flag > tc-project-profile.md > version declared in the pom > agent default.
 
     The pom wins over the default on purpose: prepare-agent and report must run
     the same JaCoCo version, otherwise the report goal rejects the exec file.

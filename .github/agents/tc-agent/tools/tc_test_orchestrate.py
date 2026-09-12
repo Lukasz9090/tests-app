@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Decision-table tests for the pipeline control flow — DEV TOOL, not runtime.
 
-`orchestrate.py state` is the brain of the pipeline: every "what next" the
+`tc_orchestrate.py state` is the brain of the pipeline: every "what next" the
 Orchestrator agent performs comes from it, and the agent is forbidden to
 second-guess it. A wrong verdict here is invisible — the run simply stops early,
 repeats a round, or reports work as finished while a review finding is still
@@ -14,7 +14,7 @@ Covered:
     learns about `unimplementable`, `suggestions`, and a working tree the run
     left with failing tests,
   * `scenarios_in_scope` — the two-axis rule that decides what is left to build,
-  * artifact selection in `_common` (`load_report`, `latest`), where a glob once
+  * artifact selection in `tc_common` (`load_report`, `latest`), where a glob once
     matched v10 for plan v1,
   * the `ledger` subcommand, where reading must not create the file.
 
@@ -22,7 +22,7 @@ Standard library only, no pytest, no maven: every case writes small markdown
 artifacts into a temporary repository. Runs in well under a second.
 
 Usage:
-    python .github/agents/common/tools/test_orchestrate.py [--verbose]
+    python .github/agents/tc-agent/tools/tc_test_orchestrate.py [--verbose]
 
 Exit codes (same discipline as the Reviewer scripts):
     0 — every case passed
@@ -40,14 +40,13 @@ import tempfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve()
-AGENTS = HERE.parents[2]
-ORCHESTRATE = AGENTS / "common" / "scripts" / "orchestrate.py"
-sys.path.insert(0, str(AGENTS / "common" / "scripts"))
-sys.path.insert(0, str(AGENTS / "test-reviewer" / "scripts"))
+TC = HERE.parents[1]
+ORCHESTRATE = TC / "scripts" / "tc_orchestrate.py"
+sys.path.insert(0, str(TC / "scripts"))
 
 try:
-    import orchestrate as o
-    import _common as c
+    import tc_orchestrate as o
+    import tc_common as c
 except ImportError as exc:  # pragma: no cover - environment problem, not a defect
     print(f"CANNOT_RUN: {exc}", file=sys.stderr)
     sys.exit(2)
@@ -478,7 +477,7 @@ def test_plan_selection():
 
 
 def _check_report(repo, name: str, payload: dict) -> None:
-    """Write a tests-r<M>.md the way run_tests.py would."""
+    """Write a tests-r<M>.md the way tc_run_tests.py would."""
     checks = repo.root / ".test-agent" / "checks" / repo.SLUG
     checks.mkdir(parents=True, exist_ok=True)
     (checks / name).write_text(

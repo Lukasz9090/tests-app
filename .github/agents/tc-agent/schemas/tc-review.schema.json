@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "review.schema.json",
+  "$id": "tc-review.schema.json",
   "title": "review",
   "type": "object",
   "required": [
@@ -60,7 +60,7 @@
           "properties": {
             "status": {
               "enum": ["PASSED", "FAILED", "NOT_RUN"],
-              "description": "NOT_RUN = run_tests.py could not run at all (exit 2), so compilation was never attempted."
+              "description": "NOT_RUN = tc_run_tests.py could not run at all (exit 2), so compilation was never attempted."
             },
             "errors": { "type": "array", "items": { "type": "string" } },
             "reason": { "type": "string" }
@@ -73,12 +73,12 @@
           "properties": {
             "status": {
               "enum": ["PASSED", "FAILED", "ERROR", "COMPILE_ERROR", "UNAVAILABLE", "NOT_RUN"],
-              "description": "Copy the status run_tests.py reported. UNAVAILABLE = the script exited 2, which is a BLOCKED decision, never a pass."
+              "description": "Copy the status tc_run_tests.py reported. UNAVAILABLE = the script exited 2, which is a BLOCKED decision, never a pass."
             },
             "reason": { "type": "string" },
             "flaky_only": {
               "type": "boolean",
-              "description": "True when every test passed but the repeated runs disagreed: run_tests.py exits 1 with status PASSED. Treat it as a defect (REPAIR_IMPLEMENTATION), not a pass."
+              "description": "True when every test passed but the repeated runs disagreed: tc_run_tests.py exits 1 with status PASSED. Treat it as a defect (REPAIR_IMPLEMENTATION), not a pass."
             },
             "total": { "type": "integer", "minimum": 0 },
             "failed": { "type": "integer", "minimum": 0 },
