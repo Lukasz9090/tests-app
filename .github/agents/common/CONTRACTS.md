@@ -88,3 +88,10 @@ Check scripts use these exit codes:
 | 2 | the check could NOT run (tooling or environment) |
 
 Exit 2 is never a pass.
+
+**A script is a black box.** Your whole contract with one is the command you
+run, the exit code it returns and the report it writes. Never open a script's
+source. It tells you nothing the report does not, it spends the context you need
+for the plan and the tests, and it invites you to reason about how a check works
+instead of acting on what it found. A script that behaves unexpectedly is
+something to report, not something to debug.

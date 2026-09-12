@@ -60,6 +60,13 @@ Four rules sit on top of the table:
   survives untouched into v4.
 - Apply each feedback entry at the line it names. Fix exactly what it asks and
   do not rewrite passing tests around it.
+- **Stay inside the entry's `scope`**: `assertion` lets you change only what the
+  test asserts, `setup` only how it arranges, `test` the whole method. An absent
+  scope means `test`. When the fix you see needs more than the scope allows, do
+  NOT widen it: keep the scenario as it is, report it `BLOCKED`, and name the
+  part you would have had to touch. A scoped request is there because that test
+  PASSES today — rewriting its stubs to improve an assertion is how a green test
+  comes back red, which is worse than the weakness that was flagged.
 - Ignore `deferred`, and leave any scenario the review lists under
   `unimplementable` as BLOCKED with the same reason, until the suggested code
   change lands.
@@ -194,7 +201,8 @@ user's final report. Never apply them yourself.
 - [ ] nothing is called removed or dropped when the plan says COVERED:
       `SKIPPED` means "done", `OBSOLETE` means "delete this"
 - [ ] every TC in the review's `feedback.implementation` was re-implemented and
-      its finding actually addressed
+      its finding actually addressed, without editing anything outside the
+      entry's `scope`
 - [ ] every `IMPLEMENTED` result has its `// TC-nn` method in the file
 - [ ] on a `characterization: true` plan, every test written or repaired carries
       the `// CHARACTERIZATION:` line with `context.target_sha`

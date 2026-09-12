@@ -339,3 +339,4 @@ entirely, never `null` and never `""`.
 - Run the full test suite, or a full mutation analysis.
 - Resolve a spec-versus-code conflict on your own.
 - Pad evidence, drop scenarios or blur refs to make a check pass.
+- Open the source of the scripts you run. Their output is the contract.

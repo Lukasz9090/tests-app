@@ -222,7 +222,11 @@
                 "items": { "type": "string", "pattern": "^TC[0-9]+$" }
               },
               "location": { "type": "string" },
-              "request": { "type": "string" }
+              "request": { "type": "string" },
+              "scope": {
+                "enum": ["assertion", "setup", "test"],
+                "description": "What the Generator may rewrite. Narrow it on a test that already passes: `assertion` for a weak assertion, `setup` for unreadable arrangement, `test` only when the whole method must change. Absent means `test`."
+              }
             }
           }
         },

@@ -11,7 +11,8 @@ Covered:
   * every branch of `compute_state` (PLAN / GENERATE / REVIEW / DONE / ESCALATE),
     both caps, and the paths carried in `dispatch`,
   * `surface`, which is the only way the Orchestrator (no file-reading tool)
-    learns about `unimplementable` and `suggestions`,
+    learns about `unimplementable`, `suggestions`, and a working tree the run
+    left with failing tests,
   * `scenarios_in_scope` — the two-axis rule that decides what is left to build,
   * artifact selection in `_common` (`load_report`, `latest`), where a glob once
     matched v10 for plan v1,
@@ -202,8 +203,8 @@ def test_no_plan():
         state = repo.state()
         expect("next_action", state["next_action"], "PLAN")
         expect("dispatch.plan_version", state["dispatch"]["plan_version"], 1)
-        expect("surface is always present", state["surface"],
-               {"unimplementable": [], "suggestions": []})
+        expect("surface is always present, with all three keys", state["surface"],
+               {"unimplementable": [], "suggestions": [], "working_tree": {}})
 
 
 def test_unparseable_plan():
@@ -474,6 +475,72 @@ def test_plan_selection():
         path, _ = c.load_plan(repo.root, repo.SLUG)
         expect("latest plan", path.name, "plan-v10.md")
         expect("state uses it", repo.state()["plan"]["version"], 10)
+
+
+def _check_report(repo, name: str, payload: dict) -> None:
+    """Write a tests-r<M>.md the way run_tests.py would."""
+    checks = repo.root / ".test-agent" / "checks" / repo.SLUG
+    checks.mkdir(parents=True, exist_ok=True)
+    (checks / name).write_text(
+        "# Check: tests\n\n```json\n" + json.dumps(payload, indent=2) + "\n```\n",
+        encoding="utf-8",
+    )
+
+
+def test_working_tree_red():
+    @case("a run that stops at the cap must surface the tests it leaves red")
+    def _(repo):
+        repo.plan(1, "READY", [PENDING])
+        repo.report(1)
+        repo.review(1, 1, "REPAIR_IMPLEMENTATION", feedback=FEEDBACK)
+        _check_report(repo, "tests-r1.md", {
+            "status": "FAILED", "total": 11, "failed": 1,
+            "failures": [{"test": "TTest#shouldSkip", "failure_phase": "setup",
+                          "location": "TTest.java:200",
+                          "message": "Invalid use of argument matchers!"}],
+        })
+
+        state = repo.state(impl_cap=1)
+        tree = state["surface"]["working_tree"]
+        expect("next_action", state["next_action"], "ESCALATE")
+        expect("the red tree is reported", tree.get("tests_red"), True)
+        expect("the failing test is named",
+               [f["test"] for f in tree.get("failures", [])], ["TTest#shouldSkip"])
+        expect("with its location", tree["failures"][0]["location"], "TTest.java:200")
+        expect("report path is repo-relative", tree.get("report"),
+               ".test-agent/checks/T/tests-r1.md")
+
+
+def test_working_tree_green():
+    @case("a green run surfaces no working-tree warning")
+    def _(repo):
+        repo.plan(1, "READY", [PENDING])
+        repo.report(1)
+        repo.review(1, 1, "ACCEPT")
+        _check_report(repo, "tests-r1.md",
+                      {"status": "PASSED", "total": 11, "failed": 0, "failures": []})
+        state = repo.state()
+        expect("next_action", state["next_action"], "DONE")
+        expect("nothing to warn about", state["surface"]["working_tree"], {})
+
+
+def test_working_tree_compile_error():
+    @case("a tree that does not compile is reported as red too")
+    def _(repo):
+        repo.plan(1, "READY", [PENDING])
+        repo.report(1)
+        repo.review(1, 1, "REPAIR_IMPLEMENTATION", feedback=FEEDBACK)
+        _check_report(repo, "tests-r1.md",
+                      {"status": "PASSED", "total": 11, "failed": 0, "failures": []})
+        _check_report(repo, "tests-r2.md",
+                      {"status": "COMPILE_ERROR",
+                       "compiler_errors": ["TTest.java:12 cannot find symbol"]})
+        tree = repo.state(impl_cap=1)["surface"]["working_tree"]
+        expect("red", tree.get("tests_red"), True)
+        expect("the compiler line is carried", tree.get("compile_errors"),
+               ["TTest.java:12 cannot find symbol"])
+        expect("newest report wins, not the first",
+               tree.get("report"), ".test-agent/checks/T/tests-r2.md")
 
 
 def test_ledger():

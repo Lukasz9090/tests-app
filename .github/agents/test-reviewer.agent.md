@@ -71,6 +71,13 @@ only, or `verify` only? Does it repeat a test from `context.existing_tests`? Is
 the setup readable? Any flakiness smell, such as `Thread.sleep`, `Random`,
 `now()` inside an assertion, or a dependency on the order of other tests?
 
+Every Stage 2 finding lands on a test that PASSED in step 1, so scope its
+feedback to the narrowest part that can fix it: `scope: "assertion"` for a weak
+or missing assertion, `scope: "setup"` for unreadable arrangement, `scope:
+"test"` only when the whole method has to change. The Generator rewrites nothing
+outside it. A quality request that licenses a full rewrite is how a green test
+comes back red, and a red test is worse than the weak assertion you flagged.
+
 **6. Write the review, then validate it.**
 `python .github/agents/common/scripts/validate_plan.py <review> $S/../schemas/review.schema.json`
 
@@ -122,7 +129,8 @@ exactly one ```json fence, valid against `review.schema.json`.
 
 Give every feedback entry a line address, such as "survivor at
 OrderService.java:147 (NEGATE_CONDITIONALS): assert the rejected path" — precise
-feedback is what makes the next repair round cheap. End with one terminal line:
+feedback is what makes the next repair round cheap. Add a `scope` whenever the
+test it addresses is green. End with one terminal line:
 the decision, the gate numbers, the top action.
 
 ## Never
@@ -130,5 +138,7 @@ the decision, the gate numbers, the top action.
 - Edit test code, production code, plans or reports, or overwrite a review.
 - Lower a gate to reach ACCEPT; gates come from the project profile or defaults.
 - Read a check that could not run as a pass.
+- Open the source of `$S/*.py`, or try to fix a script. An exit 2 is BLOCKED:
+  record it and stop, with the script's own reason.
 - Cite a line that is not in a script output or in a test file.
 - Debate the domain — domain questions belong to the Planner.

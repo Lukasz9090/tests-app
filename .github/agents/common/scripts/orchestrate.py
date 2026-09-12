@@ -174,15 +174,54 @@ def _newest(directory: Path, up_to_version: int, iterations, path_of):
     return None
 
 
-def surface(directory: Path, n: int, review: dict | None = None) -> dict:
+def working_tree(repo: Path, slug: str) -> dict:
+    """What the run leaves behind in the repository, from the newest test check.
+
+    A pipeline that stops at a cap stops with whatever the Generator last wrote
+    still on disk. When that includes a red test, the build is broken and the
+    escalation must say so: "impl_cap reached" reads like a budget note, while
+    "one test fails and the suite is red" is the fact the user has to act on.
+    Nothing else surfaces it — the Orchestrator cannot read a check report.
+    """
+    checks = repo / ".test-agent" / "checks" / slug
+    pattern = re.compile(r"-r(\d+)\.md$")
+    reports = sorted((f for f in checks.glob("tests-r*.md") if pattern.search(f.name)),
+                     key=lambda f: int(pattern.search(f.name).group(1)))
+    if not reports:
+        return {}
+    newest = reports[-1]
+    data = _safe_payload(newest)
+    if "__error__" in data:
+        return {"report": rel(newest, repo), "unreadable": data["__error__"]}
+
+    status = data.get("status")
+    if status == "COMPILE_ERROR":
+        return {"report": rel(newest, repo), "tests_red": True,
+                "compile_errors": data.get("compiler_errors", [])[:10]}
+    failures = data.get("failures", []) or []
+    if not failures:
+        return {}
+    return {
+        "report": rel(newest, repo),
+        "tests_red": True,
+        "failures": [{"test": f.get("test"), "location": f.get("location"),
+                      "failure_phase": f.get("failure_phase"),
+                      "message": (f.get("message") or "")[:200]}
+                     for f in failures[:10]],
+    }
+
+
+def surface(directory: Path, n: int, review: dict | None = None,
+            repo: Path | None = None, slug: str | None = None) -> dict:
     """What the orchestrator must relay to the user but cannot read itself.
 
     `unimplementable` comes from the review, `suggestions` from the generation
-    report — different artifacts, and possibly from an EARLIER plan version than
-    the current one (a bumped plan has no report of its own yet). The
-    orchestrator dispatches only, so the state call hands both over.
+    report, `working_tree` from the newest test check — three artifacts, and the
+    first two possibly from an EARLIER plan version than the current one (a
+    bumped plan has no report of its own yet). The orchestrator dispatches only,
+    so the state call hands all of them over.
     """
-    out = {"unimplementable": [], "suggestions": []}
+    out = {"unimplementable": [], "suggestions": [], "working_tree": {}}
 
     if review is None:
         path = _newest(directory, n, _review_iterations, review_path)
@@ -195,6 +234,9 @@ def surface(directory: Path, n: int, review: dict | None = None) -> dict:
         report = _safe_payload(path)
         if "__error__" not in report:
             out["suggestions"] = report.get("suggestions", []) or []
+
+    if repo is not None and slug is not None:
+        out["working_tree"] = working_tree(repo, slug)
     return out
 
 
@@ -211,7 +253,7 @@ def compute_state(repo: Path, slug: str, impl_cap: int, plan_cap: int) -> dict:
         "caps": {"impl_cap": impl_cap, "plan_cap": plan_cap},
         "next_action": None,
         "dispatch": None,
-        "surface": {"unimplementable": [], "suggestions": []},
+        "surface": {"unimplementable": [], "suggestions": [], "working_tree": {}},
         "reason": None,
     }
 
@@ -236,13 +278,13 @@ def compute_state(repo: Path, slug: str, impl_cap: int, plan_cap: int) -> dict:
         open_path, open_review = open_feedback_review(directory, n)
         if open_path is not None:
             out["next_action"] = "ESCALATE"
-            out["surface"] = surface(directory, n, open_review)
+            out["surface"] = surface(directory, n, open_review, repo, slug)
             out["reason"] = (f"plan v{n} is COMPLETE, but {open_path.name} still has open "
                              f"feedback.implementation. Closing the run here would drop those "
                              f"findings; a human must decide whether they are addressed")
             return out
         out["next_action"] = "DONE"
-        out["surface"] = surface(directory, n)
+        out["surface"] = surface(directory, n, None, repo, slug)
         out["reason"] = (f"plan v{n} is COMPLETE: every scenario is already implemented "
                          f"(implementation: COVERED) or REMOVED; nothing left to generate")
         return out
@@ -273,13 +315,13 @@ def compute_state(repo: Path, slug: str, impl_cap: int, plan_cap: int) -> dict:
             open_path, open_review = open_feedback_review(directory, n)
             if open_path is not None:
                 out["next_action"] = "ESCALATE"
-                out["surface"] = surface(directory, n, open_review)
+                out["surface"] = surface(directory, n, open_review, repo, slug)
                 out["reason"] = (f"plan v{n} has no scenario in scope, but {open_path.name} "
                                  f"still has open feedback.implementation; those findings would "
                                  f"be lost")
                 return out
             out["next_action"] = "DONE"
-            out["surface"] = surface(directory, n)
+            out["surface"] = surface(directory, n, None, repo, slug)
             out["reason"] = (f"plan v{n} is {status} but no scenario is in scope "
                              f"(all COVERED or REMOVED); nothing to generate")
             return out
@@ -326,20 +368,20 @@ def compute_state(repo: Path, slug: str, impl_cap: int, plan_cap: int) -> dict:
 
     if decision in DECISION_ACCEPT:
         out["next_action"] = "DONE"
-        out["surface"] = surface(directory, n, review)
+        out["surface"] = surface(directory, n, review, repo, slug)
         out["reason"] = f"reviewer decided {decision} at v{n}-r{rev_m}"
         return out
 
     if decision in DECISION_STOP:
         out["next_action"] = "ESCALATE"
-        out["surface"] = surface(directory, n, review)
+        out["surface"] = surface(directory, n, review, repo, slug)
         out["reason"] = f"reviewer decided {decision}; belongs to a human (spec/code or unrunnable check)"
         return out
 
     if decision == "REPAIR_IMPLEMENTATION":
         if gen_m >= impl_cap:
             out["next_action"] = "ESCALATE"
-            out["surface"] = surface(directory, n, review)
+            out["surface"] = surface(directory, n, review, repo, slug)
             out["reason"] = f"REPAIR_IMPLEMENTATION but impl_cap {impl_cap} reached at v{n} (rounds={gen_m})"
             return out
         out["next_action"] = "GENERATE"
@@ -354,7 +396,7 @@ def compute_state(repo: Path, slug: str, impl_cap: int, plan_cap: int) -> dict:
     if decision == "REPAIR_PLAN":
         if n >= plan_cap:
             out["next_action"] = "ESCALATE"
-            out["surface"] = surface(directory, n, review)
+            out["surface"] = surface(directory, n, review, repo, slug)
             out["reason"] = f"REPAIR_PLAN but plan_cap {plan_cap} reached (plan versions={n})"
             return out
         out["next_action"] = "PLAN"

@@ -21,10 +21,15 @@ Usage:
                                                          [--repo .] [--skip-mutation]
                                                          [--keep]
 
+It writes its artifacts under `.test-agent/{plans,checks}/<target>/` and removes
+exactly those afterwards. It refuses to start when either already exists: that
+directory is gitignored, so a real run's plan and reviews live nowhere else.
+
 Exit codes:
     0 — every script ran and its report parses
     1 — a script could not run, or wrote a report that does not parse
-    2 — the smoke test could not be set up (no target, no test class, no git)
+    2 — the smoke test could not be set up (no target, no test class, no git, or
+        artifacts for this target already exist)
 """
 
 from __future__ import annotations
@@ -46,6 +51,10 @@ REVIEWER = AGENTS / "test-reviewer" / "scripts"
 SKIP_DIRS = {"target", "build", "out", ".git", ".test-agent"}
 
 
+class Unusable(Exception):
+    """Setup failed. Callers map this to exit code 2, like every check script."""
+
+
 def find_one(repo: Path, *names: str) -> Path | None:
     for name in names:
         for path in repo.rglob(f"{name}.java"):
@@ -65,18 +74,34 @@ def container(title: str, payload: dict) -> str:
             f"```json\n{json.dumps(payload, indent=2)}\n```\n")
 
 
+def refuse_to_clobber(repo: Path, target: str) -> None:
+    """Never run on top of a real run's artifacts.
+
+    `.test-agent/` is gitignored, so a plan, its reviews and its check reports
+    exist in exactly one place. Overwriting them, or removing them afterwards as
+    "cleanup", destroys work that cannot be recovered from git.
+    """
+    for existing in (repo / ".test-agent" / "plans" / target,
+                     repo / ".test-agent" / "checks" / target):
+        if existing.exists():
+            raise Unusable(f"CANNOT_RUN: {existing} already exists. The smoke test writes and "
+                f"then removes its own artifacts, so it refuses to touch a real "
+                f"run's. Pick another --target, or move that directory aside."
+            )
+
+
 def setup(repo: Path, target: str) -> tuple[Path, str]:
     """Write the smallest plan + report the check scripts accept."""
     source = find_one(repo, target)
     if source is None:
-        raise SystemExit(f"CANNOT_RUN: no {target}.java under {repo}")
+        raise Unusable(f"CANNOT_RUN: no {target}.java under {repo}")
     test_source = find_one(repo, f"{target}Test", f"{target}Tests")
     if test_source is None:
-        raise SystemExit(f"CANNOT_RUN: no {target}Test.java or {target}Tests.java — "
+        raise Unusable(f"CANNOT_RUN: no {target}Test.java or {target}Tests.java — "
                          f"the smoke test needs an existing test class to run")
     sha = head_sha(repo)
     if sha is None:
-        raise SystemExit("CANNOT_RUN: not a git checkout, so the plan cannot record target_sha")
+        raise Unusable("CANNOT_RUN: not a git checkout, so the plan cannot record target_sha")
 
     test_method = None
     for line in test_source.read_text(encoding="utf-8", errors="replace").splitlines():
@@ -85,7 +110,7 @@ def setup(repo: Path, target: str) -> tuple[Path, str]:
             test_method = stripped[len("void "):].split("(")[0]
             break
     if test_method is None:
-        raise SystemExit(f"CANNOT_RUN: found no test method in {test_source}")
+        raise Unusable(f"CANNOT_RUN: found no test method in {test_source}")
 
     plans = repo / ".test-agent" / "plans" / target
     plans.mkdir(parents=True, exist_ok=True)
@@ -161,7 +186,12 @@ def main() -> int:
 
     repo = Path(args.repo).resolve()
     target = args.target
-    plans, test_class = setup(repo, target)
+    try:
+        refuse_to_clobber(repo, target)
+        plans, test_class = setup(repo, target)
+    except Unusable as exc:
+        print(exc, file=sys.stderr)
+        return 2
     print(f"smoke target: {target} (tests: {test_class}), artifacts in {plans}")
 
     failures = []
@@ -182,7 +212,11 @@ def main() -> int:
         check_report(repo, target, report, failures)
 
     if not args.keep:
-        shutil.rmtree(repo / ".test-agent", ignore_errors=True)
+        # Only what this run created, never the directory that holds every other
+        # target's plans, reviews and reports.
+        for own in (repo / ".test-agent" / "plans" / target,
+                    repo / ".test-agent" / "checks" / target):
+            shutil.rmtree(own, ignore_errors=True)
 
     print()
     if failures:

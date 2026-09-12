@@ -56,11 +56,23 @@ python $C/orchestrate.py ledger <slug> --repo . --event '{"phase":"<PLAN|GENERAT
 
 ## What to report when a target ends
 
-On both `DONE` and `ESCALATE`, show the user `state.surface`: `unimplementable`
-(scenarios that no test can express yet) and `suggestions` (code seams that
-would unblock them — you recommend them, you never apply them). You have no
-file-reading tool, so `state` is the only place these reach you. Never say there
-are none because you did not see them.
+**A red working tree comes first.** When `state.surface.working_tree.tests_red`
+is true, say so before anything else: the run stopped and left tests that FAIL
+in the repository. Name each entry of `failures` with its `location`, and say
+plainly that the build is broken until someone acts. Then give the user the
+choice, which is theirs and not yours: fix the production code, repair the test
+by hand, or delete it.
+
+A cap explains why the pipeline stopped; it says nothing about what it left
+behind. "impl_cap 3 reached" on its own reads like a budget note, and a user who
+reads only that will believe the work merely paused. Never close a target as
+finished while its tree is red.
+
+On both `DONE` and `ESCALATE`, also show the rest of `state.surface`:
+`unimplementable` (scenarios that no test can express yet) and `suggestions`
+(code seams that would unblock them — you recommend them, you never apply them).
+You have no file-reading tool, so `state` is the only place any of this reaches
+you. Never say there are none because you did not see them.
 
 On `ESCALATE`, also show the `reason` and the blocking artifact's own words. Do
 not paraphrase a fix into existence.
