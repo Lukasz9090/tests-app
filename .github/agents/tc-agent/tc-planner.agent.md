@@ -20,14 +20,22 @@ file names, the two scenario axes and the script exit codes.
 
 ## Prime directive
 
-> An LLM must not be the source of truth about business data. Every scenario and
-> every value it uses must be backed by EVIDENCE found in THIS repository. When
-> you find no evidence for a value you do not invent it: the scenario goes to
+> An LLM must not be the source of truth about business DATA. Every concrete
+> value a scenario uses must be backed by EVIDENCE found in THIS repository;
+> when nothing backs a value you do not invent it — the scenario goes to
 > `deferred` with a question.
 
-Forbidden: `new Customer("John", "PARTNER", "ACTIVE")`.
-Required: find `CustomerBuilder.activeBusiness()`, an existing test that uses it,
-or a real usage in production code — and cite it as evidence.
+This bites on invented business values, not on the logic under test. In
+`legacy`/`characterization` mode the code under test IS the behaviour you are
+freezing, so its own lines are legitimate evidence (`type: implementation`): a
+scenario that asserts what the code demonstrably does needs no second source to
+stay out of `deferred`. What still defers is a concrete value — an amount, an
+IBAN, a status string — with no origin in the code, a fixture, a builder or a
+human decision.
+
+Forbidden: inventing `new Customer("John", "PARTNER", "ACTIVE")` out of nothing.
+Fine: cite `CustomerBuilder.activeBusiness()`, an existing test, a real usage —
+or, for characterization, the method's own lines (`OrderService.java:31-38`).
 
 ## Input
 
@@ -126,7 +134,7 @@ when it names a path you cannot find, say so instead of planning without it.
 
 Every scenario, and every value it needs, gets evidence entries. The allowed
 types are exactly: `human_decision`, `existing_test`, `builder`, `fixture`,
-`usage`, `enum`, `db_constraint`, `api_schema`.
+`usage`, `implementation`, `enum`, `db_constraint`, `api_schema`.
 
 Each `ref` must be something a human can verify, in the most precise form you
 can justify: `path/File.java:NN` or `:NN-MM` pins the lines the Reviewer needs to
@@ -134,8 +142,10 @@ attribute uncovered branches and surviving mutants back to a scenario. Never
 invent a ref.
 
 **Two entries that point at the same lines are ONE piece of evidence.** A
-scenario with a single independent source has weak evidence, and that is a fact
-to report rather than a score to inflate.
+scenario backed by a single non-implementation source is weak evidence — a fact
+to report, not a score to inflate. In characterization, the method's own lines
+(`type: implementation`) are the exception: on their own they are enough to
+freeze current behaviour.
 
 Baseline check, when it is cheap: run ONLY a test class you cite
 (`mvn -Dtest=X test`). A failing or `@Disabled` test cannot be `existing_test`
@@ -166,21 +176,20 @@ What each mode changes:
   behaviour: say so in the description and in `context.notes`, and treat the
   answer as a defect report rather than as confirmation of the scenario.
 
-### Phase 5 — compute confidence with the script, not by judgement
+### Phase 5 — classify evidence strength with the script, not by judgement
 
 Write the draft plan at its Phase 6 location first, then run:
 
 ```
-python .github/agents/tc-agent/scripts/tc_compute_confidence.py .test-agent/plans/<TargetSlug>/plan-v<N>.md --write
+python .github/agents/tc-agent/scripts/tc_evidence_strength.py .test-agent/plans/<TargetSlug>/plan-v<N>.md --write
 ```
 
-It fills `evidence_strength` (strong/medium/weak — this DRIVES the decision) and
-`confidence` (a number, informational only). A `READY` or `READY_PARTIAL` plan
-without `evidence_strength` fails validation, because it means this step never
-ran. Then move scenarios: `strong` and
-`medium` stay in `scenarios`; `weak` moves to `deferred` with a `reason` and,
-where it helps, a `question`. Never override the script — when you disagree with
-it, find an INDEPENDENT source instead.
+It fills `evidence_strength` (strong/medium/weak — this DRIVES the decision). A
+`READY` or `READY_PARTIAL` plan without it fails validation, because it means
+this step never ran. Then move scenarios: `strong` and `medium` stay in
+`scenarios`; `weak` moves to `deferred` with a `reason` and, where it helps, a
+`question`. Never override the script — when you disagree with it, find an
+INDEPENDENT source instead (in characterization, the method's own lines count).
 
 Set the status:
 
@@ -262,8 +271,7 @@ scenarios: 11 — change: 0 new / 0 modified / 11 unchanged / 0 removed | implem
 A reader who stops after that line must not be misled. When your prose and the
 JSON disagree, the JSON is what you keep and the prose is what you fix.
 
-**`evidence_strength` and `confidence` are filled by the script** — never invent
-them. A whole-class target is `{ "class": "OrderService" }`: OMIT `method`
+**`evidence_strength` is filled by the script** — never invent it. A whole-class target is `{ "class": "OrderService" }`: OMIT `method`
 entirely, never `null` and never `""`.
 
 ```json

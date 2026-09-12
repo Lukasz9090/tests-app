@@ -2,12 +2,11 @@
 """Run PIT on the target class only and report the surviving mutants.
 
 Invokes the mutationCoverage goal directly: nothing is compiled here, PIT reuses
-the classes built by tc_run_tests.py and drives the tests itself. A history file is
-kept per target so later repair iterations skip unchanged mutants.
+the classes built by tc_run_tests.py and drives the tests itself.
 
 Usage:
   python tc_mutation.py <TargetSlug> --repo . [--module M] [--iteration 1]
-                     [--gate 0.7] [--provider pit|descartes]
+                     [--gate 0.7]
 """
 
 from __future__ import annotations
@@ -45,10 +44,7 @@ def main() -> int:
     c.add_common_args(parser)
     parser.add_argument("--gate", type=float, default=None)
     parser.add_argument("--pit-version", default=None)
-    parser.add_argument("--provider", choices=["pit", "descartes"], default="pit")
     parser.add_argument("--tests", default=None, help="explicit comma-separated test classes")
-    parser.add_argument("--history", action="store_true",
-                        help="keep a PIT history file - needs the arcmutate history plugin (PIT 1.20+)")
     args = parser.parse_args()
 
     repo = Path(args.repo).resolve()
@@ -71,13 +67,6 @@ def main() -> int:
         if not tests:
             raise c.CheckError("no test classes resolved from the generation report")
 
-        # Incremental history moved to the commercial arcmutate plugin; passing the
-        # flags without it fails the run outright ("History has been enabled but no
-        # history plugin has been installed"). Opt in only when that plugin exists.
-        history_args = []
-        if args.history:
-            history = c.checks_dir(repo, args.slug) / "pit-history.bin"
-            history_args = [f"-DhistoryInputFile={history}", f"-DhistoryOutputFile={history}"]
         command = (
             [c.mvn_executable(), "-B"]
             + c.module_args(module)
@@ -94,11 +83,7 @@ def main() -> int:
                 "-DoutputFormats=XML",
                 "-DtimestampedReports=false",
             ]
-            + history_args
         )
-        if args.provider == "descartes":
-            command.append("-Dfeatures=+CLASSLIMIT(limit[1])")
-            command.append("-DmutationEngine=descartes")
 
         started = time.time() - 2
         code, output = c.run(command, repo)

@@ -83,7 +83,7 @@
         "properties": {
           "scenarios": { "items": { "required": ["evidence_strength"] } }
         },
-        "errorMessage": "every scenario of a READY / READY_PARTIAL plan needs `evidence_strength`, which is filled by tc_compute_confidence.py. A plan without it skipped Phase 5, so nothing decided whether a scenario belongs in `scenarios` or in `deferred`."
+        "errorMessage": "every scenario of a READY / READY_PARTIAL plan needs `evidence_strength`, which the planner fills in Phase 5 (tc_evidence_strength.py). A plan without it skipped Phase 5, so nothing decided whether a scenario belongs in `scenarios` or in `deferred`."
       }
     },
     {
@@ -114,7 +114,10 @@
       "required": ["type", "ref"],
       "additionalProperties": false,
       "properties": {
-        "type": { "enum": ["human_decision", "existing_test", "builder", "fixture", "usage", "enum", "db_constraint", "api_schema"] },
+        "type": {
+          "enum": ["human_decision", "existing_test", "builder", "fixture", "usage", "implementation", "enum", "db_constraint", "api_schema"],
+          "description": "`implementation` = the source lines of the code under test. In legacy/characterization mode it is legitimate evidence on its own, because such a plan freezes what the code does today; in spec-driven mode it is not a substitute for the spec."
+        },
         "ref": { "type": "string", "minLength": 1 }
       }
     },
@@ -149,7 +152,6 @@
         },
         "description": { "type": "string", "minLength": 5 },
         "priority": { "enum": ["high", "medium", "low"] },
-        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
         "data": { "type": "object" },
         "implementation_hints": {
           "type": "object",
@@ -199,7 +201,6 @@
         "description": { "type": "string", "minLength": 5 },
         "reason": { "type": "string", "minLength": 5 },
         "question": { "type": "string" },
-        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
         "evidence": { "type": "array", "items": { "$ref": "#/$defs/evidence" } },
         "evidence_strength": { "$ref": "#/$defs/strength" }
       }

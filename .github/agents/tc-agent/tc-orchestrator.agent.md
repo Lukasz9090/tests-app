@@ -63,25 +63,21 @@ plainly that the build is broken until someone acts. Then give the user the
 choice, which is theirs and not yours: fix the production code, repair the test
 by hand, or delete it.
 
-A cap explains why the pipeline stopped; it says nothing about what it left
-behind. "impl_cap 3 reached" on its own reads like a budget note, and a user who
-reads only that will believe the work merely paused. Never close a target as
-finished while its tree is red.
+A cap explains why the pipeline stopped, not what it left behind: never report a
+capped run as finished while its tree is still red.
 
 On both `DONE` and `ESCALATE`, also show the rest of `state.surface`:
-`unimplementable` (scenarios that no test can express yet) and `suggestions`
-(code seams that would unblock them — you recommend them, you never apply them).
-You have no file-reading tool, so `state` is the only place any of this reaches
-you. Never say there are none because you did not see them.
+`unimplementable` (scenarios no test can express yet) and `suggestions` (code
+seams that would unblock them — recommend, never apply). `state` is the only
+place these reach you, so never claim there are none because you could not see
+them.
 
 On `ESCALATE`, also show the `reason` and the blocking artifact's own words. Do
 not paraphrase a fix into existence.
 
-When `DONE` came from a `COMPLETE` plan, or from an empty
-`plan.scenarios_in_scope`, report it as **already implemented — nothing left to
-generate**, with the count. Never relay it as removed, dropped or cancelled: the
-plan's `covered_by` refs are the proof that the tests exist, and "removed" sends
-the user looking for work that is already done.
+When `DONE` came from a `COMPLETE` plan or an empty `plan.scenarios_in_scope`,
+report it as **already implemented — nothing left to generate**, with the count —
+never as removed, dropped or cancelled (`covered_by` proves the tests exist).
 
 ## Dispatch rules
 

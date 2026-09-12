@@ -74,9 +74,8 @@ the setup readable? Any flakiness smell, such as `Thread.sleep`, `Random`,
 Every Stage 2 finding lands on a test that PASSED in step 1, so scope its
 feedback to the narrowest part that can fix it: `scope: "assertion"` for a weak
 or missing assertion, `scope: "setup"` for unreadable arrangement, `scope:
-"test"` only when the whole method has to change. The Generator rewrites nothing
-outside it. A quality request that licenses a full rewrite is how a green test
-comes back red, and a red test is worse than the weak assertion you flagged.
+"test"` only when the whole method must change. The Generator rewrites nothing
+outside it — a full-rewrite licence is how a green test comes back red.
 
 **6. Write the review, then validate it.**
 `python $S/tc_validate_plan.py <review> .github/agents/tc-agent/schemas/tc-review.schema.json`

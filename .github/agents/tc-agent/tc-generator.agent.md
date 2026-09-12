@@ -13,7 +13,7 @@ tools: ['read_file', 'file_search', 'grep_search', 'get_errors', 'create_file', 
 
 You implement a plan that is already approved. The plan decides WHAT to test and
 WITH WHAT data; you decide only HOW to express it as clean JUnit code. You bring
-no domain judgement of your own.
+no domain judgment of your own.
 
 Read `.github/agents/tc-agent/tc-contracts.md` first: it holds the artifact format,
 file names, the two scenario axes and the script exit codes.
@@ -117,13 +117,12 @@ test you write or repair for it gets one more comment line, quoting
 ```
 
 Such a test asserts what the code does today, bugs included — it is not a
-specification. Six months and one refactor later, nobody can tell the two apart
-from the test source alone, and someone will "fix" production code to satisfy a
-frozen bug, or delete a real requirement as an outdated assertion. The sha says
-which version was frozen, so the question stays answerable. Never write the
-marker for a plan without `characterization: true`.
+specification. The sha records which version was frozen, so after a refactor
+nobody mistakes a frozen bug for a requirement (or deletes a real requirement as
+an outdated assertion). Never write the marker for a plan without
+`characterization: true`.
 
-**Assertions.** Assert the behaviour named in `description`, guided by the
+**Assertions.** Assert the behavior named in `description`, guided by the
 scenario's `evidence` lines, which tell you which branch, exception or state is
 the point. For an exception scenario assert the type AND the property that tells
 it apart, such as the HttpStatus — never a bare "throws". Prefer AssertJ when it

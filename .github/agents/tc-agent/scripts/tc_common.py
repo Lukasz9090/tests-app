@@ -350,7 +350,6 @@ def resolve_module(repo: Path, plan: dict, override: str | None,
 
 PROFILE_PATHS = (
     Path(".github") / "agents" / "tc-agent" / "tc-project-profile.md",  # committed config
-    Path(".test-agent") / "project-profile.md",                          # legacy location
 )
 
 

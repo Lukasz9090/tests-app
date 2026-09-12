@@ -79,8 +79,6 @@ def main() -> int:
     parser.add_argument("--tests", default=None, help="explicit comma-separated test classes")
     parser.add_argument("--no-existing", action="store_true", help="do not include the plan's existing tests")
     parser.add_argument("--jacoco-version", default=None)
-    parser.add_argument("--force-agent", action="store_true",
-                        help="inject prepare-agent even when the pom already binds it (risks a duplicate agent)")
     args = parser.parse_args()
 
     repo = Path(args.repo).resolve()
@@ -107,7 +105,7 @@ def main() -> int:
         exec_file = c.checks_dir(repo, args.slug) / "jacoco.exec"
         # surefire matches -Dtest most reliably on simple class names; PIT gets the FQCNs
         selectors = sorted({name.split(".")[-1] for name in tests})
-        bound_pom = None if args.force_agent else c.pom_binds_jacoco_agent(repo, module)
+        bound_pom = c.pom_binds_jacoco_agent(repo, module)
         agent_goal = [] if bound_pom else [f"org.jacoco:jacoco-maven-plugin:{jacoco}:prepare-agent"]
         agent_source = f"pom-bound ({bound_pom})" if bound_pom else f"cli goal ({jacoco})"
         command = (
@@ -171,8 +169,8 @@ def main() -> int:
                 "property prepare-agent sets - the tests ran WITHOUT the JaCoCo agent. Fix the "
                 "pom: <argLine>@{argLine} ...</argLine>"
                 if pom
-                else f"agent source was {agent_source}; if pom-bound, its execution may be in an "
-                f"inactive profile - re-run with --force-agent. Expected exec at {exec_file}"
+                else f"agent source was {agent_source}; if pom-bound, its execution may sit in an "
+                f"inactive profile. Expected exec at {exec_file}"
             )
             raise c.CheckError(f"{executed} tests ran but {exec_file.name} is missing/empty. {hint}")
 
