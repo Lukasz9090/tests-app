@@ -17,17 +17,29 @@ import re
 import sys
 from pathlib import Path
 
-MAX_TOTAL_CHARS = 400_000          # hard budget (~100k tokens)
+# The planner has to READ this pack, so the budget is bounded by its context
+# window, not by disk. ~150k chars is roughly 37k tokens, which leaves room for
+# the agent's own reasoning; the old 400k could not be read at all.
+MAX_TOTAL_CHARS = 150_000          # hard budget (~37k tokens)
 MAX_FILE_CHARS = 40_000            # per-file cap before truncation
 SIG_RE = re.compile(
     r"^\s*(?:public|protected)\s+[\w<>\[\],\s?]+\s+\w+\s*\([^;{]*\)", re.M)
 IMPORT_RE = re.compile(r"^import\s+(?:static\s+)?([\w.]+)\s*;", re.M)
 CLASS_DECL = "(class|interface|enum|record)"
+# Build output holds generated and copied sources. A ref that "verifies" against
+# target/generated-sources points at a file nobody edits.
+SKIP_DIRS = {"target", "build", "out", ".git", ".idea", ".test-agent", "node_modules"}
 
 
 def find_roots(repo: Path):
+    """Maven source/test roots. Maven only — a Gradle repo yields no roots here
+    and the planner must stop with UNSUPPORTED_REPOSITORY, because every check
+    script downstream drives mvn."""
     src, test = [], []
-    for pom_dir in {p.parent for p in repo.rglob("pom.xml")}:
+    # Maven copies the pom into target/classes/META-INF/maven/..., so an
+    # unfiltered walk invents modules that live inside the build output.
+    poms = (p for p in repo.rglob("pom.xml") if not SKIP_DIRS.intersection(p.parts))
+    for pom_dir in {p.parent for p in poms}:
         m, t = pom_dir / "src/main/java", pom_dir / "src/test/java"
         if m.is_dir():
             src.append(m)
@@ -38,7 +50,9 @@ def find_roots(repo: Path):
 
 def java_files(roots):
     for r in roots:
-        yield from r.rglob("*.java")
+        for f in r.rglob("*.java"):
+            if not SKIP_DIRS.intersection(f.parts):
+                yield f
 
 
 def find_class_file(name, roots):
@@ -46,14 +60,29 @@ def find_class_file(name, roots):
     return hits
 
 
+_CACHE = {}
+
+
 def read(f: Path):
+    """Read a file once. Scanning for tests, builders and enums revisits the same
+    files many times; without the cache a large repo pays for each visit."""
+    key = str(f)
+    if key in _CACHE:
+        return _CACHE[key]
     try:
         t = f.read_text(encoding="utf-8", errors="replace")
     except OSError:
-        return ""
+        t = ""
     if len(t) > MAX_FILE_CHARS:
         t = t[:MAX_FILE_CHARS] + f"\n// ... TRUNCATED at {MAX_FILE_CHARS} chars\n"
+    _CACHE[key] = t
     return t
+
+
+def mentions(text: str, *names) -> bool:
+    """Does the text use any of these simple names as a whole word?"""
+    pattern = "|".join(re.escape(n) for n in names if n)
+    return bool(pattern) and re.search(rf"\b(?:{pattern})\b", text) is not None
 
 
 def signatures_only(text):
@@ -69,7 +98,7 @@ def local_deps(text, all_by_name, own_pkg_files):
         if simple in all_by_name:
             deps.add(simple)
     for f in own_pkg_files:                       # same-package, no import needed
-        if f.stem != "package-info" and re.search(rf"\b{f.stem}\b", text):
+        if f.stem != "package-info" and mentions(text, f.stem):
             deps.add(f.stem)
     return deps
 
@@ -81,6 +110,9 @@ def main():
     a = ap.parse_args()
 
     repo = Path(a.repo).resolve()
+    if not any(p for p in repo.rglob("pom.xml") if not SKIP_DIRS.intersection(p.parts)):
+        sys.exit("UNSUPPORTED_REPOSITORY: no pom.xml found. This pipeline is "
+                 "Maven-only - every check script drives mvn.")
     src_roots, test_roots = find_roots(repo)
 
     # --- resolve target ---
@@ -119,15 +151,14 @@ def main():
 
     # --- tests, builders/fixtures, enums ---
     tests = [f for f in java_files(test_roots)
-             if cname in f.stem or re.search(rf"\b{cname}\b", read(f))]
+             if cname in f.stem or mentions(read(f), cname)]
     builder_pat = re.compile(r"(Builder|Factory|Fixtures?|TestData|Mother)$")
+    wanted = tuple({cname} | l1)                  # one alternation, not one pass per name
     builders = [f for f in java_files(test_roots + src_roots)
-                if builder_pat.search(f.stem)
-                and any(re.search(rf"\b{t}\b", read(f))
-                        for t in ({cname} | l1))]
+                if builder_pat.search(f.stem) and mentions(read(f), *wanted)]
     enums = [all_by_name[d] for d in (l1 | l2)
              if d in all_by_name
-             and re.search(rf"\benum\s+{d}\b", read(all_by_name[d]))]
+             and re.search(rf"\benum\s+{re.escape(d)}\b", read(all_by_name[d]))]
 
     # --- assemble with budget ---
     out = [f"# Context Pack: {slug}", "",
@@ -159,7 +190,17 @@ def main():
                 out.append(block)
                 budget -= len(block)
 
+    # Order = priority, because `add` drops what no longer fits. Existing tests,
+    # builders and enums come before the dependency dump: they are the EVIDENCE
+    # that keeps a scenario out of `deferred`, so losing them to a class with
+    # twelve dependencies is the worst trade this script can make.
     add("TARGET", target_file, target_text)
+    for f in sorted(set(tests)):
+        add("EXISTING TEST", f, read(f))
+    for f in sorted(set(builders)):
+        add("BUILDER/FIXTURE", f, read(f))
+    for f in sorted(set(enums)):
+        add("ENUM", f, read(f))
     for name in sorted(l1):
         f = all_by_name.get(name)
         if f:
@@ -168,12 +209,6 @@ def main():
         f = all_by_name.get(name)
         if f:
             add("DEPENDENCY (level 2, signatures)", f, signatures_only(read(f)))
-    for f in sorted(set(tests)):
-        add("EXISTING TEST", f, read(f))
-    for f in sorted(set(builders)):
-        add("BUILDER/FIXTURE", f, read(f))
-    for f in sorted(set(enums)):
-        add("ENUM", f, read(f))
 
     out.append("\n## MANIFEST (all files included above)\n")
     for f in [target_file, *[all_by_name[n] for n in sorted(l1 | l2)

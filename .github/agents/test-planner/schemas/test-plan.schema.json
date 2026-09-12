@@ -3,314 +3,135 @@
   "$id": "test-plan.schema.json",
   "title": "test-plan",
   "type": "object",
-  "required": [
-    "schema_version",
-    "plan_version",
-    "status"
-  ],
+  "required": ["schema_version", "plan_version", "status"],
   "additionalProperties": false,
   "properties": {
-    "schema_version": {
-      "const": 1
-    },
-    "plan_version": {
-      "type": "integer",
-      "minimum": 1
-    },
-    "based_on_version": {
-      "type": "integer",
-      "minimum": 1
-    },
+    "schema_version": { "const": 1 },
+    "plan_version": { "type": "integer", "minimum": 1 },
+    "based_on_version": { "type": "integer", "minimum": 1 },
     "target": {
       "type": "object",
-      "required": [
-        "class"
-      ],
+      "required": ["class"],
       "additionalProperties": false,
       "properties": {
-        "class": {
-          "type": "string",
-          "minLength": 1
-        },
+        "class": { "type": "string", "minLength": 1 },
         "method": {
           "type": "string",
           "minLength": 1,
-          "description": "OMIT this key entirely for whole-class targets — never null or empty."
+          "description": "OMIT entirely for a whole-class target — never null, never empty."
         }
       }
     },
-    "mode": {
-      "enum": [
-        "legacy",
-        "spec-driven",
-        "interactive",
-        "tdd"
-      ]
-    },
-    "characterization": {
-      "type": "boolean"
-    },
+    "mode": { "enum": ["legacy", "spec-driven", "interactive", "tdd"] },
+    "characterization": { "type": "boolean" },
     "status": {
-      "enum": [
-        "READY",
-        "READY_PARTIAL",
-        "COMPLETE",
-        "NEEDS_CLARIFICATION",
-        "BLOCKED",
-        "UNSUPPORTED_REPOSITORY"
-      ],
-      "description": "COMPLETE = the plan is valid and every scenario is already implemented (implementation: COVERED) or REMOVED, so there is nothing to generate. It is a success state, not a cancellation."
+      "enum": ["READY", "READY_PARTIAL", "COMPLETE", "NEEDS_CLARIFICATION", "BLOCKED", "UNSUPPORTED_REPOSITORY"],
+      "description": "COMPLETE = valid plan, every scenario already COVERED or REMOVED, nothing to generate. A success state, not a cancellation."
     },
-    "missing": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      }
-    },
+    "missing": { "type": "array", "items": { "type": "string" } },
     "conflict": {
       "type": "object",
-      "required": [
-        "specification",
-        "implementation"
-      ],
+      "required": ["specification", "implementation"],
+      "additionalProperties": false,
       "properties": {
-        "specification": {
-          "type": "string"
-        },
-        "implementation": {
-          "type": "string"
-        }
+        "specification": { "type": "string" },
+        "implementation": { "type": "string" }
       }
     },
     "context": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "source_roots": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
+        "source_roots": { "type": "array", "items": { "type": "string" } },
+        "test_roots": { "type": "array", "items": { "type": "string" } },
+        "related_classes": { "type": "array", "items": { "type": "string" } },
+        "existing_tests": { "type": "array", "items": { "type": "string" } },
+        "builders": { "type": "array", "items": { "type": "string" } },
+        "fixtures": { "type": "array", "items": { "type": "string" } },
+        "relevant_enums": { "type": "array", "items": { "type": "string" } },
+        "target_sha": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{7,40}$",
+          "description": "Commit that last touched the target file. It dates what the plan describes, and a characterization test that quotes it stays checkable after a refactor."
         },
-        "test_roots": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "related_classes": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "existing_tests": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "builders": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "fixtures": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "relevant_enums": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "notes": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        }
+        "notes": { "type": "array", "items": { "type": "string" } }
       }
     },
-    "scenarios": {
-      "type": "array",
-      "items": {
-        "$ref": "#/$defs/scenario"
-      }
-    },
-    "deferred": {
-      "type": "array",
-      "items": {
-        "$ref": "#/$defs/deferredScenario"
-      }
-    }
+    "scenarios": { "type": "array", "items": { "$ref": "#/$defs/scenario" } },
+    "deferred": { "type": "array", "items": { "$ref": "#/$defs/deferredScenario" } }
   },
   "allOf": [
     {
-      "if": {
-        "properties": {
-          "status": {
-            "const": "READY"
-          }
-        }
-      },
+      "if": { "properties": { "status": { "const": "READY" } } },
+      "then": { "required": ["target", "mode", "scenarios"] }
+    },
+    {
+      "if": { "properties": { "status": { "const": "READY_PARTIAL" } } },
+      "then": { "required": ["target", "mode", "scenarios", "deferred"] }
+    },
+    {
+      "if": { "properties": { "status": { "const": "COMPLETE" } } },
+      "then": { "required": ["target", "mode", "scenarios"] }
+    },
+    {
+      "if": { "properties": { "status": { "const": "UNSUPPORTED_REPOSITORY" } } },
+      "then": { "required": ["missing"] }
+    },
+    {
+      "if": { "properties": { "status": { "enum": ["READY", "READY_PARTIAL"] } } },
       "then": {
-        "required": [
-          "target",
-          "mode",
-          "scenarios"
-        ]
+        "properties": {
+          "scenarios": { "items": { "required": ["evidence_strength"] } }
+        },
+        "errorMessage": "every scenario of a READY / READY_PARTIAL plan needs `evidence_strength`, which is filled by compute_confidence.py. A plan without it skipped Phase 5, so nothing decided whether a scenario belongs in `scenarios` or in `deferred`."
       }
     },
     {
-      "if": {
-        "properties": {
-          "status": {
-            "const": "READY_PARTIAL"
-          }
-        }
-      },
-      "then": {
-        "required": [
-          "target",
-          "mode",
-          "scenarios",
-          "deferred"
-        ]
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "status": {
-            "const": "COMPLETE"
-          }
-        }
-      },
-      "then": {
-        "required": [
-          "target",
-          "mode",
-          "scenarios"
-        ]
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "status": {
-            "const": "UNSUPPORTED_REPOSITORY"
-          }
-        }
-      },
-      "then": {
-        "required": [
-          "missing"
-        ]
-      }
-    },
-    {
-      "if": {
-        "required": [
-          "based_on_version"
-        ]
-      },
+      "if": { "required": ["based_on_version"] },
       "then": {
         "properties": {
-          "scenarios": {
-            "items": {
-              "required": [
-                "change",
-                "implementation"
-              ]
-            }
-          }
+          "scenarios": { "items": { "required": ["change", "implementation"] } }
         },
         "errorMessage": "a revision (based_on_version is set) must state BOTH axes on every scenario: `change` (did the scenario definition change?) and `implementation` (does a test for it already exist?). Never encode 'already implemented' as change: REMOVED."
       }
     },
     {
-      "if": {
-        "required": [
-          "mode"
-        ],
-        "properties": {
-          "mode": {
-            "const": "legacy"
-          }
-        }
-      },
+      "if": { "required": ["mode"], "properties": { "mode": { "const": "legacy" } } },
+      "then": { "required": ["characterization"] }
+    },
+    {
+      "if": { "required": ["characterization"], "properties": { "characterization": { "const": true } } },
       "then": {
-        "required": [
-          "characterization"
-        ]
+        "required": ["context"],
+        "properties": { "context": { "required": ["target_sha"] } },
+        "errorMessage": "a characterization plan freezes the behaviour of one version of the code, so `context.target_sha` must name it (git log -1 --format=%H -- <target file>). Without it nobody can tell later whether the frozen behaviour is still the current one."
       }
     }
   ],
   "$defs": {
     "evidence": {
       "type": "object",
-      "required": [
-        "type",
-        "ref"
-      ],
+      "required": ["type", "ref"],
       "additionalProperties": false,
       "properties": {
-        "type": {
-          "enum": [
-            "human_decision",
-            "existing_test",
-            "builder",
-            "fixture",
-            "usage",
-            "enum",
-            "db_constraint",
-            "api_schema",
-            "runtime_observation",
-            "dynamic_invariant"
-          ]
-        },
-        "ref": {
-          "type": "string",
-          "minLength": 1
-        }
+        "type": { "enum": ["human_decision", "existing_test", "builder", "fixture", "usage", "enum", "db_constraint", "api_schema"] },
+        "ref": { "type": "string", "minLength": 1 }
       }
     },
+    "strength": { "enum": ["strong", "medium", "weak"] },
     "scenario": {
       "type": "object",
-      "required": [
-        "id",
-        "change",
-        "description",
-        "priority",
-        "evidence"
-      ],
+      "required": ["id", "change", "description", "priority", "evidence"],
       "additionalProperties": false,
       "properties": {
-        "id": {
-          "type": "string",
-          "pattern": "^TC[0-9]+$"
-        },
+        "id": { "type": "string", "pattern": "^TC[0-9]+$" },
         "change": {
-          "enum": [
-            "UNCHANGED",
-            "MODIFIED",
-            "NEW",
-            "REMOVED"
-          ],
-          "description": "Delta of the SCENARIO DEFINITION against based_on_version — nothing else. REMOVED means the BEHAVIOUR is no longer to be tested and any test for it is a deletion candidate; it NEVER means 'already implemented' or 'nothing to do' — that is `implementation`."
+          "enum": ["UNCHANGED", "MODIFIED", "NEW", "REMOVED"],
+          "description": "Delta of the SCENARIO DEFINITION only. REMOVED = the behaviour is no longer to be tested and any test for it is a deletion candidate; it NEVER means 'already implemented' — that is `implementation`."
         },
         "implementation": {
-          "enum": [
-            "PENDING",
-            "COVERED",
-            "BLOCKED"
-          ],
-          "description": "Implementation state, ORTHOGONAL to `change`. PENDING = no test exists yet (default when absent). COVERED = a test exists and passes; `covered_by` names it. BLOCKED = the generator could not implement it soundly (reason lives in the generation report)."
+          "enum": ["PENDING", "COVERED", "BLOCKED"],
+          "description": "ORTHOGONAL to `change`. PENDING (default when absent) = no test yet. COVERED = a test exists and passes, named by `covered_by`. BLOCKED = the generator could not implement it soundly."
         },
         "covered_by": {
           "type": "string",
@@ -320,124 +141,46 @@
         "split_from": {
           "type": "string",
           "pattern": "^TC[0-9]+$",
-          "description": "For NEW scenarios extracted from a previous bundled scenario."
+          "description": "For a NEW scenario extracted from a previously bundled one."
         },
         "change_reason": {
           "type": "string",
-          "description": "Mandatory for REMOVED: why the behaviour ceased to exist. 'Already covered/implemented/passing' is NOT a removal reason — use implementation: COVERED instead."
+          "description": "Mandatory for REMOVED: why the behaviour ceased to exist."
         },
-        "description": {
-          "type": "string",
-          "minLength": 5
-        },
-        "priority": {
-          "enum": [
-            "high",
-            "medium",
-            "low"
-          ]
-        },
-        "confidence": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 1
-        },
-        "data": {
-          "type": "object"
-        },
-        "expected_result": {
-          "enum": [
-            "pass",
-            "fail_red"
-          ],
-          "description": "Reserved for future TDD mode. Default/absent = pass."
-        },
+        "description": { "type": "string", "minLength": 5 },
+        "priority": { "enum": ["high", "medium", "low"] },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "data": { "type": "object" },
         "implementation_hints": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "test_class": {
-              "type": "string"
-            },
-            "test_method": {
-              "type": "string"
-            },
-            "test_file": {
-              "type": "string"
-            }
+            "test_class": { "type": "string" },
+            "test_method": { "type": "string" },
+            "test_file": { "type": "string" }
           }
         },
-        "evidence": {
-          "type": "array",
-          "minItems": 1,
-          "items": {
-            "$ref": "#/$defs/evidence"
-          }
-        },
-        "evidence_strength": {
-          "enum": [
-            "strong",
-            "medium",
-            "weak"
-          ],
-          "description": "Rule-based evidence strength (script-free v0 flow)."
-        }
+        "evidence": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/evidence" } },
+        "evidence_strength": { "$ref": "#/$defs/strength" }
       },
       "allOf": [
         {
-          "if": {
-            "required": [
-              "change"
-            ],
-            "properties": {
-              "change": {
-                "const": "REMOVED"
-              }
-            }
-          },
-          "then": {
-            "required": [
-              "change_reason"
-            ]
-          }
+          "if": { "required": ["change"], "properties": { "change": { "const": "REMOVED" } } },
+          "then": { "required": ["change_reason"] }
         },
         {
-          "if": {
-            "required": [
-              "change"
-            ],
-            "properties": {
-              "change": {
-                "const": "REMOVED"
-              }
-            }
-          },
+          "if": { "required": ["change"], "properties": { "change": { "const": "REMOVED" } } },
           "then": {
             "properties": {
-              "change_reason": {
-                "not": {
-                  "pattern": "(?i)cover|already|exist|implement|passing|green|no work|done|nothing to"
-                }
-              }
+              "change_reason": { "not": { "pattern": "(?i)cover|already|exist|implement|passing|green|no work|done|nothing to" } }
             },
             "errorMessage": "MISLABELLED_REMOVED: change_reason describes a scenario that is already tested, which is NOT a removal. REMOVED is only for a behaviour that ceased to exist (deleted code path, withdrawn requirement) and whose test should be deleted. Set change to UNCHANGED/MODIFIED and implementation: COVERED with covered_by instead."
           }
         },
         {
-          "if": {
-            "required": [
-              "implementation"
-            ],
-            "properties": {
-              "implementation": {
-                "const": "COVERED"
-              }
-            }
-          },
+          "if": { "required": ["implementation"], "properties": { "implementation": { "const": "COVERED" } } },
           "then": {
-            "required": [
-              "covered_by"
-            ],
+            "required": ["covered_by"],
             "errorMessage": "implementation: COVERED must name the test that covers it in `covered_by` (TestClass#method or path:lines) — an unverifiable 'already covered' claim is how a scenario silently leaves the plan's scope."
           }
         }
@@ -445,78 +188,20 @@
     },
     "deferredScenario": {
       "type": "object",
-      "required": [
-        "id",
-        "description",
-        "reason"
-      ],
+      "required": ["id", "description", "reason"],
       "additionalProperties": false,
       "properties": {
-        "id": {
-          "type": "string",
-          "pattern": "^TC[0-9]+$"
-        },
-        "description": {
-          "type": "string",
-          "minLength": 5
-        },
-        "confidence": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 1
-        },
-        "reason": {
-          "type": "string",
-          "minLength": 5
-        },
-        "question": {
-          "type": "string"
-        },
-        "evidence": {
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/evidence"
-          }
-        },
-        "evidence_strength": {
-          "enum": [
-            "strong",
-            "medium",
-            "weak"
-          ],
-          "description": "Rule-based evidence strength (script-free v0 flow)."
-        },
+        "id": { "type": "string", "pattern": "^TC[0-9]+$" },
         "change": {
-          "enum": [
-            "UNCHANGED",
-            "MODIFIED",
-            "NEW",
-            "REMOVED"
-          ],
-          "description": "Same meaning as on a scenario: definition delta only. Never 'already implemented'."
+          "enum": ["UNCHANGED", "MODIFIED", "NEW", "REMOVED"],
+          "description": "Same meaning as on a scenario: definition delta only."
         },
-        "implementation": {
-          "enum": [
-            "PENDING",
-            "COVERED",
-            "BLOCKED"
-          ],
-          "description": "Normally PENDING — deferred means not planned for implementation. COVERED only when a test already exists for a scenario that is being deferred anyway; `covered_by` then names it."
-        },
-        "covered_by": {
-          "type": "string",
-          "minLength": 3
-        },
-        "change_reason": {
-          "type": "string"
-        },
-        "priority": {
-          "enum": [
-            "high",
-            "medium",
-            "low"
-          ]
-        }
+        "description": { "type": "string", "minLength": 5 },
+        "reason": { "type": "string", "minLength": 5 },
+        "question": { "type": "string" },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "evidence": { "type": "array", "items": { "$ref": "#/$defs/evidence" } },
+        "evidence_strength": { "$ref": "#/$defs/strength" }
       }
     }
   }

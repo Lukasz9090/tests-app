@@ -3,131 +3,60 @@
   "$id": "generation-report.schema.json",
   "title": "generation-report",
   "type": "object",
-  "required": [
-    "schema_version",
-    "plan_version",
-    "target",
-    "test_files",
-    "results"
-  ],
+  "required": ["schema_version", "plan_version", "target", "test_files", "results"],
   "additionalProperties": false,
   "properties": {
-    "schema_version": {
-      "const": 1
-    },
-    "plan_version": {
-      "type": "integer",
-      "minimum": 1
-    },
+    "schema_version": { "const": 1 },
+    "plan_version": { "type": "integer", "minimum": 1 },
     "target": {
       "type": "object",
-      "required": [
-        "class"
-      ],
+      "required": ["class"],
       "additionalProperties": false,
       "properties": {
-        "class": {
-          "type": "string"
-        },
-        "method": {
-          "type": "string"
-        }
+        "class": { "type": "string" },
+        "method": { "type": "string" }
       }
     },
     "test_files": {
       "type": "array",
-      "minItems": 0,
-      "items": {
-        "type": "string"
-      },
-      "description": "May legitimately be empty when every scenario was SKIPPED or OBSOLETE — a run with nothing to implement touches no file. `results` still accounts for every scenario."
+      "items": { "type": "string" },
+      "description": "May legitimately be empty when every scenario was SKIPPED or OBSOLETE. `results` still accounts for every scenario."
     },
     "notes": {
       "type": "array",
-      "items": {
-        "type": "string"
-      },
-      "description": "Run-level facts the Reviewer must see, e.g. a context pack rebuilt because the plan recorded no path."
+      "items": { "type": "string" },
+      "description": "Run-level facts the Reviewer must see, such as a missing context pack."
     },
     "results": {
       "type": "array",
       "minItems": 1,
       "items": {
         "type": "object",
-        "required": [
-          "id",
-          "status"
-        ],
+        "required": ["id", "status"],
         "additionalProperties": false,
         "properties": {
-          "id": {
-            "type": "string",
-            "pattern": "^TC[0-9]+$"
-          },
+          "id": { "type": "string", "pattern": "^TC[0-9]+$" },
           "status": {
-            "enum": [
-              "IMPLEMENTED",
-              "BLOCKED",
-              "SKIPPED",
-              "OBSOLETE"
-            ],
-            "description": "SKIPPED = nothing to do, the scenario stays covered (plan says implementation: COVERED, or an untouched `// TC-nn` method already exists). OBSOLETE = the plan marked the scenario change: REMOVED and a test for it still exists — it is a DELETION CANDIDATE reported to the human, never deleted here."
+            "enum": ["IMPLEMENTED", "BLOCKED", "SKIPPED", "OBSOLETE"],
+            "description": "SKIPPED = nothing to do, the scenario stays covered. OBSOLETE = the plan says change: REMOVED and a test still exists — a DELETION CANDIDATE reported to the human, never deleted here."
           },
-          "test_method": {
-            "type": "string"
-          },
-          "reason": {
-            "type": "string"
-          },
-          "notes": {
-            "type": "string"
-          }
+          "test_method": { "type": "string" },
+          "reason": { "type": "string" },
+          "notes": { "type": "string" }
         },
         "allOf": [
           {
-            "if": {
-              "properties": {
-                "status": {
-                  "const": "BLOCKED"
-                }
-              }
-            },
-            "then": {
-              "required": [
-                "reason"
-              ]
-            }
+            "if": { "properties": { "status": { "const": "BLOCKED" } } },
+            "then": { "required": ["reason"] }
           },
           {
-            "if": {
-              "properties": {
-                "status": {
-                  "const": "IMPLEMENTED"
-                }
-              }
-            },
-            "then": {
-              "required": [
-                "test_method"
-              ]
-            }
+            "if": { "properties": { "status": { "const": "IMPLEMENTED" } } },
+            "then": { "required": ["test_method"] }
           },
           {
-            "if": {
-              "required": [
-                "status"
-              ],
-              "properties": {
-                "status": {
-                  "const": "OBSOLETE"
-                }
-              }
-            },
+            "if": { "required": ["status"], "properties": { "status": { "const": "OBSOLETE" } } },
             "then": {
-              "required": [
-                "reason",
-                "test_method"
-              ],
+              "required": ["reason", "test_method"],
               "errorMessage": "OBSOLETE must name the existing test method that is now a deletion candidate (`test_method`) and why the behaviour is gone (`reason`) — otherwise nobody can act on it."
             }
           }
@@ -138,27 +67,12 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": [
-          "related",
-          "suggestion",
-          "rationale"
-        ],
+        "required": ["related", "suggestion", "rationale"],
         "additionalProperties": false,
         "properties": {
-          "related": {
-            "type": "array",
-            "minItems": 1,
-            "items": {
-              "type": "string",
-              "pattern": "^TC[0-9]+$"
-            }
-          },
-          "suggestion": {
-            "type": "string"
-          },
-          "rationale": {
-            "type": "string"
-          }
+          "related": { "type": "array", "minItems": 1, "items": { "type": "string", "pattern": "^TC[0-9]+$" } },
+          "suggestion": { "type": "string" },
+          "rationale": { "type": "string" }
         }
       }
     }

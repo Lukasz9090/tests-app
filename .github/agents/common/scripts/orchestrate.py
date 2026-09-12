@@ -11,8 +11,8 @@ Source of truth = the artifacts, not the ledger. Everything except the audit
 trail is recomputed from files every call, so a lost ledger (git clean) never
 corrupts control flow; `state` reconstructs it from the versioned artifacts.
 
-stdlib-only; run with the plain `python` on PATH (`python3` where that is its
-name). Same convention as every other script in this repo.
+Standard library only; run with the plain `python` on PATH (`python3` where that
+is its name). Only validate_plan.py needs a dependency (jsonschema).
 
 Subcommands
 -----------
@@ -20,6 +20,9 @@ Subcommands
       Print a JSON status block whose `next_action` is one of:
         PLAN | GENERATE | REVIEW | DONE | ESCALATE
       with the exact plan version / iteration to use and the artifact paths.
+      `surface` carries what the orchestrator must show the user but cannot read
+      itself: `unimplementable` (from the review) and `suggestions` (from the
+      generation report).
 
   ledger <Slug> --repo . [--event '<json>'] [--outcome DONE|ESCALATED]
       With --event: append one history entry (creates the ledger if missing).
@@ -58,6 +61,20 @@ def _now() -> str:
 
 def plan_dir(repo: Path, slug: str) -> Path:
     return repo / ".test-agent" / "plans" / slug
+
+
+def rel(path: Path, repo: Path) -> str:
+    """Repo-relative, forward slashes.
+
+    The Orchestrator pastes these paths straight into a sub-agent prompt, and
+    every agent file writes them the same way (`.test-agent/plans/...`). An
+    absolute Windows path with backslashes would be the odd one out, and it
+    leaks the checkout location into the artifacts.
+    """
+    try:
+        return path.resolve().relative_to(repo.resolve()).as_posix()
+    except ValueError:
+        return path.as_posix()
 
 
 def _versions(directory: Path, pattern: re.Pattern) -> list[int]:
@@ -102,6 +119,31 @@ def _review_iterations(directory: Path, n: int) -> list[int]:
     return _versions(directory, re.compile(rf"review-v{n}-r(\d+)\.md$"))
 
 
+def _impl_feedback(review: dict) -> list:
+    return (review.get("feedback", {}) or {}).get("implementation", []) or []
+
+
+def open_feedback_review(directory: Path, up_to_version: int):
+    """Newest review, at or below `up_to_version`, whose implementation feedback
+    is still open — i.e. it asked for a repair and no later ACCEPT closed it.
+
+    Findings must survive a plan bump. Without this the generator gets no review
+    path on the first round of plan v<N+1>, and a DONE on a COMPLETE plan would
+    drop the findings entirely (both are silent losses, not errors).
+    """
+    for version in range(up_to_version, 0, -1):
+        for iteration in reversed(_review_iterations(directory, version)):
+            path = review_path(directory, version, iteration)
+            review = _safe_payload(path)
+            if "__error__" in review:
+                continue
+            if review.get("decision") in DECISION_ACCEPT:
+                return None, None          # newest verdict accepted: nothing open
+            if _impl_feedback(review):
+                return path, review
+    return None, None
+
+
 def scenarios_in_scope(plan: dict) -> list[str]:
     """Ids the generator still has work on.
 
@@ -123,6 +165,39 @@ def scenarios_in_scope(plan: dict) -> list[str]:
     return ids
 
 
+def _newest(directory: Path, up_to_version: int, iterations, path_of):
+    """Newest artifact at or below a plan version, or None."""
+    for version in range(up_to_version, 0, -1):
+        found = iterations(directory, version)
+        if found:
+            return path_of(directory, version, found[-1])
+    return None
+
+
+def surface(directory: Path, n: int, review: dict | None = None) -> dict:
+    """What the orchestrator must relay to the user but cannot read itself.
+
+    `unimplementable` comes from the review, `suggestions` from the generation
+    report — different artifacts, and possibly from an EARLIER plan version than
+    the current one (a bumped plan has no report of its own yet). The
+    orchestrator dispatches only, so the state call hands both over.
+    """
+    out = {"unimplementable": [], "suggestions": []}
+
+    if review is None:
+        path = _newest(directory, n, _review_iterations, review_path)
+        review = _safe_payload(path) if path else {}
+    if "__error__" not in review:
+        out["unimplementable"] = review.get("unimplementable", []) or []
+
+    path = _newest(directory, n, _gen_iterations, gen_report_path)
+    if path:
+        report = _safe_payload(path)
+        if "__error__" not in report:
+            out["suggestions"] = report.get("suggestions", []) or []
+    return out
+
+
 def compute_state(repo: Path, slug: str, impl_cap: int, plan_cap: int) -> dict:
     directory = plan_dir(repo, slug)
     plan_versions = _versions(directory, re.compile(r"plan-v(\d+)\.md$"))
@@ -136,6 +211,7 @@ def compute_state(repo: Path, slug: str, impl_cap: int, plan_cap: int) -> dict:
         "caps": {"impl_cap": impl_cap, "plan_cap": plan_cap},
         "next_action": None,
         "dispatch": None,
+        "surface": {"unimplementable": [], "suggestions": []},
         "reason": None,
     }
 
@@ -149,7 +225,7 @@ def compute_state(repo: Path, slug: str, impl_cap: int, plan_cap: int) -> dict:
     p_path = directory / f"plan-v{n}.md"
     plan = _safe_payload(p_path)
     status = plan.get("status")
-    out["plan"] = {"version": n, "path": str(p_path), "status": status}
+    out["plan"] = {"version": n, "path": rel(p_path, repo), "status": status}
 
     if "__error__" in plan:
         out["next_action"] = "ESCALATE"
@@ -157,7 +233,16 @@ def compute_state(repo: Path, slug: str, impl_cap: int, plan_cap: int) -> dict:
         return out
 
     if status == PLAN_STATUS_COMPLETE:
+        open_path, open_review = open_feedback_review(directory, n)
+        if open_path is not None:
+            out["next_action"] = "ESCALATE"
+            out["surface"] = surface(directory, n, open_review)
+            out["reason"] = (f"plan v{n} is COMPLETE, but {open_path.name} still has open "
+                             f"feedback.implementation. Closing the run here would drop those "
+                             f"findings; a human must decide whether they are addressed")
+            return out
         out["next_action"] = "DONE"
+        out["surface"] = surface(directory, n)
         out["reason"] = (f"plan v{n} is COMPLETE: every scenario is already implemented "
                          f"(implementation: COVERED) or REMOVED; nothing left to generate")
         return out
@@ -185,23 +270,37 @@ def compute_state(repo: Path, slug: str, impl_cap: int, plan_cap: int) -> dict:
             # Belt and braces for a planner that wrote READY instead of COMPLETE:
             # with nothing PENDING there is no generation to dispatch, and an
             # empty generation report is not a valid artifact.
+            open_path, open_review = open_feedback_review(directory, n)
+            if open_path is not None:
+                out["next_action"] = "ESCALATE"
+                out["surface"] = surface(directory, n, open_review)
+                out["reason"] = (f"plan v{n} has no scenario in scope, but {open_path.name} "
+                                 f"still has open feedback.implementation; those findings would "
+                                 f"be lost")
+                return out
             out["next_action"] = "DONE"
+            out["surface"] = surface(directory, n)
             out["reason"] = (f"plan v{n} is {status} but no scenario is in scope "
                              f"(all COVERED or REMOVED); nothing to generate")
             return out
+        # A review of plan v<n-1> can still hold implementation findings: the plan
+        # bumped, the finding did not. Name it here or the generator starts the new
+        # version blind and the finding dies between two valid artifacts.
+        carry, _ = open_feedback_review(directory, n - 1) if n > 1 else (None, None)
         out["next_action"] = "GENERATE"
         out["dispatch"] = {"agent": "test-generator", "plan_version": n, "iteration": 1,
-                           "report_path": str(gen_report_path(directory, n, 1)),
-                           "prior_review_path": None}
+                           "report_path": rel(gen_report_path(directory, n, 1), repo),
+                           "prior_review_path": None,
+                           "carry_review_path": rel(carry, repo) if carry else None}
         out["reason"] = f"plan v{n} is {status} but has no generation yet"
         return out
 
-    out["generation"] = {"iteration": gen_m, "path": str(gen_report_path(directory, n, gen_m))}
+    out["generation"] = {"iteration": gen_m, "path": rel(gen_report_path(directory, n, gen_m), repo)}
 
     if rev_m < gen_m:
         out["next_action"] = "REVIEW"
         out["dispatch"] = {"agent": "test-reviewer", "plan_version": n, "iteration": gen_m,
-                           "review_path": str(review_path(directory, n, gen_m))}
+                           "review_path": rel(review_path(directory, n, gen_m), repo)}
         out["reason"] = f"generation iteration {gen_m} is awaiting review"
         return out
 
@@ -210,7 +309,7 @@ def compute_state(repo: Path, slug: str, impl_cap: int, plan_cap: int) -> dict:
     review = _safe_payload(r_path)
     if "__error__" in review:
         out["next_action"] = "ESCALATE"
-        out["review"] = {"iteration": rev_m, "path": str(r_path), "decision": None,
+        out["review"] = {"iteration": rev_m, "path": rel(r_path, repo), "decision": None,
                          "has_open_impl_feedback": False, "has_repeated_finding": False}
         out["reason"] = f"{r_path.name} is unparseable: {review['__error__']}"
         return out
@@ -220,31 +319,34 @@ def compute_state(repo: Path, slug: str, impl_cap: int, plan_cap: int) -> dict:
     repeated = any(bool(f.get("repeated")) for f in findings)
     impl_feedback = (review.get("feedback", {}) or {}).get("implementation", []) or []
     out["review"] = {
-        "iteration": rev_m, "path": str(r_path), "decision": decision,
+        "iteration": rev_m, "path": rel(r_path, repo), "decision": decision,
         "has_open_impl_feedback": bool(impl_feedback),
         "has_repeated_finding": repeated,
     }
 
     if decision in DECISION_ACCEPT:
         out["next_action"] = "DONE"
+        out["surface"] = surface(directory, n, review)
         out["reason"] = f"reviewer decided {decision} at v{n}-r{rev_m}"
         return out
 
     if decision in DECISION_STOP:
         out["next_action"] = "ESCALATE"
+        out["surface"] = surface(directory, n, review)
         out["reason"] = f"reviewer decided {decision}; belongs to a human (spec/code or unrunnable check)"
         return out
 
     if decision == "REPAIR_IMPLEMENTATION":
         if gen_m >= impl_cap:
             out["next_action"] = "ESCALATE"
+            out["surface"] = surface(directory, n, review)
             out["reason"] = f"REPAIR_IMPLEMENTATION but impl_cap {impl_cap} reached at v{n} (rounds={gen_m})"
             return out
         out["next_action"] = "GENERATE"
         out["dispatch"] = {
             "agent": "test-generator", "plan_version": n, "iteration": gen_m + 1,
-            "report_path": str(gen_report_path(directory, n, gen_m + 1)),
-            "prior_review_path": str(r_path),  # carries feedback.implementation forward
+            "report_path": rel(gen_report_path(directory, n, gen_m + 1), repo),
+            "prior_review_path": rel(r_path, repo),  # carries feedback.implementation forward
         }
         out["reason"] = f"reviewer asked to repair implementation; round {gen_m + 1} of {impl_cap}"
         return out
@@ -252,6 +354,7 @@ def compute_state(repo: Path, slug: str, impl_cap: int, plan_cap: int) -> dict:
     if decision == "REPAIR_PLAN":
         if n >= plan_cap:
             out["next_action"] = "ESCALATE"
+            out["surface"] = surface(directory, n, review)
             out["reason"] = f"REPAIR_PLAN but plan_cap {plan_cap} reached (plan versions={n})"
             return out
         out["next_action"] = "PLAN"
@@ -260,11 +363,11 @@ def compute_state(repo: Path, slug: str, impl_cap: int, plan_cap: int) -> dict:
             # CRITICAL: implementation findings must survive the plan bump, or a
             # weak-assertion finding from v{n} silently dies when the generator
             # later looks only for a review of v{n+1} (which won't exist yet).
-            "carry_review_path": str(r_path) if impl_feedback else None,
+            "carry_review_path": rel(r_path, repo) if impl_feedback else None,
             # The planner classifies `implementation` from these, not from a
             # grep of the test files — see test-planner Phase 2.5.
-            "prior_generation_report_path": str(gen_report_path(directory, n, gen_m)),
-            "prior_review_path": str(r_path),
+            "prior_generation_report_path": rel(gen_report_path(directory, n, gen_m), repo),
+            "prior_review_path": rel(r_path, repo),
         }
         out["reason"] = f"reviewer asked to repair the plan; writing plan v{n + 1}"
         return out
@@ -351,11 +454,11 @@ def main() -> int:
         if args.outcome:
             payload["status"] = args.outcome
             payload["outcome"] = args.outcome
-        ledger_write(repo, args.slug, payload)
         if not args.event and not args.outcome:
             print(json.dumps(payload, indent=2, ensure_ascii=False))
-        else:
-            print(f"ledger updated: {ledger_file(repo, args.slug)}")
+            return 0                      # reading the ledger must not create one
+        ledger_write(repo, args.slug, payload)
+        print(f"ledger updated: {ledger_file(repo, args.slug)}")
         return 0
 
     return 2

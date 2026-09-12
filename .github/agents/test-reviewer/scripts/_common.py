@@ -16,7 +16,9 @@ import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-JSON_FENCE = re.compile(r"```json\s*\n(.*?)\n```", re.S)
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "common" / "scripts"))
+from md_payload import load_payload as _load_payload  # noqa: E402
+
 PACKAGE = re.compile(r"^\s*package\s+([\w.]+)\s*;", re.M)
 VERSION_SUFFIX = re.compile(r"-v(\d+)(?:-r(\d+))?\.md$")
 
@@ -39,18 +41,17 @@ class CheckError(Exception):
 
 
 def payload(path: Path) -> dict:
-    """Extract the single ```json fence that carries an artifact's contract."""
+    """The artifact's contract, read by the shared fence reader.
+
+    Only the error type is local: every caller here maps a bad artifact to exit
+    code 2 through CheckError.
+    """
     if not path.exists():
         raise CheckError(f"missing artifact: {path}")
-    blocks = JSON_FENCE.findall(path.read_text(encoding="utf-8", errors="replace"))
-    if len(blocks) != 1:
-        raise CheckError(
-            f"INVALID_ARTIFACT {path}: expected exactly one ```json fence, found {len(blocks)}"
-        )
     try:
-        return json.loads(blocks[0])
-    except json.JSONDecodeError as exc:
-        raise CheckError(f"INVALID_ARTIFACT {path}: {exc}") from exc
+        return _load_payload(path)[0]
+    except ValueError as exc:
+        raise CheckError(f"INVALID_ARTIFACT {exc}") from exc
 
 
 def _version_key(path: Path) -> tuple:
@@ -83,8 +84,18 @@ def load_plan(repo: Path, slug: str) -> tuple[Path, dict]:
 
 
 def load_report(repo: Path, slug: str, plan_version: int) -> tuple[Path, dict]:
-    pattern = f"generation-report-v{plan_version}*.md"
-    path = latest(plans_dir(repo, slug).glob(pattern))
+    """Newest report for THIS plan version.
+
+    A glob on `-v{n}*` also matches v10, v11 ... and `_version_key` then ranks
+    those highest, so plan v1 would be reviewed against the report of plan v10.
+    Filter on the parsed version instead.
+    """
+    candidates = [
+        path
+        for path in plans_dir(repo, slug).glob("generation-report-v*.md")
+        if _version_key(path)[0] == plan_version
+    ]
+    path = latest(candidates)
     if path is None:
         raise CheckError(f"no generation report for plan v{plan_version} in {plans_dir(repo, slug)}")
     return path, payload(path)
@@ -337,14 +348,46 @@ def resolve_module(repo: Path, plan: dict, override: str | None,
 # ---------------------------------------------------------------- profile ---
 
 
+PROFILE_PATHS = (
+    Path(".github") / "agents" / "common" / "project-profile.md",   # committed config
+    Path(".test-agent") / "project-profile.md",                     # legacy location
+)
+
+
+_PROFILE_CACHE = {}
+
+
 def profile(repo: Path) -> dict:
-    path = repo / ".test-agent" / "project-profile.md"
-    if not path.exists():
-        return {}
-    try:
-        return payload(path)
-    except CheckError:
-        return {}
+    """Quality gates and tool versions, first match wins.
+
+    `.test-agent/` is gitignored, so a profile kept only there never reaches the
+    team and every run silently falls back to DEFAULT_GATES.
+
+    A malformed profile still falls back, but says so on stderr: a gate that
+    quietly reverts to the default is the kind of degradation nobody notices
+    until a weak test suite has been accepted. Cached per repo, because every
+    gate and version lookup calls this.
+    """
+    key = str(repo)
+    if key in _PROFILE_CACHE:
+        return _PROFILE_CACHE[key]
+
+    found = {}
+    for relative in PROFILE_PATHS:
+        path = repo / relative
+        if not path.exists():
+            continue
+        try:
+            found = payload(path)
+        except CheckError as exc:
+            print(f"WARNING: ignoring {path}: {exc}. Falling back to the built-in "
+                  f"gates {DEFAULT_GATES} and tool versions {DEFAULT_VERSIONS}.",
+                  file=sys.stderr)
+            found = {}
+        break
+
+    _PROFILE_CACHE[key] = found
+    return found
 
 
 def gate_value(repo: Path, key: str, override=None) -> float:

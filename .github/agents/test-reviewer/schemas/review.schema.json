@@ -58,8 +58,12 @@
           "required": ["status"],
           "additionalProperties": false,
           "properties": {
-            "status": { "enum": ["PASSED", "FAILED"] },
-            "errors": { "type": "array", "items": { "type": "string" } }
+            "status": {
+              "enum": ["PASSED", "FAILED", "NOT_RUN"],
+              "description": "NOT_RUN = run_tests.py could not run at all (exit 2), so compilation was never attempted."
+            },
+            "errors": { "type": "array", "items": { "type": "string" } },
+            "reason": { "type": "string" }
           }
         },
         "tests": {
@@ -67,7 +71,15 @@
           "required": ["status"],
           "additionalProperties": false,
           "properties": {
-            "status": { "enum": ["PASSED", "FAILED", "ERROR", "NOT_RUN"] },
+            "status": {
+              "enum": ["PASSED", "FAILED", "ERROR", "COMPILE_ERROR", "UNAVAILABLE", "NOT_RUN"],
+              "description": "Copy the status run_tests.py reported. UNAVAILABLE = the script exited 2, which is a BLOCKED decision, never a pass."
+            },
+            "reason": { "type": "string" },
+            "flaky_only": {
+              "type": "boolean",
+              "description": "True when every test passed but the repeated runs disagreed: run_tests.py exits 1 with status PASSED. Treat it as a defect (REPAIR_IMPLEMENTATION), not a pass."
+            },
             "total": { "type": "integer", "minimum": 0 },
             "failed": { "type": "integer", "minimum": 0 },
             "failures": {
@@ -173,7 +185,8 @@
               "duplicate_test",
               "flaky_risk",
               "data_not_backed_by_evidence",
-              "unreadable_setup"
+              "unreadable_setup",
+              "missing_characterization_marker"
             ]
           },
           "location": { "type": "string" },
@@ -257,14 +270,6 @@
           "location": { "type": "string" },
           "spec_ref": { "type": "string" }
         }
-      }
-    },
-    "metrics": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "duration_s": { "type": "number", "minimum": 0 },
-        "tests_total": { "type": "integer", "minimum": 0 }
       }
     }
   }

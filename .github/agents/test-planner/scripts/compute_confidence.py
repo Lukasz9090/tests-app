@@ -21,11 +21,11 @@ from md_payload import load_payload, save_payload
 
 # Evidence weights (see architecture doc, section 8).
 # human_decision > existing_test > builder/fixture > usage > enum/constraint
+# Exactly the types test-plan.schema.json allows. Weighting a type the schema
+# rejects is dead code that suggests the planner may use it.
 WEIGHTS = {
     "human_decision": 0.95,
     "existing_test": 0.80,
-    "runtime_observation": 0.75,
-    "dynamic_invariant": 0.70,
     "builder": 0.60,
     "fixture": 0.60,
     "usage": 0.40,
@@ -35,8 +35,8 @@ WEIGHTS = {
 }
 
 
-STRONG_TYPES = {"human_decision", "existing_test", "runtime_observation"}
-MEDIUM_POOL = {"usage", "api_schema", "db_constraint", "enum", "dynamic_invariant"}
+STRONG_TYPES = {"human_decision", "existing_test"}
+MEDIUM_POOL = {"usage", "api_schema", "db_constraint", "enum"}
 
 
 def strength(evidence_list):
@@ -80,8 +80,8 @@ def main():
 
     try:
         plan, original = load_payload(path)
-    except (ValueError, Exception) as e:
-        sys.exit(f"ERROR: {e}")
+    except (OSError, ValueError) as e:      # not bare Exception: a bug here must not
+        sys.exit(f"ERROR: {e}")             # be reported as a malformed artifact
     if not isinstance(plan, dict):
         sys.exit(f"Not a JSON object: {path}")
 

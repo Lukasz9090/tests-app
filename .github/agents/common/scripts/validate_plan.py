@@ -1,238 +1,112 @@
 #!/usr/bin/env python3
-"""Validate an agent artifact against its JSON Schema — no third-party deps.
+"""Validate an agent artifact against its JSON Schema.
 
-Implements the subset of JSON Schema draft 2020-12 that the agent schemas
-actually use: type, required, properties, additionalProperties, items,
-minItems/maxItems, minimum/maximum/exclusive*, minLength/maxLength, pattern,
-enum, const, uniqueItems, allOf/anyOf/oneOf/not, if/then/else and local $ref
-($defs). Anything else in a schema is ignored rather than guessed at, so a
-schema using an unsupported keyword still validates the parts it can.
+Thin wrapper over `jsonschema`, the reference implementation. This script used to
+carry a hand-written subset of draft 2020-12 so the pipeline needed no
+dependency, plus a fidelity harness to prove that subset still agreed with the
+real thing — 646 lines to avoid one `pip install`. The library does the job.
 
-One non-standard extension: a schema node may carry `errorMessage` (a string).
-When that node produces any violation, the generated messages are replaced by
-it. Constraints like `not: {pattern: ...}` are otherwise reported as "must NOT
-match the 'not' schema", which tells the agent that wrote the artifact nothing
-about what to write instead — and an unactionable error is how a defect gets
-"fixed" by deleting the field.
+One non-standard extension survives, because it is load-bearing: a schema node
+may carry `errorMessage` (a string). When anything under that node fails, its
+generated messages are replaced by that one sentence. `not: {pattern: ...}` is
+otherwise reported as "should not be valid under the given schema", which tells
+the agent that wrote the artifact nothing about what to write instead — and an
+unactionable error is how a defect gets "fixed" by deleting the field.
+
+The artifact is read through md_payload, the single fence reader shared by every
+script, so a file that one tool accepts is accepted by all of them.
 
 Usage:
   validate_plan.py <artifact.md|artifact.json> <schema.json>
 
-Exit 0 = artifact valid. Exit 1 = INVALID_ARTIFACT (with every violation
-listed, not just the first).
+Exit 0 = artifact valid. Exit 1 = INVALID_ARTIFACT, with every violation listed,
+not just the first. Exit 2 = the check could not run (missing schema, or
+jsonschema not installed) — never to be read as a pass.
 """
 
 from __future__ import annotations
 
 import json
-import re
 import sys
 from pathlib import Path
 
-JSON_FENCE = re.compile(r"^```json\s*\n(.*?)\n```", re.S | re.M)
-
-TYPES = {
-    "object": dict,
-    "array": list,
-    "string": str,
-    "boolean": bool,
-    "null": type(None),
-}
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from md_payload import payload as read_payload  # noqa: E402
 
 
-def type_matches(value, expected: str) -> bool:
-    if expected == "integer":
-        # bool is a subclass of int in Python; JSON Schema treats them apart
-        return isinstance(value, int) and not isinstance(value, bool)
-    if expected == "number":
-        return isinstance(value, (int, float)) and not isinstance(value, bool)
-    if expected == "boolean":
-        return isinstance(value, bool)
-    if expected == "integer_like":
-        return False
-    python_type = TYPES.get(expected)
-    if python_type is None:
-        return True  # unknown type name: do not invent a failure
-    if python_type is dict:
-        return isinstance(value, dict)
-    if python_type is list:
-        return isinstance(value, list)
-    if python_type is str:
-        return isinstance(value, str)
-    return isinstance(value, python_type)
+def _validator(schema: dict):
+    """The reference validator, or a clear instruction on how to get it."""
+    try:
+        from jsonschema import Draft202012Validator
+    except ImportError as exc:
+        raise RuntimeError(
+            "this check needs the jsonschema library: pip install -r "
+            ".github/agents/requirements.txt (or pip install jsonschema)"
+        ) from exc
+    return Draft202012Validator(schema)
 
 
-def resolve_ref(ref: str, root: dict):
-    """Resolve a local pointer such as '#/$defs/scenario'."""
-    if not ref.startswith("#"):
-        raise ValueError(f"only local $ref is supported, got {ref!r}")
-    node = root
-    for token in ref.lstrip("#/").split("/"):
-        if not token:
-            continue
-        token = token.replace("~1", "/").replace("~0", "~")
-        if isinstance(node, list):
-            node = node[int(token)]
-        else:
-            node = node[token]
+def follow_ref(node, root: dict):
+    """Step through a local `$ref` so the walk below does not stop at one."""
+    seen = 0
+    while isinstance(node, dict) and isinstance(node.get("$ref"), str) and node["$ref"].startswith("#"):
+        target = root
+        for part in node["$ref"].lstrip("#/").split("/"):
+            if not part:
+                continue
+            try:
+                target = target[part.replace("~1", "/").replace("~0", "~")]
+            except (KeyError, TypeError):
+                return node
+        node = target
+        seen += 1
+        if seen > 10:                    # a cycle would otherwise spin here
+            break
     return node
 
 
-def json_equal(left, right) -> bool:
-    """Equality with JSON semantics, not Python's.
+def custom_message(schema: dict, error) -> str | None:
+    """The `errorMessage` of the deepest node that owns the failure.
 
-    Python evaluates True == 1, so a plain == would accept `"schema_version":
-    true` for `"const": 1`. JSON Schema keeps booleans and numbers distinct.
+    A violation often surfaces far below the node that explains it: the rule
+    lives on an `allOf/N/then`, while the error is raised by the `required` of an
+    `items` three levels down. `absolute_schema_path` is the route from the root
+    to the failing keyword, so walking it and keeping the last `errorMessage` on
+    the way finds the sentence a human wrote for exactly this case.
+
+    The route runs THROUGH `$ref`s — `items: {$ref: #/$defs/scenario}` is one
+    step in the path, not a stop — so each node is resolved before indexing.
+    Without that, every rule inside `$defs` silently loses its message and the
+    agent gets "should not be valid under the given schema" instead.
     """
-    if isinstance(left, bool) != isinstance(right, bool):
-        return False
-    if isinstance(left, dict) and isinstance(right, dict):
-        return left.keys() == right.keys() and all(json_equal(left[k], right[k]) for k in left)
-    if isinstance(left, list) and isinstance(right, list):
-        return len(left) == len(right) and all(json_equal(a, b) for a, b in zip(left, right))
-    return left == right
+    node = schema
+    found = None
+    for token in list(error.absolute_schema_path):
+        node = follow_ref(node, schema)
+        if isinstance(node, dict) and isinstance(node.get("errorMessage"), str):
+            found = node["errorMessage"]
+        try:
+            node = node[int(token)] if isinstance(node, list) else node[token]
+        except (KeyError, IndexError, ValueError, TypeError):
+            return found
+    node = follow_ref(node, schema)
+    if isinstance(node, dict) and isinstance(node.get("errorMessage"), str):
+        found = node["errorMessage"]
+    return found
 
 
-def describe(value) -> str:
-    text = json.dumps(value, ensure_ascii=False) if not isinstance(value, str) else repr(value)
-    return text if len(text) <= 60 else text[:57] + "..."
+def validate(instance, schema: dict) -> list:
+    """Human-readable violations, empty list = valid.
 
-
-def validate(instance, schema, root=None, path="$") -> list:
-    """Return a list of human-readable violations (empty list = valid)."""
-    if root is None:
-        root = schema
-    errors = []
-
-    if not isinstance(schema, dict):
-        return errors  # `true`/`false` schemas: treat as permissive
-
-    if "$ref" in schema:
-        return validate(instance, resolve_ref(schema["$ref"], root), root, path)
-
-    # --- type ---------------------------------------------------------------
-    if "type" in schema:
-        expected = schema["type"]
-        allowed = expected if isinstance(expected, list) else [expected]
-        if not any(type_matches(instance, name) for name in allowed):
-            errors.append(f"{path}: expected type {'/'.join(allowed)}, got {type(instance).__name__}")
-            return errors  # further checks would be noise
-
-    # --- const / enum -------------------------------------------------------
-    if "const" in schema and not json_equal(instance, schema["const"]):
-        errors.append(f"{path}: must be {describe(schema['const'])}, got {describe(instance)}")
-    if "enum" in schema and not any(json_equal(instance, v) for v in schema["enum"]):
-        allowed = ", ".join(describe(v) for v in schema["enum"])
-        errors.append(f"{path}: {describe(instance)} is not one of [{allowed}]")
-
-    # --- numbers ------------------------------------------------------------
-    if isinstance(instance, (int, float)) and not isinstance(instance, bool):
-        if "minimum" in schema and instance < schema["minimum"]:
-            errors.append(f"{path}: {instance} < minimum {schema['minimum']}")
-        if "maximum" in schema and instance > schema["maximum"]:
-            errors.append(f"{path}: {instance} > maximum {schema['maximum']}")
-        if "exclusiveMinimum" in schema and instance <= schema["exclusiveMinimum"]:
-            errors.append(f"{path}: {instance} <= exclusiveMinimum {schema['exclusiveMinimum']}")
-        if "exclusiveMaximum" in schema and instance >= schema["exclusiveMaximum"]:
-            errors.append(f"{path}: {instance} >= exclusiveMaximum {schema['exclusiveMaximum']}")
-        if "multipleOf" in schema and schema["multipleOf"]:
-            quotient = instance / schema["multipleOf"]
-            if abs(quotient - round(quotient)) > 1e-9:
-                errors.append(f"{path}: {instance} is not a multiple of {schema['multipleOf']}")
-
-    # --- strings ------------------------------------------------------------
-    if isinstance(instance, str):
-        if "minLength" in schema and len(instance) < schema["minLength"]:
-            errors.append(f"{path}: shorter than minLength {schema['minLength']}")
-        if "maxLength" in schema and len(instance) > schema["maxLength"]:
-            errors.append(f"{path}: longer than maxLength {schema['maxLength']}")
-        if "pattern" in schema and not re.search(schema["pattern"], instance):
-            errors.append(f"{path}: {describe(instance)} does not match /{schema['pattern']}/")
-
-    # --- arrays -------------------------------------------------------------
-    if isinstance(instance, list):
-        if "minItems" in schema and len(instance) < schema["minItems"]:
-            errors.append(f"{path}: has {len(instance)} items, minItems is {schema['minItems']}")
-        if "maxItems" in schema and len(instance) > schema["maxItems"]:
-            errors.append(f"{path}: has {len(instance)} items, maxItems is {schema['maxItems']}")
-        if schema.get("uniqueItems"):
-            seen = [json.dumps(item, sort_keys=True, ensure_ascii=False) for item in instance]
-            if len(set(seen)) != len(seen):
-                errors.append(f"{path}: items are not unique")
-        if "items" in schema:
-            for index, item in enumerate(instance):
-                errors += validate(item, schema["items"], root, f"{path}[{index}]")
-
-    # --- objects ------------------------------------------------------------
-    if isinstance(instance, dict):
-        for key in schema.get("required", []):
-            if key not in instance:
-                errors.append(f"{path}: missing required property '{key}'")
-        properties = schema.get("properties", {})
-        for key, subschema in properties.items():
-            if key in instance:
-                errors += validate(instance[key], subschema, root, f"{path}.{key}")
-        pattern_properties = schema.get("patternProperties", {})
-        for pattern, subschema in pattern_properties.items():
-            for key, value in instance.items():
-                if re.search(pattern, key):
-                    errors += validate(value, subschema, root, f"{path}.{key}")
-        extra = schema.get("additionalProperties", True)
-        if extra is not True:
-            known = set(properties)
-            unknown = [
-                key
-                for key in instance
-                if key not in known
-                and not any(re.search(p, key) for p in pattern_properties)
-            ]
-            if extra is False:
-                for key in unknown:
-                    errors.append(f"{path}: unexpected property '{key}'")
-            else:
-                for key in unknown:
-                    errors += validate(instance[key], extra, root, f"{path}.{key}")
-
-    # --- combinators --------------------------------------------------------
-    for subschema in schema.get("allOf", []):
-        errors += validate(instance, subschema, root, path)
-    if "anyOf" in schema:
-        if not any(not validate(instance, s, root, path) for s in schema["anyOf"]):
-            errors.append(f"{path}: does not match any schema in anyOf")
-    if "oneOf" in schema:
-        matches = sum(1 for s in schema["oneOf"] if not validate(instance, s, root, path))
-        if matches != 1:
-            errors.append(f"{path}: matches {matches} schemas in oneOf, expected exactly 1")
-    if "not" in schema and not validate(instance, schema["not"], root, path):
-        errors.append(f"{path}: must NOT match the 'not' schema")
-
-    # --- conditional --------------------------------------------------------
-    if "if" in schema:
-        branch = "then" if not validate(instance, schema["if"], root, path) else "else"
-        if branch in schema:
-            errors += validate(instance, schema[branch], root, path)
-
-    # --- custom message -----------------------------------------------------
-    if errors and isinstance(schema.get("errorMessage"), str):
-        return [f"{path}: {schema['errorMessage']}"]
-
-    return errors
-
-
-def load_payload(path: Path):
-    """Read the artifact: the single ```json fence of a markdown container,
-    or the whole file when it is plain JSON."""
-    if not path.exists():
-        raise ValueError(f"file not found: {path}")
-    text = path.read_text(encoding="utf-8-sig", errors="replace")
-    if path.suffix.lower() == ".json":
-        return json.loads(text)
-    blocks = JSON_FENCE.findall(text)
-    if len(blocks) != 1:
-        raise ValueError(
-            f"expected exactly one ```json fence at the start of a line, found {len(blocks)}"
-        )
-    return json.loads(blocks[0])
+    Kept as a function because check_examples.py validates in-process.
+    """
+    violations = []
+    for error in _validator(schema).iter_errors(instance):
+        message = custom_message(schema, error) or error.message
+        entry = f"{error.json_path}: {message}"
+        if entry not in violations:      # one errorMessage covers every failure
+            violations.append(entry)     # under its node, so report it once
+    return sorted(violations)
 
 
 def main() -> int:
@@ -242,8 +116,8 @@ def main() -> int:
     artifact_path, schema_path = Path(sys.argv[1]), Path(sys.argv[2])
 
     try:
-        instance = load_payload(artifact_path)
-    except (ValueError, json.JSONDecodeError) as exc:
+        instance = read_payload(artifact_path)
+    except (OSError, ValueError) as exc:
         print(f"INVALID_ARTIFACT {artifact_path}: {exc}")
         return 1
     try:
@@ -252,7 +126,12 @@ def main() -> int:
         print(f"INVALID_SCHEMA {schema_path}: {exc}")
         return 2
 
-    errors = validate(instance, schema)
+    try:
+        errors = validate(instance, schema)
+    except RuntimeError as exc:
+        print(f"CHECK_UNAVAILABLE: {exc}", file=sys.stderr)
+        return 2
+
     if errors:
         print(f"INVALID_ARTIFACT {artifact_path} ({len(errors)} violation(s)):")
         for error in errors:
