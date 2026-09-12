@@ -24,9 +24,11 @@ Subcommands
       itself: `unimplementable` (from the review) and `suggestions` (from the
       generation report).
 
-  ledger <Slug> --repo . [--event '<json>'] [--outcome DONE|ESCALATED]
-      With --event: append one history entry (creates the ledger if missing).
-      With --outcome: mark the run terminal. With neither: print the ledger.
+  ledger <Slug> --repo . [--phase PLAN|GENERATE|REVIEW] [--note "..."]
+                         [--event '<json>'] [--outcome DONE|ESCALATED]
+      With --phase/--note (or the raw --event escape hatch): append one history
+      entry (creates the ledger if missing). With --outcome: mark the run
+      terminal. With none of them: print the ledger.
 
 Exit codes: 0 ok; 2 usage/IO error. `state` never fails on a missing pipeline —
 "nothing yet" is a valid state (next_action = PLAN).
@@ -472,7 +474,10 @@ def main() -> int:
     l = sub.add_parser("ledger")
     l.add_argument("slug")
     l.add_argument("--repo", default=".")
-    l.add_argument("--event", default=None, help="JSON object to append to history")
+    l.add_argument("--phase", default=None, help="PLAN | GENERATE | REVIEW — the step just dispatched")
+    l.add_argument("--note", default=None, help="one-line human note for the history entry")
+    l.add_argument("--event", default=None,
+                   help="raw JSON object to append (escape hatch; --phase/--note is shell-safe and simpler)")
     l.add_argument("--outcome", default=None, choices=["DONE", "ESCALATED"])
 
     args = parser.parse_args()
@@ -485,18 +490,26 @@ def main() -> int:
 
     if args.cmd == "ledger":
         payload = ledger_read(repo, args.slug) or _empty_ledger(args.slug)
-        if args.event:
+        entry = None
+        if args.event:                    # raw-JSON escape hatch
             try:
                 entry = json.loads(args.event)
             except json.JSONDecodeError as exc:
                 print(f"--event is not valid JSON: {exc}", file=sys.stderr)
                 return 2
+        elif args.phase or args.note:     # the shell-safe path
+            entry = {}
+            if args.phase:
+                entry["phase"] = args.phase
+            if args.note:
+                entry["note"] = args.note
+        if entry is not None:
             entry.setdefault("ts", _now())
             payload["history"].append(entry)
         if args.outcome:
             payload["status"] = args.outcome
             payload["outcome"] = args.outcome
-        if not args.event and not args.outcome:
+        if entry is None and not args.outcome:
             print(json.dumps(payload, indent=2, ensure_ascii=False))
             return 0                      # reading the ledger must not create one
         ledger_write(repo, args.slug, payload)

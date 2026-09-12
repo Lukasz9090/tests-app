@@ -51,8 +51,15 @@ python $C/tc_orchestrate.py state <slug> --repo . --impl-cap <impl_cap> --plan-c
 **3. Log the dispatch and go back to step 1.**
 
 ```
-python $C/tc_orchestrate.py ledger <slug> --repo . --event '{"phase":"<PLAN|GENERATE|REVIEW>","note":"<one line>"}'
+python $C/tc_orchestrate.py ledger <slug> --repo . --phase <PLAN|GENERATE|REVIEW> --note "<one line>"
 ```
+
+The ledger is a **best-effort audit trail and never affects control flow** —
+`next_action` is recomputed from the artifacts on every `state` call. Run this
+ONCE. If it errors for any reason, do not retry it, do not debug it, and do not
+stop the loop: just note "ledger skipped" and go straight back to step 1. Pass
+the note as one double-quoted argument (`--note "..."`); never hand the script
+raw JSON. The same applies to the `--outcome` call on DONE/ESCALATE.
 
 ## What to report when a target ends
 
