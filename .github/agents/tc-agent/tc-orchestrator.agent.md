@@ -7,7 +7,7 @@ description: >
   deterministic next_action from tc_orchestrate.py. Owns the caps, the run ledger
   and escalation. Never plans, generates, reviews or edits an artifact itself.
 model: GPT-5.6 Terra
-tools: ['run_subagent', 'run_in_terminal', 'get_terminal_output']
+#tools: ['run_subagent', 'run_in_terminal', 'get_terminal_output']
 disable-model-invocation: true
 ---
 

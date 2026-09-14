@@ -30,6 +30,11 @@ Subcommands
       entry (creates the ledger if missing). With --outcome: mark the run
       terminal. With none of them: print the ledger.
 
+  clean  <Slug> --repo .   (or --all for every target)
+      Remove this run's scratch under .test-agent/{context,plans,checks}. That
+      folder is gitignored working state; `state` rebuilds control flow from the
+      plans that remain, so cleaning is always safe.
+
 Exit codes: 0 ok; 2 usage/IO error. `state` never fails on a missing pipeline —
 "nothing yet" is a valid state (next_action = PLAN).
 """
@@ -40,6 +45,7 @@ import argparse
 import datetime as _dt
 import json
 import re
+import shutil
 import sys
 from pathlib import Path
 
@@ -480,6 +486,11 @@ def main() -> int:
                    help="raw JSON object to append (escape hatch; --phase/--note is shell-safe and simpler)")
     l.add_argument("--outcome", default=None, choices=["DONE", "ESCALATED"])
 
+    cl = sub.add_parser("clean")
+    cl.add_argument("slug", nargs="?", default=None)
+    cl.add_argument("--repo", default=".")
+    cl.add_argument("--all", action="store_true", help="remove artifacts for every target")
+
     args = parser.parse_args()
     repo = Path(args.repo).resolve()
 
@@ -514,6 +525,30 @@ def main() -> int:
             return 0                      # reading the ledger must not create one
         ledger_write(repo, args.slug, payload)
         print(f"ledger updated: {ledger_file(repo, args.slug)}")
+        return 0
+
+    if args.cmd == "clean":
+        base = repo / ".test-agent"
+        subdirs = ("context", "plans", "checks")
+        if args.all:
+            removed = []
+            for name in subdirs:
+                d = base / name
+                if d.exists():
+                    shutil.rmtree(d)
+                    removed.append(name)
+            print(f"cleaned .test-agent: {', '.join(removed) or 'nothing to remove'}")
+            return 0
+        if not args.slug:
+            print("clean needs a <slug>, or --all to wipe every target", file=sys.stderr)
+            return 2
+        removed = []
+        for name in subdirs:
+            d = base / name / args.slug
+            if d.exists():
+                shutil.rmtree(d)
+                removed.append(rel(d, repo))
+        print(f"cleaned {args.slug}: {', '.join(removed) or 'nothing to remove'}")
         return 0
 
     return 2

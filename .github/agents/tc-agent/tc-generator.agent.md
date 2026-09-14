@@ -6,7 +6,7 @@ description: >
   a generation report. Plans nothing, runs nothing, touches no production code.
 model: GPT-5.6 Luna
 user-invocable: false
-tools: ['read_file', 'file_search', 'grep_search', 'get_errors', 'create_file', 'insert_edit_into_file', 'replace_string_in_file']
+#tools: ['read_file', 'file_search', 'grep_search', 'get_errors', 'create_file', 'insert_edit_into_file', 'replace_string_in_file']
 ---
 
 # Test Generator Agent (v0)

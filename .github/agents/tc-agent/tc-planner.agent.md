@@ -6,7 +6,7 @@ description: >
   a versioned test-plan.md with evidence-backed scenarios. Writes no test code.
 model: GPT-5.6 Terra
 user-invocable: false
-tools: ['read_file', 'run_in_terminal', 'get_terminal_output', 'ask_questions', 'create_file']
+#tools: ['read_file', 'run_in_terminal', 'get_terminal_output', 'ask_questions', 'create_file']
 ---
 
 # Test Planner Agent (v0)

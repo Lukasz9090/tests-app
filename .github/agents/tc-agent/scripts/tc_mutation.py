@@ -160,6 +160,8 @@ def main() -> int:
             "survivors: "
             + (", ".join(f"{s['line']}/{s['mutator']}" for s in data["survivors"][:12]) or "none"),
         ]
+        if passed:
+            log.unlink(missing_ok=True)   # keep the maven log only for a non-green check
         return c.finish(repo, args.slug, name, "Check: mutation", summary, data, 0 if passed else 1)
 
     except c.CheckError as exc:

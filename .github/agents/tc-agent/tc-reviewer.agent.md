@@ -7,7 +7,7 @@ description: >
   REPAIR_PLAN / NEEDS_TRIAGE / BLOCKED. Never edits code.
 model: GPT-5.6 Terra
 user-invocable: false
-tools: ['read_file', 'file_search', 'grep_search', 'run_in_terminal', 'get_terminal_output', 'create_file']
+#tools: ['read_file', 'file_search', 'grep_search', 'run_in_terminal', 'get_terminal_output', 'create_file']
 ---
 
 # Test Reviewer Agent (v0)

@@ -211,6 +211,8 @@ def main() -> int:
             f"{scope}: branch {branch_ratio:.0%}, line {line_ratio:.0%} (gate {gate:.0%})",
             f"uncovered lines: {', '.join(str(u['line']) for u in uncovered[:12]) or 'none'}",
         ] + notes
+        if passed:
+            log.unlink(missing_ok=True)   # keep the maven log only for a non-green check
         return c.finish(repo, args.slug, name, "Check: coverage", summary, data, 0 if passed else 1)
 
     except c.CheckError as exc:

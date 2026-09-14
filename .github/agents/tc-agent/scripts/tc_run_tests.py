@@ -199,6 +199,8 @@ def main() -> int:
             phases = {f.get("failure_phase") for f in failures}
             summary.append("failure phases: " + ", ".join(sorted(p for p in phases if p)))
         code = 1 if (failures or flaky) else 0
+        if code == 0:
+            log.unlink(missing_ok=True)   # keep the maven log only for a non-green check
         return c.finish(repo, args.slug, f"tests-r{args.iteration}.md",
                         "Check: tests", summary, data, code)
 
