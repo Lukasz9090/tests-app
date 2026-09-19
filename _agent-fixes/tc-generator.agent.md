@@ -204,20 +204,20 @@ user's final report. Never apply them yourself.
 
 - [ ] every scenario appears in `results` once, with the status the table dictates
 - [ ] nothing is called removed or dropped when the plan says COVERED:
-  `SKIPPED` means "done", `OBSOLETE` means "delete this"
+      `SKIPPED` means "done", `OBSOLETE` means "delete this"
 - [ ] every TC in the review's `feedback.implementation` was re-implemented and
-  its finding actually addressed, without editing anything outside the
-  entry's `scope`
+      its finding actually addressed, without editing anything outside the
+      entry's `scope`
 - [ ] every `IMPLEMENTED` result has its `// TC-nn` method in the file
 - [ ] on a `characterization: true` plan, every test written or repaired carries
-  the `// CHARACTERIZATION:` line with `context.target_sha`
+      the `// CHARACTERIZATION:` line with `context.target_sha`
 - [ ] no file under `src/main` was touched
 - [ ] no invented business values — spot-check data against plan and pack refs
 - [ ] time values are relative to now, follow the pack's CONVENTIONS, and pass
-  the guards that precede the guard under test
+      the guards that precede the guard under test
 - [ ] every `BLOCKED` has a reason, and every suggestion references TC ids
 - [ ] `get_errors` ran on every file in `test_files` with no compile error left,
-  or each remaining error has its scenario BLOCKED with the message quoted
+      or each remaining error has its scenario BLOCKED with the message quoted
 
 Finish with a short terminal summary: implemented, blocked and skipped counts,
 any repaired TC ids, and the top suggestions.
