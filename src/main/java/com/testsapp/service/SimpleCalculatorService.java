@@ -51,4 +51,8 @@ public class SimpleCalculatorService {
 
         return value.equalsIgnoreCase(reverseString(value));
     }
+
+    public boolean isEven(int number) {
+        return number % 2 == 0;
+    }
 }
