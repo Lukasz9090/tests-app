@@ -86,6 +86,19 @@ current behaviour and add `tc-agent-note: reported as defect: <what>`.
 fixtures, seeders, existing tests, or — in legacy — the code under test itself.
 No invented names, amounts, ids, statuses.
 
+Two things are NOT business data and never make a scenario a placeholder:
+- **Relational values** — a value whose only role is to be equal (or not
+  equal) to another value the test also controls: a key compared with the key
+  of an entry a mock returns, an id passed in and echoed back. Any neutral
+  literal works (`"KEY-1"` / `"OTHER-KEY"`); the evidence is the comparison
+  line in the code under test. Name them so nobody reads them as real data.
+- **Object shapes** — a DTO or domain object built with its own constructor,
+  builder or setters. The class declaration is the evidence for its shape;
+  fill only the fields the code under test reads.
+
+Only a value whose MEANING matters (a real status the code switches on, a
+threshold, an IBAN format) needs a source beyond that.
+
 **A5. Determinism.** No test may depend on the wall-clock time, the date, random
 values, execution order or sleeps.
 - When production code reads the clock directly (no injected `Clock`), build

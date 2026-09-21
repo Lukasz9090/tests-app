@@ -53,8 +53,9 @@ placeholder, and appears exactly once in `results`.** A placeholder is how the
 next run knows the gap is deliberate; a scenario that silently disappears is
 planned again forever.
 
-"Cannot implement soundly" means: a value with no source in the plan or the
-pack, a branch that cannot be made deterministic without a code seam (§A5), or
+"Cannot implement soundly" means: a business value with no source in the plan
+or the pack (NOT a relational value or an object shape — conventions §A4: use a
+neutral literal like `"KEY-1"` and the DTO's own constructor/setters), a branch that cannot be made deterministic without a code seam (§A5), or
 a compile error you could not fix (below). Say exactly why in `reason` — the
 same text goes into `tc-agent-deferred`.
 

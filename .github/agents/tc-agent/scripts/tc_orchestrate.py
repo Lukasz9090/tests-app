@@ -606,11 +606,20 @@ def render_report(info: dict, state: dict, outcome: str, summary: str, commit: d
     if info["gates"]:
         g_ = info["gates"]
         parts = []
+        def one(name, g):
+            r, gate = g.get("ratio"), g.get("gate")
+            miss = isinstance(r, (int, float)) and isinstance(gate, (int, float)) and r < gate
+            return f"{name} {_pct(r)} (gate {_pct(gate)}{' - NOT MET' if miss else ''})"
         if "coverage" in g_:
-            parts.append(f"branch coverage {_pct(g_['coverage']['ratio'])} (gate {_pct(g_['coverage']['gate'])})")
+            parts.append(one("branch coverage", g_["coverage"]))
         if "mutation" in g_:
-            parts.append(f"mutation {_pct(g_['mutation']['ratio'])} (gate {_pct(g_['mutation']['gate'])})")
+            parts.append(one("mutation", g_["mutation"]))
+        elif "coverage" in g_:
+            parts.append("mutation not run (runs only after the coverage gate)")
         lines.append("- gates: " + ", ".join(parts))
+        if any(" - NOT MET" in x for x in parts):
+            lines.append("- a gate is NOT MET: the reviewer accepted the gap as explained by the "
+                         "placeholders below. Check that each placeholder reason is really untestable.")
     for u in info["unimplementable"]:
         lines.append(f"- unimplementable {u.get('id')}: {u.get('reason')}"
                      + (f" -> {u['suggestion']}" if u.get("suggestion") else ""))

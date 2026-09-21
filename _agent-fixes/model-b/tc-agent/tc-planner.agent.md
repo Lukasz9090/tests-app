@@ -36,6 +36,14 @@ what the code demonstrably does needs no second source to stay out of
 `deferred`. What still defers is a concrete value — an amount, an IBAN, a status
 string — with no origin in the code, a fixture, a builder or a human decision.
 
+Not business data, never a reason to defer (conventions §A4): relational
+values — a key the test passes in AND puts into the entry a mocked collaborator
+returns, where the code only checks equality — and object shapes built from a
+DTO's own constructor or setters. Plan them with the comparison line as
+`implementation` evidence and `data` such as "input key K; dictionary returns
+an entry with dictKey = K". In `interactive`, when a value's meaning really
+matters and nothing backs it, ASK for it before you defer.
+
 Forbidden: inventing `new Customer("John", "PARTNER", "ACTIVE")` out of nothing.
 Fine: cite `CustomerBuilder.activeBusiness()`, an existing test, a real usage —
 or, for characterization, the method's own lines (`OrderService.java:31-38`).

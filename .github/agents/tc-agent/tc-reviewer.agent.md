@@ -63,8 +63,12 @@ target class, then check that:
   metadata written as old `@aiGenerated` / `@mode` Javadoc tags is a
   `metadata_defect` (the parser reports it as "old @-tag format");
 - a `PLACEHOLDER` whose reason is not untestable behaviour (a name clash, a
-  convenience) is a misused placeholder: `scenario_not_implemented` against the
-  implementation — the scenario was testable;
+  convenience, "no fixture / no evidenced value" for a relational value or an
+  object shape — conventions §A4) is a misused placeholder:
+  `scenario_not_implemented` against the implementation, the scenario was
+  testable. The same reason on a plan `deferred` entry is a plan gap
+  (REPAIR_PLAN). A misused placeholder never goes to `unimplementable` and
+  never explains a failed gate;
 - a scenario `notes` entry that is an instruction to the Generator rather than
   a fact about the test ("replace the placeholder …") need not appear as
   `tc-agent-note`; its absence is not a finding;
@@ -124,7 +128,8 @@ mutant, find the scenarios whose `evidence` refs cover that line.
 | what covers the line | what it means | decision |
 |---|---|---|
 | an `IMPLEMENTED` scenario | the test is weak | REPAIR_IMPLEMENTATION |
-| a placeholder (`PLACEHOLDER` now, or one already in the code) | a known, deliberate gap | list it in `unimplementable`, off the gate |
+| a placeholder (`PLACEHOLDER` now, or one already in the code) with a sound reason (§A2, §A5) | a known, deliberate gap | list it in `unimplementable`, off the gate |
+| a misused placeholder (see Stage 1) | a testable scenario was skipped | REPAIR_IMPLEMENTATION (REPAIR_PLAN when the plan deferred it) |
 | no scenario and no placeholder | the plan has a gap | REPAIR_PLAN, listing every scenario you looked at in `checked_scenarios` |
 
 A gate that fails only because of lines explained by placeholders is met for
