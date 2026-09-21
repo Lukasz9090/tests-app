@@ -1,0 +1,575 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tc-review.schema.json",
+  "title": "review (Model B)",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "plan_version",
+    "generation_report",
+    "review_iteration",
+    "target",
+    "mode",
+    "decision",
+    "checks",
+    "findings"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "plan_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "generation_report": {
+      "type": "string",
+      "description": "Repo-relative path of the generation report this review judges."
+    },
+    "review_iteration": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "target": {
+      "type": "object",
+      "required": [
+        "class"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "class": {
+          "type": "string"
+        },
+        "method": {
+          "type": "string"
+        }
+      }
+    },
+    "mode": {
+      "enum": [
+        "legacy",
+        "spec-driven"
+      ]
+    },
+    "decision": {
+      "enum": [
+        "ACCEPT",
+        "ACCEPT_PARTIAL",
+        "REPAIR_IMPLEMENTATION",
+        "REPAIR_PLAN",
+        "NEEDS_TRIAGE",
+        "BLOCKED"
+      ]
+    },
+    "stages": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "stage1_conformance": {
+          "enum": [
+            "PASSED",
+            "FAILED",
+            "SKIPPED"
+          ]
+        },
+        "stage2_quality": {
+          "enum": [
+            "PASSED",
+            "FAILED",
+            "SKIPPED"
+          ]
+        }
+      }
+    },
+    "checks": {
+      "type": "object",
+      "required": [
+        "compile",
+        "tests"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "compile": {
+          "type": "object",
+          "required": [
+            "status"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "enum": [
+                "PASSED",
+                "FAILED",
+                "NOT_RUN"
+              ],
+              "description": "NOT_RUN = tc_run_tests.py could not run at all (exit 2), so compilation was never attempted."
+            },
+            "errors": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "reason": {
+              "type": "string"
+            }
+          }
+        },
+        "tests": {
+          "type": "object",
+          "required": [
+            "status"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "enum": [
+                "PASSED",
+                "FAILED",
+                "ERROR",
+                "COMPILE_ERROR",
+                "UNAVAILABLE",
+                "NOT_RUN"
+              ],
+              "description": "Copy the status tc_run_tests.py reported. UNAVAILABLE = the script exited 2, which is a BLOCKED decision, never a pass."
+            },
+            "reason": {
+              "type": "string"
+            },
+            "flaky_only": {
+              "type": "boolean",
+              "description": "True when every test passed but the repeated runs disagreed: tc_run_tests.py exits 1 with status PASSED. Treat it as a defect (REPAIR_IMPLEMENTATION), not a pass."
+            },
+            "total": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "failed": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "failures": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "test",
+                  "failure_phase"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "test": {
+                    "type": "string"
+                  },
+                  "failure_phase": {
+                    "enum": [
+                      "assertion",
+                      "setup"
+                    ]
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "location": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "flaky": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "coverage": {
+          "type": "object",
+          "required": [
+            "status"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "enum": [
+                "PASSED",
+                "FAILED",
+                "SKIPPED",
+                "UNAVAILABLE"
+              ]
+            },
+            "reason": {
+              "type": "string"
+            },
+            "scope": {
+              "type": "string"
+            },
+            "branch_ratio": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "line_ratio": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "gate": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "uncovered": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "line"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "line": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "method": {
+                    "type": "string"
+                  },
+                  "missed_branches": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          }
+        },
+        "mutation": {
+          "type": "object",
+          "required": [
+            "status"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "enum": [
+                "PASSED",
+                "FAILED",
+                "SKIPPED",
+                "SKIPPED_UNAVAILABLE"
+              ]
+            },
+            "reason": {
+              "type": "string"
+            },
+            "scope": {
+              "type": "string"
+            },
+            "score": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "gate": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "killed": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "survived": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "no_coverage": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "survivors": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "line",
+                  "mutator"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "line": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "method": {
+                    "type": "string"
+                  },
+                  "mutator": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "severity",
+          "attributed_to",
+          "message"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^F[0-9]+$"
+          },
+          "tc": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^TC[0-9]+$"
+            }
+          },
+          "stage": {
+            "enum": [
+              1,
+              2
+            ]
+          },
+          "severity": {
+            "enum": [
+              "blocker",
+              "major",
+              "minor"
+            ]
+          },
+          "type": {
+            "enum": [
+              "compile_error",
+              "test_failure",
+              "scenario_not_implemented",
+              "wrong_expected_behavior",
+              "missing_scenario",
+              "uncovered_branch",
+              "survivor_mutant",
+              "weak_assertion",
+              "duplicate_test",
+              "flaky_risk",
+              "data_not_backed_by_evidence",
+              "unreadable_setup",
+              "metadata_defect",
+              "missing_placeholder",
+              "convention"
+            ]
+          },
+          "location": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "attributed_to": {
+            "enum": [
+              "implementation",
+              "plan",
+              "code",
+              "environment"
+            ]
+          },
+          "checked_scenarios": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^TC[0-9]+$"
+            }
+          },
+          "repeated": {
+            "type": "boolean"
+          },
+          "test_method": {
+            "type": "string"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "attributed_to": {
+                  "const": "plan"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "checked_scenarios"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "feedback": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "implementation": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "request"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "tc": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC[0-9]+$"
+                }
+              },
+              "location": {
+                "type": "string"
+              },
+              "request": {
+                "type": "string"
+              },
+              "scope": {
+                "enum": [
+                  "assertion",
+                  "setup",
+                  "test"
+                ],
+                "description": "What the Generator may rewrite. Narrow it on a test that already passes: `assertion` for a weak assertion, `setup` for unreadable arrangement, `test` only when the whole method must change. Absent means `test`."
+              }
+            }
+          }
+        },
+        "plan": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "request"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "tc": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC[0-9]+$"
+                }
+              },
+              "location": {
+                "type": "string"
+              },
+              "request": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "unimplementable": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "reason"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^TC[0-9]+$"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "suggestion": {
+            "type": "string"
+          },
+          "test_method": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "triage": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "tc",
+          "expected",
+          "actual",
+          "location"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "tc": {
+            "type": "string",
+            "pattern": "^TC[0-9]+$"
+          },
+          "expected": {
+            "type": "string"
+          },
+          "actual": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string"
+          },
+          "spec_ref": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "commit_summary": {
+      "type": "string",
+      "minLength": 40,
+      "maxLength": 900,
+      "description": "2-5 English sentences in the past tense for the commit message and the run report: what was added, what was deliberately left as a placeholder and why, what would unblock it. No TC ids, no speculation."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "required": [
+          "decision"
+        ],
+        "properties": {
+          "decision": {
+            "enum": [
+              "ACCEPT",
+              "ACCEPT_PARTIAL"
+            ]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "commit_summary"
+        ]
+      },
+      "errorMessage": "ACCEPT / ACCEPT_PARTIAL needs `commit_summary`: 2-5 English sentences that go into the commit message and the run report."
+    }
+  ]
+}

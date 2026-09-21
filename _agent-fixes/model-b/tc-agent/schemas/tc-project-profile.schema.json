@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "tc-project-profile.schema.json",
+  "title": "project-profile",
+  "type": "object",
+  "required": [
+    "schema_version"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "quality_gates": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Thresholds for the target scope. A key that is not listed here is ignored by the scripts, which is why unknown keys are rejected: a typo would silently restore the built-in default.",
+      "properties": {
+        "branch_coverage_target_scope": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "mutation_score_target_scope": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "tooling": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Only when the pom declares no version, or its version cannot read the class files of the JDK in use. A value here overrides the pom, and prepare-agent must run the same JaCoCo version as the report goal.",
+      "properties": {
+        "jacoco_version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+(\\.[0-9]+)?$"
+        },
+        "pit_version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+(\\.[0-9]+)?$"
+        }
+      }
+    },
+    "freshness_days": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Legacy mode (without --interactive) refuses to freeze a target whose last commit is younger than this many days. Default 7."
+    },
+    "instruction_paths": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Extra repository instruction files the context pack includes in REPO CONVENTIONS, relative to the repo root; may live outside .github. An `applyTo` front-matter is honoured."
+    }
+  }
+}

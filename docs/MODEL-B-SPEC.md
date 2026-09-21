@@ -23,16 +23,16 @@ W Modelu A plany, review i raporty były źródłem prawdy maszyny stanów — `
 
 ## 3. Metadane per test (schemat bazy)
 
-Metadane są w **Javadoc nad METODĄ testu** — nigdy na klasie. Fakty maszynowe w tagach (jeden na linię), proza w pierwszej linii.
+Metadane są w **Javadoc nad METODĄ testu** — nigdy na klasie. Fakty maszynowe w liniach `tc-agent-<klucz>: <wartość>` (jedna na linię) — to zwykły tekst, nie tagi Javadoca `@…`, więc IDE i doclint niczego nie podkreślają. Proza w pierwszej linii.
 
 ```java
 /**
  * AI-generated test. Characterizes current behaviour of OrderService (a freeze, not a spec).
  *
- * @aiGenerated
- * @mode legacy
- * @characterizes OrderService@29aeef6a
- * @note business-hours guard off-by-one at 17:00 — reported as a defect, frozen as current behaviour
+ * tc-agent: generated
+ * tc-agent-mode: legacy
+ * tc-agent-characterizes: OrderService@29aeef6a
+ * tc-agent-note: business-hours guard off-by-one at 17:00 — reported as a defect, frozen as current behaviour
  */
 @Test
 @DisplayName("active customer can create an order")
@@ -43,12 +43,12 @@ Zaślepka (scenariusz świadomie nieprzetestowany — deferred albo niemożliwy 
 
 ```java
 /**
- * AI-generated placeholder. Scenario deliberately NOT tested — see @deferred.
+ * AI-generated placeholder. Scenario deliberately NOT tested — see tc-agent-deferred.
  *
- * @aiGenerated
- * @mode legacy
- * @characterizes OrderService@29aeef6a
- * @deferred business-hours guard reads LocalDateTime.now() directly; needs an injected java.time.Clock
+ * tc-agent: generated
+ * tc-agent-mode: legacy
+ * tc-agent-characterizes: OrderService@29aeef6a
+ * tc-agent-deferred: business-hours guard reads LocalDateTime.now() directly; needs an injected java.time.Clock
  */
 @Test
 @Disabled("AI deferred: needs a Clock seam")
@@ -56,21 +56,21 @@ void shouldRejectOrderWhenOutsideBusinessHours() {
 }
 ```
 
-| tag | znaczenie |
+| linia | znaczenie |
 |---|---|
-| `@aiGenerated` | metodę napisał agent |
-| `@mode legacy \| spec-driven` | tryb generacji |
-| `@interactive` | przebieg był z modyfikatorem interactive |
-| `@characterizes <Class>@<sha>` | tylko legacy; `%h` ostatniego commita pliku targetu — punkt zamrożenia |
-| `@deferred <powód>` | tylko w zaślepce `@Disabled("AI deferred: …")` z pustym ciałem |
-| `@note <tekst>` | powtarzalny; zamrożony bug, odpowiedź człowieka — dotyczy TEJ metody |
+| `tc-agent: generated` | metodę napisał agent |
+| `tc-agent-mode: legacy \| spec-driven` | tryb generacji |
+| `tc-agent-interactive: true` | przebieg był z modyfikatorem interactive |
+| `tc-agent-characterizes: <Class>@<sha>` | tylko legacy; `%h` ostatniego commita pliku targetu — punkt zamrożenia |
+| `tc-agent-deferred: <powód>` | tylko w zaślepce `@Disabled("AI deferred: …")` z pustym ciałem |
+| `tc-agent-note: <tekst>` | powtarzalny; zamrożony bug, odpowiedź człowieka — dotyczy TEJ metody |
 
 Zasady:
 - **Bez TC id w kodzie.** Scenariusz ↔ test łączy nazwa metody (`implementation_hints.test_method`).
 - **Niezmiennik:** każdy scenariusz planu kończy w kodzie jako test albo zaślepka. Zaślepka to jedyny zapis, że luka jest znana i świadoma.
 - **Porównanie sha po prefiksie** (w dowolną stronę, min. 7 znaków) — `%h` ma zmienną długość.
 - **Spec-driven nie ma sha** — zamraża spec (ulotny), nie kod; brak auto-staleness jest zamierzony.
-- Parser (`tc_javadoc.py`) nie zgaduje: tag zniekształcony, tag na klasie, zaślepka bez `@Disabled` → `metadata_defects` w derive-state.
+- Parser (`tc_javadoc.py`) nie zgaduje: linia zniekształcona, nieznany klucz, metadane na klasie, stary format `@aiGenerated`, zaślepka bez `@Disabled` → `metadata_defects` w derive-state.
 
 ## 4. derive-state (`tc_derive_state.py`)
 
@@ -79,12 +79,12 @@ Każdy przebieg zaczyna od wyprowadzenia stanu **z realnego świata**, warstwami
 | tier | co | koszt |
 |---|---|---|
 | 0 | slug → plik, FQCN, moduł | ms |
-| 1 | discovery klas testowych (ludzkie + AI, po nazwie lub użyciu targetu), parsowanie tagów, git: `%h`, dirty, wiek | ms |
+| 1 | discovery klas testowych (ludzkie + AI, po nazwie lub użyciu targetu), parsowanie linii `tc-agent`, git: `%h`, dirty, wiek | ms |
 | 2 | testy + coverage (JaCoCo) | build |
 | 3 | mutacje (PIT) — tylko gdy tier 2 nie zdecydował | wolne |
 
-**Stale** = test legacy z `@characterizes <Target>@sha`, gdzie sha ≠ bieżący `%h` pliku targetu, albo target jest dirty.
-- stale i **zielony** → `reseal`: skrypt podmienia tylko linię `@characterizes` (zachowanie się nie zmieniło),
+**Stale** = test legacy z `tc-agent-characterizes: <Target>@sha`, gdzie sha ≠ bieżący `%h` pliku targetu, albo target jest dirty.
+- stale i **zielony** → `reseal`: skrypt podmienia tylko linię `tc-agent-characterizes` (zachowanie się nie zmieniło),
 - stale i **czerwony** → `recharacterize` → planer,
 - stale **zaślepka** → `recharacterize` (ocenić na nowo).
 
@@ -109,7 +109,7 @@ reseal → podmiana sha w zielonych testach stale
 finish → run-report.md (+ commit przy --commit)
 ```
 
-- Pętla PLAN → GENERATE → REVIEW → repair i capy (`impl_cap`, `plan_cap`) działają w obrębie przebiegu. REPAIR_PLAN = planowanie od nowa: planer widzi w kodzie testy z `@aiGenerated`. Generator zawsze czyta najnowsze review przebiegu (bez carry-forward).
+- Pętla PLAN → GENERATE → REVIEW → repair i capy (`impl_cap`, `plan_cap`) działają w obrębie przebiegu. REPAIR_PLAN = planowanie od nowa: planer widzi w kodzie testy z `tc-agent: generated`. Generator zawsze czyta najnowsze review przebiegu (bez carry-forward).
 - Weryfikacja na wyjściu = **ACCEPT recenzenta** (nie ma drugiego derive-state).
 - Wynik: `DONE` / `DONE_PARTIAL` (są zaślepki) / `BLOCKED` / `RED` / `ESCALATED`.
 - **`--commit`**: tylko przy DONE / DONE_PARTIAL, tylko pliki testowe przebiegu, nigdy przy zabrudzonym indeksie, bez push. Na branchu chronionym (albo detached HEAD) tworzy `tc-agent/<slug>/<run-id>`. Lista chronionych: linia `tc-agent-protected-branches: …` w `AGENTS.md` repo docelowego; brak → tylko `master`.
@@ -128,11 +128,11 @@ finish → run-report.md (+ commit przy --commit)
 
 - **3 role + izolacja kontekstu** (niezależny recenzent), orchestrator jako dispatcher,
 - **bramki coverage + mutacje** (egzekwowane, z profilu),
-- **characterization** — przez `@characterizes Class@sha` w teście,
+- **characterization** — przez `tc-agent-characterizes: Class@sha` w teście,
 - **dyscyplina dowodów** (prime directive; implementacja = dowód w legacy),
 - **context-pack** + wstrzykiwanie konwencji repo (§8),
 - **skrypty** run_tests / coverage / mutation / validate / verify_refs / evidence_strength,
-- **interactive** — odpowiedzi trafiają do `@note` / zaślepek, pytania do `CONFIRM:` w raporcie.
+- **interactive** — odpowiedzi trafiają do `tc-agent-note` / zaślepek, pytania do `CONFIRM:` w raporcie.
 
 ## 8. Konwencje: agent kontra repo
 
@@ -166,4 +166,3 @@ Bez Mavena i bez sieci: `tools/tc_test_javadoc.py`, `tc_test_derive_state.py`, `
 - **DONE_PARTIAL poniżej bramki** — gdy luka jest większa niż bramka dopuszcza, ale w całości wyjaśniona zaślepkami, każdy przebieg kosztuje jedno wywołanie planera (COMPLETE).
 - **Zaślepki utrzymywane ręcznie** — usunięcie zaślepki bez zmiany kodu = pipeline zapyta / odroczy ponownie (świadomy trade-off „zero plików”).
 - **Sha per plik** — szum przy dużych klasach; łagodzi go reseal.
-- **doclint strict** — custom tagi Javadoc (`@aiGenerated` itd.) trzeba zarejestrować (`-tag aiGenerated:a:"AI generated"` …) albo tolerować warningi. `tests-app` nie ma javadoc pluginu.

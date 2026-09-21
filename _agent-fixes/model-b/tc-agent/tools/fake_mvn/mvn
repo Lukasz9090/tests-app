@@ -1,0 +1,137 @@
+#!/usr/bin/env python3
+"""A fake `mvn` for the check-script tests — DEV TOOL, never used at runtime.
+
+It understands exactly the three invocations the check scripts make and writes
+the reports real Maven would write, so the scripts' plumbing (arguments, report
+discovery, parsing, exit codes) is tested without a JDK or network:
+
+  ... -Dtest=A,B ... test                 -> target/surefire-reports/TEST-*.xml + exec file
+  ... jacoco-maven-plugin:...:report      -> target/site/jacoco/jacoco.xml
+  ... pitest-maven:...:mutationCoverage   -> target/pit-reports/mutations.xml
+
+Behaviour is steered by environment variables:
+  FAKE_MVN_FAIL      comma list of `Class#method` to report as failing
+  FAKE_MVN_COMPILE   when set, fail compilation with this message
+  FAKE_MVN_BRANCH    "covered,missed" branch counters for every class (default 8,0)
+  FAKE_MVN_MUTANTS   "killed,survived" mutants per class (default 4,0)
+  FAKE_MVN_LOG       append each argv to this file
+"""
+
+import os
+import re
+import sys
+from pathlib import Path
+
+HERE = Path(__file__).resolve()
+sys.path.insert(0, str(HERE.parents[2] / "scripts"))
+import tc_javadoc as j  # noqa: E402
+
+args = sys.argv[1:]
+cwd = Path.cwd()
+if os.environ.get("FAKE_MVN_LOG"):
+    with open(os.environ["FAKE_MVN_LOG"], "a", encoding="utf-8") as log:
+        log.write(" ".join(args) + "\n")
+
+
+def prop(name):
+    for a in args:
+        if a.startswith(f"-D{name}="):
+            return a.split("=", 1)[1]
+    return None
+
+
+def main_classes():
+    root = cwd / "src" / "main" / "java"
+    for f in root.rglob("*.java"):
+        yield f.relative_to(root).with_suffix("").as_posix(), f
+
+
+def test_files():
+    return list((cwd / "src" / "test" / "java").rglob("*.java"))
+
+
+if "test" in args:
+    if os.environ.get("FAKE_MVN_COMPILE"):
+        print(f"[ERROR] /x/src/test/java/Broken.java:[3,5] {os.environ['FAKE_MVN_COMPILE']}")
+        print("[ERROR] COMPILATION ERROR")
+        sys.exit(1)
+    wanted = set((prop("test") or "").split(","))
+    failing = set(filter(None, os.environ.get("FAKE_MVN_FAIL", "").split(",")))
+    out = cwd / "target" / "surefire-reports"
+    out.mkdir(parents=True, exist_ok=True)
+    any_fail = False
+    for f in test_files():
+        if f.stem not in wanted:
+            continue
+        text = f.read_text(encoding="utf-8")
+        pkg = re.search(r"^\s*package\s+([\w.]+)\s*;", text, re.M)
+        fqcn = f"{pkg.group(1)}.{f.stem}" if pkg else f.stem
+        methods, _ = j.parse_text(text, f.name)
+        cases = []
+        for m in methods:
+            key = f"{f.stem}#{m.name}"
+            if m.disabled:
+                cases.append(f'<testcase classname="{fqcn}" name="{m.name}"><skipped/></testcase>')
+            elif key in failing:
+                any_fail = True
+                cases.append(
+                    f'<testcase classname="{fqcn}" name="{m.name}">'
+                    f'<failure type="org.opentest4j.AssertionFailedError" message="expected: 5 but was: 6">'
+                    f"at {fqcn}.{m.name}({f.name}:{m.line + 3})</failure></testcase>")
+            else:
+                cases.append(f'<testcase classname="{fqcn}" name="{m.name}"/>')
+        (out / f"TEST-{fqcn}.xml").write_text(
+            f'<?xml version="1.0"?><testsuite name="{fqcn}">' + "".join(cases) + "</testsuite>",
+            encoding="utf-8")
+    dest = prop("jacoco.destFile")
+    if dest:
+        Path(dest).parent.mkdir(parents=True, exist_ok=True)
+        Path(dest).write_bytes(b"fake-exec")
+    sys.exit(1 if any_fail else 0)
+
+if any(":report" in a for a in args):
+    covered, missed = (int(x) for x in os.environ.get("FAKE_MVN_BRANCH", "8,0").split(","))
+    out = cwd / "target" / "site" / "jacoco"
+    out.mkdir(parents=True, exist_ok=True)
+    packages = {}
+    for internal, f in main_classes():
+        packages.setdefault(internal.rsplit("/", 1)[0], []).append((internal, f))
+    body = []
+    for pkg, classes in packages.items():
+        body.append(f'<package name="{pkg}">')
+        for internal, f in classes:
+            lines = f.read_text(encoding="utf-8").splitlines()
+            methods = [(i + 1, m.group(1)) for i, l in enumerate(lines)
+                       for m in [re.search(r"public\s+\w+\s+(\w+)\s*\(", l)] if m]
+            body.append(f'<class name="{internal}" sourcefilename="{f.name}">')
+            for line, name in methods:
+                body.append(f'<method name="{name}" line="{line}">'
+                            f'<counter type="BRANCH" missed="{missed}" covered="{covered}"/>'
+                            f'<counter type="LINE" missed="0" covered="3"/></method>')
+            body.append(f'<counter type="BRANCH" missed="{missed}" covered="{covered}"/>'
+                        f'<counter type="LINE" missed="0" covered="10"/></class>')
+            first_if = next((i + 1 for i, l in enumerate(lines) if " if " in f" {l.strip()} "), 1)
+            mb = 1 if missed else 0
+            body.append(f'<sourcefile name="{f.name}"><line nr="{first_if}" mi="0" ci="3" mb="{mb}" cb="1"/></sourcefile>')
+        body.append("</package>")
+    (out / "jacoco.xml").write_text('<?xml version="1.0"?><!DOCTYPE report PUBLIC "-//JACOCO//DTD Report 1.1//EN" "report.dtd">'
+                                    '<report name="x">' + "".join(body) + "</report>", encoding="utf-8")
+    sys.exit(0)
+
+if any("mutationCoverage" in a for a in args):
+    killed, survived = (int(x) for x in os.environ.get("FAKE_MVN_MUTANTS", "4,0").split(","))
+    target = prop("pit.targetClasses") or prop("targetClasses")
+    out = cwd / "target" / "pit-reports"
+    out.mkdir(parents=True, exist_ok=True)
+    rows = []
+    for status, count in (("KILLED", killed), ("SURVIVED", survived)):
+        for k in range(count):
+            rows.append(f'<mutation status="{status}"><mutatedClass>{target}</mutatedClass>'
+                        f"<mutatedMethod>create</mutatedMethod><lineNumber>{5 + k}</lineNumber>"
+                        f"<mutator>org.pitest.mutationtest.engine.gregor.mutators.NegateConditionalsMutator</mutator>"
+                        f"</mutation>")
+    (out / "mutations.xml").write_text("<mutations>" + "".join(rows) + "</mutations>", encoding="utf-8")
+    sys.exit(0)
+
+print(f"[ERROR] fake mvn does not understand: {' '.join(args)}")
+sys.exit(1)
