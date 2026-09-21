@@ -5,8 +5,9 @@ Model B keeps no state between runs. Every run starts here and answers one
 question from the committed code, the tests, git, coverage and mutations -
 never from an artifact an earlier run left behind:
 
-    PLAN      no tests yet, a coverage/mutation gap, or characterization tests
-              whose frozen behaviour changed (stale AND red)
+    PLAN      no tests yet, a coverage/mutation gap, a method no test executes,
+              lines changed since the last freeze that no test covers, or
+              characterization tests whose frozen behaviour changed (stale AND red)
     DONE      gates met on the CURRENT code and nothing stale is red
     RED       a test that is not a stale characterization fails: stop, a human acts
     BLOCKED   legacy mode would freeze code that is dirty or too fresh
@@ -274,6 +275,29 @@ def derive(repo: Path, target_slug: str, run: dict, runner=None,
     reasons = []
     if cov.get("status") == "FAILED":
         reasons.append("COVERAGE_GAP")
+
+    # A passed class-level gate can hide new code: a method added to a class
+    # that was 100% covered still leaves it above 80%. Two checks close that.
+    untested = [m for m in cov.get("methods", []) or []
+                if m.get("line_covered", 0) == 0 and m.get("line_missed", 0) > 0
+                and m.get("name") != "<init>"]
+    if untested:
+        out["coverage"]["untested_methods"] = untested
+        reasons.append("UNTESTED_METHODS")
+
+    freeze_shas = sorted({m.meta.characterizes_sha for m in t1["stale"] if m.meta.characterizes_sha})
+    if freeze_shas and not t1["git"]["dirty"]:
+        changed = set()
+        for sha in freeze_shas:
+            changed |= g.changed_lines(repo, target.file, sha) or set()
+        uncovered_changed = sorted({u["line"] for u in cov.get("uncovered", []) or []
+                                    if u.get("line") in changed})
+        out["coverage"]["changed_since"] = freeze_shas
+        out["coverage"]["changed_lines"] = sorted(changed)
+        if uncovered_changed:
+            out["coverage"]["changed_uncovered"] = uncovered_changed
+            reasons.append("CHANGED_CODE_UNCOVERED")
+
     if out["recharacterize"]:
         reasons.append("STALE")
     if reasons:

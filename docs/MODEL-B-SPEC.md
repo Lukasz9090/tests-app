@@ -92,7 +92,7 @@ Każdy przebieg zaczyna od wyprowadzenia stanu **z realnego świata**, warstwami
 
 | wynik | kiedy |
 |---|---|
-| `PLAN` | `NO_TESTS`, `COVERAGE_GAP`, `MUTATION_GAP`, `STALE` |
+| `PLAN` | `NO_TESTS`, `COVERAGE_GAP`, `MUTATION_GAP`, `UNTESTED_METHODS` (metoda bez ani jednej pokrytej linii — np. nowo dodana — nawet gdy bramka klasy przechodzi), `CHANGED_CODE_UNCOVERED` (linie zmienione od ostatniego zamrożenia, `git diff <sha>..HEAD`, których żaden test nie pokrywa), `STALE` |
 | `DONE` | bramki spełnione na BIEŻĄCYM kodzie, nic stale nie jest czerwone |
 | `RED` | czerwony test, który nie jest stale charakteryzacją (ludzki, świeży AI, spec-driven), albo błąd kompilacji |
 | `BLOCKED` | `PLAN` w legacy, a target dirty (zawsze) lub młodszy niż `freshness_days` (chyba że interactive) |

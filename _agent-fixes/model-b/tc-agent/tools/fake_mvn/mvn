@@ -14,6 +14,7 @@ Behaviour is steered by environment variables:
   FAKE_MVN_COMPILE   when set, fail compilation with this message
   FAKE_MVN_BRANCH    "covered,missed" branch counters for every class (default 8,0)
   FAKE_MVN_MUTANTS   "killed,survived" mutants per class (default 4,0)
+  FAKE_MVN_UNTESTED  comma list of method names no test executes (0 covered lines)
   FAKE_MVN_LOG       append each argv to this file
 """
 
@@ -104,10 +105,12 @@ if any(":report" in a for a in args):
             methods = [(i + 1, m.group(1)) for i, l in enumerate(lines)
                        for m in [re.search(r"public\s+\w+\s+(\w+)\s*\(", l)] if m]
             body.append(f'<class name="{internal}" sourcefilename="{f.name}">')
+            untested = set(filter(None, os.environ.get("FAKE_MVN_UNTESTED", "").split(",")))
             for line, name in methods:
+                lm, lc = (3, 0) if name in untested else (0, 3)
                 body.append(f'<method name="{name}" line="{line}">'
                             f'<counter type="BRANCH" missed="{missed}" covered="{covered}"/>'
-                            f'<counter type="LINE" missed="0" covered="3"/></method>')
+                            f'<counter type="LINE" missed="{lm}" covered="{lc}"/></method>')
             body.append(f'<counter type="BRANCH" missed="{missed}" covered="{covered}"/>'
                         f'<counter type="LINE" missed="0" covered="10"/></class>')
             first_if = next((i + 1 for i, l in enumerate(lines) if " if " in f" {l.strip()} "), 1)

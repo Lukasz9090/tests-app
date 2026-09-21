@@ -54,6 +54,8 @@ From the run directory:
 | `NO_TESTS` | the target (or the method, for a `Class.method` slug) from scratch |
 | `COVERAGE_GAP` | scenarios for the lines in `coverage.uncovered` |
 | `MUTATION_GAP` | scenarios that kill the mutants in `mutation.survivors` |
+| `UNTESTED_METHODS` | every method in `coverage.untested_methods` — no test executes it at all (typically a newly added method), even though the class-level gate may pass |
+| `CHANGED_CODE_UNCOVERED` | the lines in `coverage.changed_uncovered`: code changed since the last freeze (`coverage.changed_since`) that no test covers |
 | `STALE` | every entry of `recharacterize` (see Phase 4) |
 
 `derive-state.md` also lists the test classes, the AI tests, the placeholders,

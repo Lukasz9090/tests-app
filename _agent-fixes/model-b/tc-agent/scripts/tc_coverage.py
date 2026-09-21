@@ -191,6 +191,19 @@ def main() -> int:
                         item["method"] = method
                     uncovered.append(item)
 
+        # Per-method line counters: a method no test executes at all (typically
+        # one just added) must be visible even when the class-level gate passes.
+        methods = []
+        for element in klass.findall("method"):
+            mname = element.get("name", "")
+            if mname in ("<clinit>",) or mname.startswith("lambda$") or "$" in mname:
+                continue
+            if method and mname != method:
+                continue
+            missed, covered = counters(element).get("LINE", (0, 0))
+            methods.append({"name": mname, "line": int(element.get("line", 0) or 0),
+                            "line_missed": missed, "line_covered": covered})
+
         branch_ratio = ratio(tuple(branch))
         line_ratio = ratio(tuple(line))
         measured = branch_ratio if sum(branch) else line_ratio
@@ -204,7 +217,8 @@ def main() -> int:
             "gate": gate,
             "gated_on": "branch" if sum(branch) else "line",
             "report": str(xml_path),
-            "uncovered": uncovered[:60],
+            "uncovered": uncovered[:200],
+            "methods": methods,
             "jacoco_version": jacoco,
         }
         if notes:

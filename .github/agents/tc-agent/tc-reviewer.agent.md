@@ -69,6 +69,10 @@ target class, then check that:
 
 **3. Coverage.** `python $S/tc_coverage.py <slug> --repo . --run <run_id> --label <label>`.
 When the gate FAILED, attribute every uncovered line — see **Attribution**.
+Independently of the gate: a method this plan was meant to cover (derive-state's
+`coverage.untested_methods` / `coverage.changed_uncovered`) that the report
+still shows with 0 covered lines, or changed lines still uncovered, is a
+`missing_scenario` / `uncovered_branch` finding attributed like a failed gate.
 
 **4. Mutation.** Only when the tests are green and coverage passed:
 `python $S/tc_mutation.py <slug> --repo . --run <run_id> --label <label>`.

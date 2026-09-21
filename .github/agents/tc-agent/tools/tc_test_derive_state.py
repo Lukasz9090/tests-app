@@ -126,6 +126,48 @@ def test_stale_red_is_recharacterized():
         expect("not red", state["red"], [])
 
 
+def cov(status="PASSED", uncovered=(), methods=None):
+    return (0 if status == "PASSED" else 1,
+            {"status": status, "branch_ratio": 0.9, "gate": 0.8,
+             "uncovered": [{"line": n, "missed_branches": 0} for n in uncovered],
+             "methods": methods or [{"name": "create", "line": 4, "line_missed": 0, "line_covered": 4}]})
+
+
+def test_new_untested_method_plans_even_when_gate_passes():
+    """The reported case: a method was added, the class-level gate still passes."""
+    with FixtureRepo() as repo:
+        repo.write_test("OrderServiceTest", ai_test("shouldA", repo.sha()))
+        repo.commit("tests", days_ago=20)
+        methods = [{"name": "create", "line": 4, "line_missed": 0, "line_covered": 4},
+                   {"name": "<init>", "line": 3, "line_missed": 1, "line_covered": 0},
+                   {"name": "cancel", "line": 12, "line_missed": 3, "line_covered": 0}]
+        runner = FakeRunner(coverage=cov(methods=methods))
+        state = derive(repo, runner)
+        expect("PLAN / UNTESTED_METHODS", (state["next_action"], state["reasons"]), ("PLAN", ["UNTESTED_METHODS"]))
+        expect("only real methods, not <init>", [m["name"] for m in state["coverage"]["untested_methods"]],
+               ["cancel"])
+        expect("PIT not run: already decided", runner.calls, ["tests", "coverage"])
+
+
+def test_changed_code_since_freeze_must_be_covered():
+    with FixtureRepo() as repo:
+        old = repo.sha()
+        repo.write_test("OrderServiceTest", ai_test("shouldA", old))
+        repo.commit("tests", days_ago=20)
+        text = repo.read(repo.target_path).replace(
+            "        return amount;\n", "        if (amount > 100) {\n            return 100;\n        }\n        return amount;\n")
+        repo.write(repo.target_path, text)
+        repo.commit("cap at 100", days_ago=10)
+        state = derive(repo, FakeRunner(coverage=cov(uncovered=[8, 9])))
+        expect("changed lines found", state["coverage"]["changed_lines"], [8, 9, 10])
+        expect("PLAN / CHANGED_CODE_UNCOVERED", (state["next_action"], state["reasons"]),
+               ("PLAN", ["CHANGED_CODE_UNCOVERED"]))
+        expect("reseal still offered for the green stale test", [r["method"] for r in state["reseal"]],
+               ["OrderServiceTest#shouldA"])
+        state = derive(repo, FakeRunner(coverage=cov(uncovered=[])))
+        expect("changed lines all covered -> DONE", state["next_action"], "DONE")
+
+
 def test_sha_prefix_is_not_stale():
     with FixtureRepo() as repo:
         full = repo.git("rev-parse", "HEAD")

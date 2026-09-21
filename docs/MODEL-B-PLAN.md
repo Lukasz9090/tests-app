@@ -43,6 +43,7 @@ Wszystkie pozycje w §1 są zaakceptowanymi decyzjami.
 | D28 | Format metadanych | Linie `tc-agent-<klucz>: <wartość>` w Javadocu zamiast tagów `@aiGenerated` / `@mode` … — zwykły tekst, więc IDE i doclint niczego nie podkreślają. Stary format `@…` jest nadal czytany (żeby nie zgubić testów), ale zgłaszany jako metadata defect. | DECYZJA (§3) |
 | D29 | Bramki a naprawy | Gdy bramka coverage / mutacji jest spełniona, pozostałe niepokryte linie i przeżywające mutanty NIE powodują REPAIR — recenzent wpisuje je jako findingi `minor`. Naprawy tylko przy niespełnionej bramce (spójnie z derive-state). | DECYZJA (§6.4) |
 
+| D30 | Nowy kod a bramka | Bramka klasy nie wystarcza przy nowym kodzie. derive-state daje PLAN także, gdy (a) metoda targetu nie ma żadnej pokrytej linii (`UNTESTED_METHODS`), (b) linie zmienione od ostatniego zamrożenia (`git diff <sha>..HEAD`) nie są pokryte (`CHANGED_CODE_UNCOVERED`). | DECYZJA (§4) |
 ---
 
 ## 2. Przebieg z lotu ptaka
@@ -874,3 +875,4 @@ Otwartych decyzji nie ma. Następny krok: etap 1 (aktualizacja `MODEL-B-SPEC.md`
 - **Maven w chmurze niedostępny** (Maven Central zablokowany polityką sieci), więc prawdziwy build nie był uruchomiony — pełen przebieg zasymulowałem na kopii `tests-app` przez fałszywy `mvn` (Case 1: reseal → DONE → commit na nowy branch).
 - **Format metadanych (D28, 2026-09-21):** tagi `@aiGenerated` itd. dawały w IDE (Copilot `get_errors`, IntelliJ) ostrzeżenia „unknown Javadoc tag” przy każdym teście. Zastąpione liniami `tc-agent: generated`, `tc-agent-mode: …`, `tc-agent-interactive: true`, `tc-agent-characterizes: …`, `tc-agent-deferred: …`, `tc-agent-note: …`. Parser czyta też stary format i zgłasza go jako defekt; reseal obsługuje oba.
 - **Bramki a naprawy (D29):** recenzent robił REPAIR_IMPLEMENTATION przy 93% mutacji (bramka 70%), bo instrukcja kazała atrybuować KAŻDY przeżywający mutant. Teraz atrybucja tylko przy niespełnionej bramce; powyżej — findingi `minor`, bez wpływu na decyzję.
+- **Nowy kod a bramka (D30):** dodana metoda w `SimpleCalculatorService` nie wywołała dopisania testów, bo pokrycie klasy (83%) nadal mieściło się w bramce 80%. derive-state sprawdza teraz dodatkowo pokrycie per metoda (JaCoCo `method` counters) i pokrycie linii zmienionych od ostatniego `tc-agent-characterizes` sha.

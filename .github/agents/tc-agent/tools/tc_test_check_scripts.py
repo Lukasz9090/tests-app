@@ -130,6 +130,16 @@ def test_stale_and_failing_goes_to_planner_then_reseal_path():
                ["OrderServiceTest#shouldA"])
 
 
+def test_untested_method_plans_even_when_gate_passes():
+    with fixture() as repo:
+        out = start(repo, {"FAKE_MVN_UNTESTED": "create"})
+        state = out["state"]
+        expect("PLAN / UNTESTED_METHODS despite a passing gate",
+               (state["next_action"], state["reasons"], state["coverage"]["status"]),
+               ("PLAN", ["UNTESTED_METHODS"], "PASSED"))
+        expect("names the method", [m["name"] for m in state["coverage"]["untested_methods"]], ["create"])
+
+
 def test_reviewer_label():
     """The Reviewer calls the same scripts with its own label; nothing collides."""
     with fixture() as repo:

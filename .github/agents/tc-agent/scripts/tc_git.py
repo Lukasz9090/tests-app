@@ -13,6 +13,7 @@ when the directory is not a git checkout; callers decide what that means.
 
 from __future__ import annotations
 
+import re
 import subprocess
 import time
 from pathlib import Path
@@ -82,6 +83,24 @@ def sha_matches(recorded: str | None, current: str | None) -> bool:
     if min(len(a), len(b)) < MIN_SHA:
         return False
     return a.startswith(b) or b.startswith(a)
+
+
+HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@", re.M)
+
+
+def changed_lines(repo: Path, path: Path, since: str) -> set | None:
+    """Line numbers of `path` (as it is at HEAD) added or changed since commit `since`.
+
+    None when the diff cannot be computed (unknown sha, not a repo).
+    """
+    code, out = git(repo, "diff", "-U0", "--no-color", f"{since}..HEAD", "--", rel(repo, path))
+    if code != 0:
+        return None
+    lines = set()
+    for m in HUNK.finditer(out):
+        start, count = int(m.group(1)), int(m.group(2) if m.group(2) is not None else 1)
+        lines.update(range(start, start + count))
+    return lines
 
 
 def current_branch(repo: Path) -> str | None:
