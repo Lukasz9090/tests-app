@@ -150,7 +150,11 @@ alone, not `verify` alone.
 boundary (repositories, gateways, clients) with Mockito; build real domain
 objects, DTOs and value types.
 
-**B6. Setup:** extract a private helper for construction repeated across tests
+**B6. Setup:** the class under test, when every test builds it the same way,
+is a field of the test class (`private final Calculator calculator = new
+Calculator();`, or `@InjectMocks` with `@Mock` collaborators) — not a line in
+each test's `// given`. Build it inside a test only when that test needs a
+different construction. Likewise extract a private helper for construction repeated across tests
 (`validRequest()`, `activeOffer()`) instead of repeating it.
 
 **B7. Test class:** `<Target>Test` in the target's package under the test root,

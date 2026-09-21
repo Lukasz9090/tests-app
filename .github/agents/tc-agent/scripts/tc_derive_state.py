@@ -185,6 +185,7 @@ def derive(repo: Path, target_slug: str, run: dict, runner=None,
         out["detail"] = str(exc)
         return out
     out["target"] = target.as_dict()
+    out["repo"] = c.repo_contract(repo, target.module)
 
     # tier 1 ------------------------------------------------------------
     out["tiers_run"].append(1)

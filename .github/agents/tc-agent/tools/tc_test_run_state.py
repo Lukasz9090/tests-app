@@ -268,6 +268,16 @@ def test_done_partial_when_placeholders_in_code():
         expect_true("DONE upgraded to DONE_PARTIAL", "Outcome: DONE_PARTIAL" in prose)
 
 
+def test_confirm_lines_are_cleaned_and_deduplicated():
+    notes = ["module: x",
+             "CONFIRM: A.java:47-52 ? the code ignores case ? freeze it? Answer: freeze.",
+             "CONFIRM: A.java:47-52 — the code ignores case — freeze it? Answer: freeze.",
+             "CONFIRM: A.java:20 — integer division? Answer: freeze."]
+    expect("dedup + '?' separator restored", o.confirm_lines(notes),
+           ["CONFIRM: A.java:47-52 — the code ignores case — freeze it? Answer: freeze.",
+            "CONFIRM: A.java:20 — integer division? Answer: freeze."])
+
+
 def test_red_tree_comes_first():
     with FixtureRepo() as repo:
         run = Run(repo)

@@ -68,11 +68,15 @@ left. Plan those; keep everything else the previous plan already delivered.
 
 ### Phase 0 — check the repository contract
 
-Confirm three things with shell commands on the build files: this is a
-**Maven** Java project (pom.xml), JUnit is a test dependency (note version 4 or
-5), and JaCoCo can run (configured in the pom, or invocable through
-fully-qualified goals). Gradle is NOT supported. In a multi-module repo, walk
-the `<parent>` chain before you report a plugin as missing.
+Read `repo` in `derive-state.md` — derive-state already read the poms: `build`
+(Maven only; Gradle is NOT supported), `junit` (`"5"`, `"4"` or `null`),
+`jacoco` / `pit` (`pom` = configured, `cli` = invoked through fully-qualified
+goals — both work), `jacoco_agent_bound` and `pit_junit5_plugin`. **Do not run
+`mvn` yourself to check this.**
+
+`junit: null` means no JUnit was visible in the repo's poms. Only then read the
+pom (and a `<parent>` inside the repo) yourself; JUnit inherited from a parent
+outside the repo counts. Write a note for each fact you rely on.
 
 When a check fails, write a plan whose JSON holds only
 `{"schema_version":1,"plan_version":<N>,"status":"UNSUPPORTED_REPOSITORY",

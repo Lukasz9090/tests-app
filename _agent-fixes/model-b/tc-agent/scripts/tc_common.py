@@ -515,6 +515,45 @@ def protected_branches(repo: Path) -> tuple[list, str]:
 PLUGIN_ARTIFACT = {"jacoco": "jacoco-maven-plugin", "pit": "pitest-maven"}
 
 
+def _poms(repo: Path, module: str | None) -> list:
+    """Module pom then root pom (the <parent> chain inside the repo, best effort)."""
+    out = []
+    for pom in (module_dir(repo, module) / "pom.xml", repo / "pom.xml"):
+        if pom.exists() and pom not in out:
+            out.append(pom)
+    return out
+
+
+def repo_contract(repo: Path, module: str | None) -> dict:
+    """What the Planner's Phase 0 needs, read from the poms WITHOUT running maven.
+
+    Static on purpose: an agent that runs `mvn -Dincludes=org.junit.jupiter ...`
+    in PowerShell gets the argument split at the dots ("No plugin found for
+    prefix '.junit.jupiter'"). Reading the pom text is deterministic and free.
+    JUnit through spring-boot-starter-test counts as JUnit 5 (Boot >= 2.2).
+    """
+    text = " ".join(re.sub(r"\s+", " ", p.read_text(encoding="utf-8", errors="replace"))
+                    for p in _poms(repo, module))
+    if re.search(r"<artifactId>\s*junit-jupiter[\w-]*\s*</artifactId>", text) \
+            or "spring-boot-starter-test" in text:
+        junit = "5"
+    elif re.search(r"<groupId>\s*junit\s*</groupId>", text):
+        junit = "4"
+    else:
+        junit = None
+    jacoco = "pom" if "jacoco-maven-plugin" in text else "cli"
+    pit = "pom" if "pitest-maven" in text else "cli"
+    return {
+        "build": "maven",
+        "junit": junit,
+        "jacoco": jacoco,
+        "jacoco_agent_bound": bool(pom_binds_jacoco_agent(repo, module)),
+        "pit": pit,
+        "pit_junit5_plugin": "pitest-junit5-plugin" in text,
+        "note": "static read of the pom(s); dependencies inherited from a parent outside the repo are not seen",
+    }
+
+
 def pom_plugin_version(repo: Path, module: str | None, artifact_id: str) -> str | None:
     """Version declared for a plugin in the module pom or the root pom, if any."""
     pattern = re.compile(

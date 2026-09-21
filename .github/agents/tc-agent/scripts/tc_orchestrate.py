@@ -451,10 +451,31 @@ def collect(repo: Path, directory: Path, state: dict) -> dict:
         "suggestions": suggestions,
         "unimplementable": (review.get("unimplementable") or []) if "__error__" not in review else [],
         "obsolete": (plan.get("obsolete") or []) if "__error__" not in plan else [],
-        "confirm": [n for n in notes if str(n).startswith("CONFIRM:")],
+        "confirm": confirm_lines(notes),
         "red": red,
         "gates": gates,
     }
+
+
+def confirm_lines(notes: list) -> list:
+    """CONFIRM: notes from the plan, cleaned and without duplicates.
+
+    A planner writing through a non-UTF-8 shell turns "—" into "?", and a planner
+    that records a question twice (once asked, once answered) duplicates it.
+    Both are cosmetic, but the report is what a human reads.
+    """
+    out, seen = [], set()
+    for note in notes:
+        text = str(note).strip()
+        if not text.startswith("CONFIRM:"):
+            continue
+        text = re.sub(r"\s+\?\s+", " — ", text)
+        key = re.sub(r"[\W_]+", " ", text).lower().strip()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(text)
+    return out
 
 
 def template_summary(info: dict, outcome: str) -> str:

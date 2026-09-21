@@ -24,7 +24,9 @@ Every artifact is a Markdown file with three parts:
 3. EXACTLY ONE fenced ```json block.
 
 The JSON block is the contract and the prose is not: when they disagree, the
-JSON is right and the prose is the defect to fix. Write strict JSON — double
+JSON is right and the prose is the defect to fix. Write the file with your
+file-writing tool, as UTF-8 — never through shell redirection (`>`, `Out-File`,
+`Set-Content`), which on Windows mangles characters such as `—` into `?`. Write strict JSON — double
 quotes, no trailing commas, no comments, never a second fence. (The container is
 Markdown because org policy blocks .json and .yaml files for Copilot.)
 
@@ -104,7 +106,14 @@ name). There is one dependency, `jsonschema`, used by `tc_validate_plan.py`:
 `pip install -r .github/agents/tc-agent/tc-requirements.txt`. Everything else
 is standard library, so there is no virtualenv to set up.
 
-This pipeline supports **Maven only**. Every check script drives `mvn`.
+This pipeline supports **Maven only**. Every check script drives `mvn`; roles
+never run `mvn` themselves.
+
+**Shell quoting (Windows / PowerShell).** When you do run a command with a
+`-Dkey=value` argument whose value contains dots, quote the WHOLE argument:
+`"-Dtest=com.acme.OrderServiceTest"`. Unquoted, PowerShell splits it at the
+dots and Maven answers `No plugin found for prefix '.acme...'`. The scripts are
+not affected — they quote for you.
 
 Check scripts use these exit codes:
 
