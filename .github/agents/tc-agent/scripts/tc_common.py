@@ -1,4 +1,10 @@
-"""Shared helpers for the tc-reviewer check scripts.
+"""Shared helpers for the pipeline scripts (Model B).
+
+Nothing here reads a plan or a generation report. The target, its Maven module
+and the test classes that exercise it are derived from the slug and the file
+system, so the same checks run before a plan exists (derive-state) and inside a
+run (the Reviewer). Every file a script writes lands in the RUN directory,
+`.test-agent/runs/<slug>/<run-id>/`, never in a shared location.
 
 Standard library only. Exit-code convention used by every check script:
   0 - check ran, gate satisfied
@@ -20,7 +26,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from tc_md_payload import load_payload as _load_payload  # noqa: E402
 
 PACKAGE = re.compile(r"^\s*package\s+([\w.]+)\s*;", re.M)
-VERSION_SUFFIX = re.compile(r"-v(\d+)(?:-r(\d+))?\.md$")
 
 DEFAULT_GATES = {
     "branch_coverage_target_scope": 0.80,
@@ -54,51 +59,151 @@ def payload(path: Path) -> dict:
         raise CheckError(f"INVALID_ARTIFACT {exc}") from exc
 
 
-def _version_key(path: Path) -> tuple:
-    match = VERSION_SUFFIX.search(path.name)
-    if not match:
-        return (0, 0)
-    return (int(match.group(1)), int(match.group(2) or 1))
+SKIP_DIRS = {"target", "build", "out", ".git", ".idea", ".test-agent", "node_modules"}
+TEST_ANNOTATION = re.compile(r"@(?:[\w.]*\.)?(?:Test|ParameterizedTest|RepeatedTest|TestFactory|TestTemplate)\b")
 
 
-def latest(paths) -> Path | None:
-    paths = list(paths)
-    return max(paths, key=_version_key) if paths else None
+# --------------------------------------------------------------- run dirs ---
 
 
-def plans_dir(repo: Path, slug: str) -> Path:
-    return repo / ".test-agent" / "plans" / slug
+def runs_root(repo: Path, slug: str) -> Path:
+    return repo / ".test-agent" / "runs" / slug
 
 
-def checks_dir(repo: Path, slug: str) -> Path:
-    path = repo / ".test-agent" / "checks" / slug
+def run_dir(repo: Path, slug: str, run: str) -> Path:
+    """The directory of one run. `latest` resolves to the newest existing run."""
+    root = runs_root(repo, slug)
+    if run == "latest":
+        runs = sorted(p for p in root.glob("*") if (p / "run.json").is_file()) if root.is_dir() else []
+        if not runs:
+            raise CheckError(f"no run found under {root} - start one with tc_orchestrate.py start")
+        return runs[-1]
+    path = root / run
+    if not (path / "run.json").is_file():
+        raise CheckError(f"run {run} not found: {path}/run.json is missing")
+    return path
+
+
+def load_run(directory: Path) -> dict:
+    return json.loads((directory / "run.json").read_text(encoding="utf-8"))
+
+
+def save_run(directory: Path, data: dict) -> None:
+    (directory / "run.json").write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n",
+                                        encoding="utf-8")
+
+
+def checks_dir(directory: Path) -> Path:
+    path = directory / "checks"
     path.mkdir(parents=True, exist_ok=True)
     return path
 
 
-def load_plan(repo: Path, slug: str) -> tuple[Path, dict]:
-    path = latest(plans_dir(repo, slug).glob("plan-v*.md"))
-    if path is None:
-        raise CheckError(f"no plan found in {plans_dir(repo, slug)}")
-    return path, payload(path)
+# ----------------------------------------------------------------- target ---
 
 
-def load_report(repo: Path, slug: str, plan_version: int) -> tuple[Path, dict]:
-    """Newest report for THIS plan version.
+class Target:
+    """What a slug names: class, optional method, source file, FQCN, module."""
 
-    A glob on `-v{n}*` also matches v10, v11 ... and `_version_key` then ranks
-    those highest, so plan v1 would be reviewed against the report of plan v10.
-    Filter on the parsed version instead.
+    def __init__(self, repo: Path, slug: str, cls: str, method: str | None,
+                 file: Path, fqcn: str, module: str | None):
+        self.repo, self.slug, self.cls, self.method = repo, slug, cls, method
+        self.file, self.fqcn, self.module = file, fqcn, module
+
+    @property
+    def rel_file(self) -> str:
+        return self.file.resolve().relative_to(self.repo.resolve()).as_posix()
+
+    @property
+    def scope(self) -> str:
+        return f"{self.fqcn}.{self.method}" if self.method else self.fqcn
+
+    def as_dict(self) -> dict:
+        out = {"slug": self.slug, "class": self.cls, "fqcn": self.fqcn,
+               "file": self.rel_file, "module": self.module}
+        if self.method:
+            out["method"] = self.method
+        return out
+
+
+class TargetError(CheckError):
+    """A slug that names no class, or more than one. `code` is machine-readable."""
+
+    def __init__(self, code: str, message: str):
+        super().__init__(f"{code}: {message}")
+        self.code = code
+
+
+def find_roots(repo: Path) -> tuple[list, list]:
+    """Maven source and test roots of every module (Maven only)."""
+    src, test = [], []
+    poms = (p for p in repo.rglob("pom.xml") if not SKIP_DIRS.intersection(p.relative_to(repo).parts))
+    for pom_dir in sorted({p.parent for p in poms}):
+        m, t = pom_dir / "src/main/java", pom_dir / "src/test/java"
+        if m.is_dir():
+            src.append(m)
+        if t.is_dir():
+            test.append(t)
+    return src, test
+
+
+def java_files(roots) -> list:
+    out = []
+    for root in roots:
+        for f in root.rglob("*.java"):
+            if not SKIP_DIRS.intersection(f.relative_to(root).parts):
+                out.append(f)
+    return out
+
+
+def resolve_target(repo: Path, slug: str) -> Target:
+    """Slug (`Class`, `Class.method` or a path to a .java file) -> Target.
+
+    Never guesses: no match is TARGET_NOT_FOUND, several are TARGET_AMBIGUOUS.
     """
-    candidates = [
-        path
-        for path in plans_dir(repo, slug).glob("generation-report-v*.md")
-        if _version_key(path)[0] == plan_version
-    ]
-    path = latest(candidates)
-    if path is None:
-        raise CheckError(f"no generation report for plan v{plan_version} in {plans_dir(repo, slug)}")
-    return path, payload(path)
+    repo = Path(repo).resolve()
+    if not any(p for p in repo.rglob("pom.xml") if not SKIP_DIRS.intersection(p.relative_to(repo).parts)):
+        raise TargetError("UNSUPPORTED_REPOSITORY", "no pom.xml found - this pipeline is Maven-only")
+    src_roots, _ = find_roots(repo)
+    method = None
+    if slug.endswith(".java") and (repo / slug).is_file():
+        file = (repo / slug).resolve()
+        cls = file.stem
+    else:
+        parts = slug.split(".")
+        cls = parts[0]
+        method = parts[1] if len(parts) > 1 else None
+        hits = [f for f in java_files(src_roots) if f.stem == cls]
+        if not hits:
+            raise TargetError("TARGET_NOT_FOUND", f"no {cls}.java under the source roots")
+        if len(hits) > 1:
+            listing = ", ".join(h.relative_to(repo).as_posix() for h in hits)
+            raise TargetError("TARGET_AMBIGUOUS", f"{cls}.java exists in several places: {listing}")
+        file = hits[0].resolve()
+    return Target(repo, slug, cls, method, file, fqcn_of_file(file), module_for_target(repo, file))
+
+
+def mentions(text: str, name: str) -> bool:
+    return re.search(rf"\b{re.escape(name)}\b", text) is not None
+
+
+def discover_test_classes(repo: Path, target: Target) -> list:
+    """Test classes that exercise the target: human and AI tests alike.
+
+    A file under a test root counts when its name contains the target's class
+    name or its source uses that name as a whole word, AND it declares at least
+    one test method (so builders and fixtures that merely mention the class are
+    not handed to surefire). Returns [(fqcn, path), ...] sorted by path.
+    """
+    _, test_roots = find_roots(Path(repo).resolve())
+    found = []
+    for f in java_files(test_roots):
+        text = f.read_text(encoding="utf-8", errors="replace")
+        if not TEST_ANNOTATION.search(text):
+            continue
+        if target.cls in f.stem or mentions(text, target.cls):
+            found.append((fqcn_of_file(f), f))
+    return sorted(found, key=lambda pair: str(pair[1]))
 
 
 def write_container(path: Path, title: str, summary: list, data: dict) -> None:
@@ -131,13 +236,13 @@ def parse_xml(path: Path):
 # ------------------------------------------------------------------ maven ---
 
 
-def write_log(repo: Path, slug: str, name: str, command: list, output: str) -> Path:
+def write_log(directory: Path, name: str, command: list, output: str) -> Path:
     """Keep the full maven output next to the check result.
 
     Terminals truncate, error messages are summaries, and re-running a failed
     maven goal to see what it said costs minutes. The log is the ground truth.
     """
-    path = checks_dir(repo, slug) / f"maven-{name}.log"
+    path = checks_dir(directory) / f"maven-{name}.log"
     path.write_text(
         "$ " + " ".join(str(part) for part in command) + "\n\n" + output,
         encoding="utf-8",
@@ -301,10 +406,9 @@ def pom_binds_jacoco_agent(repo: Path, module: str | None) -> Path | None:
 def module_for_target(repo: Path, target_file: Path) -> str | None:
     """Derive the Maven module from the target's own location.
 
-    The nearest ancestor directory that owns a pom.xml IS the module, whatever
-    the plan says. This is the fallback that makes multi-module repos work even
-    when the Planner recorded no module: reports live under <module>/target, and
-    looking for them at the repo root finds nothing while maven exits 0.
+    The nearest ancestor directory that owns a pom.xml IS the module. Reports
+    live under <module>/target, and looking for them at the repo root finds
+    nothing while maven exits 0. None = the target lives in the root project.
     """
     try:
         current = target_file.resolve().parent
@@ -315,33 +419,6 @@ def module_for_target(repo: Path, target_file: Path) -> str | None:
         if (current / "pom.xml").exists():
             return current.relative_to(repo).as_posix()
         current = current.parent
-    return None
-
-
-def resolve_module(repo: Path, plan: dict, override: str | None,
-                   target_file: Path | None = None) -> str | None:
-    """--module wins; otherwise read context.notes, but only accept a REAL module.
-
-    The notes are prose written by the Planner, so a phrase like "single module
-    Maven project" used to yield `-pl Maven` and maven answered "Could not find
-    the selected project in the reactor". Every candidate is now checked against
-    the filesystem; anything that is not a directory with a pom.xml is ignored.
-    """
-    if override:
-        if not is_module(repo, override):
-            raise CheckError(f"--module {override}: no {override}/pom.xml under {repo}")
-        return override.strip().rstrip("/")
-    context = plan.get("context", {})
-    explicit = context.get("module")
-    if explicit and is_module(repo, str(explicit)):
-        return str(explicit).strip().rstrip("/")
-    for note in context.get("notes", []) or []:
-        for match in re.finditer(r"module[\s:=]+([\w\-./]+)", str(note), re.I):
-            candidate = match.group(1).strip().rstrip("/")
-            if is_module(repo, candidate):
-                return candidate
-    if target_file is not None:
-        return module_for_target(repo, target_file)
     return None
 
 
@@ -394,6 +471,45 @@ def gate_value(repo: Path, key: str, override=None) -> float:
         return float(override)
     gates = profile(repo).get("quality_gates", {})
     return float(gates.get(key, DEFAULT_GATES[key]))
+
+
+DEFAULT_FRESHNESS_DAYS = 7
+
+
+def freshness_days(repo: Path) -> float:
+    """Legacy mode refuses to freeze code younger than this (tc-project-profile.md)."""
+    value = profile(repo).get("freshness_days", DEFAULT_FRESHNESS_DAYS)
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return float(DEFAULT_FRESHNESS_DAYS)
+
+
+def instruction_paths(repo: Path) -> list:
+    """Extra repo instruction files named in the profile (may live outside .github)."""
+    return [str(p) for p in profile(repo).get("instruction_paths", []) or []]
+
+
+PROTECTED_LINE = re.compile(r"^\s*[-*]?\s*`?tc-agent-protected-branches:\s*(.*?)`?\s*$", re.M)
+DEFAULT_PROTECTED = ["master"]
+
+
+def protected_branches(repo: Path) -> tuple[list, str]:
+    """Branches the agent never commits to, and where that list came from.
+
+    Read from ONE line in the repo's AGENTS.md:
+        tc-agent-protected-branches: master, main, release/*
+    No file, no line, or an empty list -> only `master`. `master` cannot be
+    un-protected by accident: an empty value falls back to the default.
+    """
+    agents = Path(repo) / "AGENTS.md"
+    if agents.is_file():
+        found = PROTECTED_LINE.search(agents.read_text(encoding="utf-8", errors="replace"))
+        if found:
+            names = [n.strip() for n in found.group(1).split(",") if n.strip()]
+            if names:
+                return names, "AGENTS.md"
+    return list(DEFAULT_PROTECTED), "default"
 
 
 PLUGIN_ARTIFACT = {"jacoco": "jacoco-maven-plugin", "pit": "pitest-maven"}
@@ -449,47 +565,9 @@ def recent_files(root: Path, pattern: str, since: float) -> list:
 # ------------------------------------------------------------------- java ---
 
 
-def java_files(repo: Path, simple_name: str) -> list:
-    return [
-        path
-        for path in repo.rglob(f"{simple_name}.java")
-        if "target" not in path.parts and ".test-agent" not in path.parts
-    ]
-
-
 def fqcn_of_file(path: Path) -> str:
     match = PACKAGE.search(path.read_text(encoding="utf-8", errors="replace"))
     return f"{match.group(1)}.{path.stem}" if match else path.stem
-
-
-def target_fqcn(repo: Path, plan: dict) -> tuple:
-    simple = plan["target"]["class"]
-    candidates = java_files(repo, simple)
-    if not candidates:
-        raise CheckError(f"cannot locate source file for target class {simple}")
-    production = [p for p in candidates if "test" not in str(p).lower()] or candidates
-    chosen = production[0]
-    return fqcn_of_file(chosen), chosen
-
-
-def test_fqcns(repo: Path, plan: dict, report: dict, with_existing: bool = True) -> list:
-    """Generated test classes plus (optionally) the existing tests the plan cites."""
-    names = []
-    for rel in report.get("test_files", []) or []:
-        path = repo / rel
-        names.append(fqcn_of_file(path) if path.exists() else Path(rel).stem)
-    if with_existing:
-        for entry in plan.get("context", {}).get("existing_tests", []) or []:
-            simple = str(entry).split("#")[0].split(".")[-1].strip()
-            found = java_files(repo, simple)
-            if found:
-                names.append(fqcn_of_file(found[0]))
-    return sorted(set(n for n in names if n))
-
-
-def target_scope(plan: dict) -> tuple:
-    target = plan.get("target", {})
-    return target.get("class"), target.get("method")
 
 
 # ------------------------------------------------------------------- cli ----
@@ -498,12 +576,26 @@ def target_scope(plan: dict) -> tuple:
 def add_common_args(parser) -> None:
     parser.add_argument("slug", help="target slug, e.g. OrderService or OrderService.createOrder")
     parser.add_argument("--repo", default=".", help="repository root (default: .)")
-    parser.add_argument("--module", default=None, help="maven module owning the target")
-    parser.add_argument("--iteration", type=int, default=1, help="review iteration, used in output name")
+    parser.add_argument("--run", default="latest", help="run id, or `latest` (default)")
+    parser.add_argument("--module", default=None, help="override the maven module owning the target")
+    parser.add_argument("--label", default="entry",
+                        help="names this check's outputs: `entry` for derive-state, v<N>-r<M> for a review")
 
 
-def finish(repo: Path, slug: str, name: str, title: str, summary: list, data: dict, code: int) -> int:
-    out = checks_dir(repo, slug) / name
+def open_run(args) -> tuple[Path, Path, "Target"]:
+    """(repo, run directory, target) for a check script's arguments."""
+    repo = Path(args.repo).resolve()
+    directory = run_dir(repo, args.slug, args.run)
+    target = resolve_target(repo, args.slug)
+    if args.module:
+        if not is_module(repo, args.module):
+            raise CheckError(f"--module {args.module}: no {args.module}/pom.xml under {repo}")
+        target.module = args.module.strip().rstrip("/")
+    return repo, directory, target
+
+
+def finish(directory: Path, name: str, title: str, summary: list, data: dict, code: int) -> int:
+    out = checks_dir(directory) / name
     write_container(out, title, summary, data)
     print(f"{title}: {data.get('status')} -> {out}")
     for item in summary:

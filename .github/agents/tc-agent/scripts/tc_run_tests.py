@@ -1,14 +1,20 @@
 #!/usr/bin/env python3
-"""Compile and run the generated tests, collecting JaCoCo execution data.
+"""Compile and run every test class that exercises the target, collecting JaCoCo data.
 
 This is the ONLY check script that builds the project. It makes sure the JaCoCo
 agent is attached exactly ONCE - injected as a fully-qualified goal only when the
 pom does not already bind prepare-agent - so tc_coverage.py can report from the
-resulting jacoco.exec without running the tests a second time.
+resulting exec file without running the tests a second time.
+
+The test classes are discovered from the target (tc_common.discover_test_classes):
+human and AI tests alike, no plan or report needed. That is what lets
+derive-state run it before anything was planned.
 
 Usage:
-  python tc_run_tests.py <TargetSlug> --repo . [--module M] [--iteration 1]
-                      [--repeat 2] [--tests A,B] [--no-existing]
+  python tc_run_tests.py <TargetSlug> --repo . --run <id|latest> [--label entry]
+                      [--module M] [--repeat 2] [--tests A,B]
+Output:
+  <run>/checks/tests-<label>.md, <run>/checks/jacoco-<label>.exec
 """
 
 from __future__ import annotations
@@ -76,33 +82,29 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     c.add_common_args(parser)
     parser.add_argument("--repeat", type=int, default=1, help="run the suite N times to expose flakiness")
-    parser.add_argument("--tests", default=None, help="explicit comma-separated test classes")
-    parser.add_argument("--no-existing", action="store_true", help="do not include the plan's existing tests")
+    parser.add_argument("--tests", default=None, help="explicit comma-separated test classes (overrides discovery)")
     parser.add_argument("--jacoco-version", default=None)
     args = parser.parse_args()
 
-    repo = Path(args.repo).resolve()
-    data = {"status": "NOT_RUN"}
-    summary = []
+    name = f"tests-{args.label}.md"
+    directory = None
 
     try:
-        _, plan = c.load_plan(repo, args.slug)
-        _, report = c.load_report(repo, args.slug, plan.get("plan_version", 1))
-        fqcn, target_file = c.target_fqcn(repo, plan)
-        module = c.resolve_module(repo, plan, args.module, target_file)
+        repo, directory, target = c.open_run(args)
+        module = target.module
         tests = (
             [t.strip() for t in args.tests.split(",") if t.strip()]
             if args.tests
-            else c.test_fqcns(repo, plan, report, with_existing=not args.no_existing)
+            else [fqcn for fqcn, _ in c.discover_test_classes(repo, target)]
         )
         if not tests:
-            raise c.CheckError("no test classes resolved from the generation report")
+            raise c.CheckError(f"no test class exercises {target.cls} - nothing to run")
 
         jacoco = c.tool_version(repo, "jacoco", args.jacoco_version, module)
         search_root = c.module_dir(repo, module)
         # Pin the exec file instead of hunting for it: -Djacoco.destFile works for
         # a pom-bound execution too, so both invocation modes land in one known place.
-        exec_file = c.checks_dir(repo, args.slug) / "jacoco.exec"
+        exec_file = c.checks_dir(directory) / f"jacoco-{args.label}.exec"
         # surefire matches -Dtest most reliably on simple class names; PIT gets the FQCNs
         selectors = sorted({name.split(".")[-1] for name in tests})
         bound_pom = c.pom_binds_jacoco_agent(repo, module)
@@ -130,7 +132,7 @@ def main() -> int:
             code, output = c.run(command, repo)
             report_files = c.recent_files(search_root, "target/surefire-reports/TEST-*.xml", started)
             runs.append(parse_surefire(report_files))
-        log = c.write_log(repo, args.slug, f"tests-r{args.iteration}", command, output)
+        log = c.write_log(directory, f"tests-{args.label}", command, output)
 
         compiler_errors = [
             f"{Path(m.group(1)).name}:{m.group(2)} {m.group(4).strip()}"
@@ -145,8 +147,7 @@ def main() -> int:
                 "compiler_errors": compiler_errors or ["compilation failed; see maven output"],
             }
             summary = [f"compilation failed ({len(data['compiler_errors'])} errors)"]
-            return c.finish(repo, args.slug, f"tests-r{args.iteration}.md",
-                            "Check: tests", summary, data, 1)
+            return c.finish(directory, name, "Check: tests", summary, data, 1)
 
         if not results:
             raise c.CheckError(
@@ -158,8 +159,8 @@ def main() -> int:
         executed = sum(1 for r in results if r["status"] != "SKIPPED")
         if not executed:
             raise c.CheckError(
-                f"surefire ran 0 tests for -Dtest={','.join(selectors)} - check the class "
-                f"names in the generation report and the module ({module or 'root'}); "
+                f"surefire ran 0 tests for -Dtest={','.join(selectors)} - check the "
+                f"discovered class names and the module ({module or 'root'}); "
                 f"full log: {log}"
             )
         if not exec_file.exists() or exec_file.stat().st_size == 0:
@@ -187,6 +188,7 @@ def main() -> int:
             "flaky": flaky,
             "jacoco_agent": agent_source,
             "module": module,
+            "label": args.label,
             "exec_file": str(exec_file),
             "report_files": [str(f) for f in report_files],
         }
@@ -201,13 +203,12 @@ def main() -> int:
         code = 1 if (failures or flaky) else 0
         if code == 0:
             log.unlink(missing_ok=True)   # keep the maven log only for a non-green check
-        return c.finish(repo, args.slug, f"tests-r{args.iteration}.md",
-                        "Check: tests", summary, data, code)
+        return c.finish(directory, name, "Check: tests", summary, data, code)
 
     except c.CheckError as exc:
         data = {"status": "UNAVAILABLE", "reason": str(exc)}
-        c.finish(repo, args.slug, f"tests-r{args.iteration}.md",
-                 "Check: tests", [str(exc)[:300]], data, 2)
+        if directory is not None:
+            c.finish(directory, name, "Check: tests", [str(exc)[:300]], data, 2)
         return c.fail(str(exc))
 
 

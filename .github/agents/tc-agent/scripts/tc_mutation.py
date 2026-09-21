@@ -2,11 +2,14 @@
 """Run PIT on the target class only and report the surviving mutants.
 
 Invokes the mutationCoverage goal directly: nothing is compiled here, PIT reuses
-the classes built by tc_run_tests.py and drives the tests itself.
+the classes built by tc_run_tests.py and drives the tests itself. The tests are
+the same discovered set tc_run_tests.py ran (human and AI alike).
 
 Usage:
-  python tc_mutation.py <TargetSlug> --repo . [--module M] [--iteration 1]
-                     [--gate 0.7]
+  python tc_mutation.py <TargetSlug> --repo . --run <id|latest> [--label entry]
+                     [--module M] [--gate 0.7] [--tests A,B]
+Output:
+  <run>/checks/mutation-<label>.md
 """
 
 from __future__ import annotations
@@ -47,25 +50,22 @@ def main() -> int:
     parser.add_argument("--tests", default=None, help="explicit comma-separated test classes")
     args = parser.parse_args()
 
-    repo = Path(args.repo).resolve()
-    name = f"mutation-r{args.iteration}.md"
+    name = f"mutation-{args.label}.md"
+    directory = None
 
     try:
-        _, plan = c.load_plan(repo, args.slug)
-        _, report = c.load_report(repo, args.slug, plan.get("plan_version", 1))
-        fqcn, target_file = c.target_fqcn(repo, plan)
-        module = c.resolve_module(repo, plan, args.module, target_file)
-        _, method = c.target_scope(plan)
+        repo, directory, target = c.open_run(args)
+        fqcn, module, method = target.fqcn, target.module, target.method
         gate = c.gate_value(repo, GATE_KEY, args.gate)
         pit = c.tool_version(repo, "pit", args.pit_version, module)
 
         tests = (
             [t.strip() for t in args.tests.split(",") if t.strip()]
             if args.tests
-            else c.test_fqcns(repo, plan, report)
+            else [fq for fq, _ in c.discover_test_classes(repo, target)]
         )
         if not tests:
-            raise c.CheckError("no test classes resolved from the generation report")
+            raise c.CheckError(f"no test class exercises {target.cls} - nothing to mutate against")
 
         command = (
             [c.mvn_executable(), "-B"]
@@ -87,7 +87,7 @@ def main() -> int:
 
         started = time.time() - 2
         code, output = c.run(command, repo)
-        log = c.write_log(repo, args.slug, f"mutation-r{args.iteration}", command, output)
+        log = c.write_log(directory, f"mutation-{args.label}", command, output)
         found = c.recent_files(c.module_dir(repo, module), "**/mutations.xml", started)
         xml_path = found[-1] if found else c.module_dir(repo, module) / "target" / "pit-reports" / "mutations.xml"
 
@@ -99,7 +99,7 @@ def main() -> int:
                     f"pit-reports exists but mutations.xml does not - add XML to <outputFormats> "
                     f"in the pom (a literal value there overrides -DoutputFormats); full log: {log}"
                 )
-                c.finish(repo, args.slug, name, "Check: mutation",
+                c.finish(directory, name, "Check: mutation",
                          [reason[:300]], {"status": "SKIPPED_UNAVAILABLE", "reason": reason}, 2)
                 return c.fail(reason)
             if any(marker in lowered for marker in UNAVAILABLE_MARKERS):
@@ -111,7 +111,7 @@ def main() -> int:
             else:
                 reason = "mutations.xml not produced (maven exit %s, full log: %s):\n%s" % (
                     code, log, failure)
-            c.finish(repo, args.slug, name, "Check: mutation",
+            c.finish(directory, name, "Check: mutation",
                      [reason[:300]], {"status": "SKIPPED_UNAVAILABLE", "reason": reason}, 2)
             return c.fail(reason)
 
@@ -162,11 +162,12 @@ def main() -> int:
         ]
         if passed:
             log.unlink(missing_ok=True)   # keep the maven log only for a non-green check
-        return c.finish(repo, args.slug, name, "Check: mutation", summary, data, 0 if passed else 1)
+        return c.finish(directory, name, "Check: mutation", summary, data, 0 if passed else 1)
 
     except c.CheckError as exc:
-        c.finish(repo, args.slug, name, "Check: mutation",
-                 [str(exc)[:300]], {"status": "SKIPPED_UNAVAILABLE", "reason": str(exc)}, 2)
+        if directory is not None:
+            c.finish(directory, name, "Check: mutation",
+                     [str(exc)[:300]], {"status": "SKIPPED_UNAVAILABLE", "reason": str(exc)}, 2)
         return c.fail(str(exc))
 
 

@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
-"""Report JaCoCo coverage for the plan's target scope from an existing jacoco.exec.
+"""Report JaCoCo coverage for the target scope from the exec file tc_run_tests.py wrote.
 
 Invokes the report goal directly, so nothing is compiled and no test is re-run.
 Emits the concrete uncovered lines/branches, which is what the Reviewer's
-attribution rule consumes - the percentage alone is not actionable.
+attribution rule and the Planner's gap list consume - the percentage alone is
+not actionable. The scope is the class, or the method when the slug names one.
 
 Usage:
-  python tc_coverage.py <TargetSlug> --repo . [--module M] [--iteration 1] [--gate 0.8]
+  python tc_coverage.py <TargetSlug> --repo . --run <id|latest> [--label entry]
+                     [--module M] [--gate 0.8]
+Output:
+  <run>/checks/coverage-<label>.md
 """
 
 from __future__ import annotations
@@ -68,18 +72,16 @@ def main() -> int:
     parser.add_argument("--jacoco-version", default=None)
     args = parser.parse_args()
 
-    repo = Path(args.repo).resolve()
-    name = f"coverage-r{args.iteration}.md"
+    name = f"coverage-{args.label}.md"
+    directory = None
 
     try:
-        _, plan = c.load_plan(repo, args.slug)
-        fqcn, target_file = c.target_fqcn(repo, plan)
-        module = c.resolve_module(repo, plan, args.module, target_file)
-        _, method = c.target_scope(plan)
+        repo, directory, target = c.open_run(args)
+        fqcn, module, method = target.fqcn, target.module, target.method
         gate = c.gate_value(repo, GATE_KEY, args.gate)
         jacoco = c.tool_version(repo, "jacoco", args.jacoco_version, module)
 
-        exec_file = c.checks_dir(repo, args.slug) / "jacoco.exec"
+        exec_file = c.checks_dir(directory) / f"jacoco-{args.label}.exec"
         if not exec_file.exists():
             raise c.CheckError(f"{exec_file} not found - run tc_run_tests.py first")
         if exec_file.stat().st_size == 0:
@@ -101,7 +103,7 @@ def main() -> int:
         )
         started = time.time() - 2
         code, output = c.run(command, repo)
-        log = c.write_log(repo, args.slug, f"coverage-r{args.iteration}", command, output)
+        log = c.write_log(directory, f"coverage-{args.label}", command, output)
         notes = []
 
         # The agent version may come from the pom (it runs during the build), but the
@@ -121,7 +123,7 @@ def main() -> int:
             ]
             started = time.time() - 2
             code, output = c.run(command, repo)
-            log = c.write_log(repo, args.slug, f"coverage-r{args.iteration}", command, output)
+            log = c.write_log(directory, f"coverage-{args.label}", command, output)
             jacoco = newest
 
         produced = c.recent_files(c.module_dir(repo, module), "**/jacoco.xml", started)
@@ -213,11 +215,12 @@ def main() -> int:
         ] + notes
         if passed:
             log.unlink(missing_ok=True)   # keep the maven log only for a non-green check
-        return c.finish(repo, args.slug, name, "Check: coverage", summary, data, 0 if passed else 1)
+        return c.finish(directory, name, "Check: coverage", summary, data, 0 if passed else 1)
 
     except c.CheckError as exc:
-        c.finish(repo, args.slug, name, "Check: coverage",
-                 [str(exc)[:300]], {"status": "UNAVAILABLE", "reason": str(exc)}, 2)
+        if directory is not None:
+            c.finish(directory, name, "Check: coverage",
+                     [str(exc)[:300]], {"status": "UNAVAILABLE", "reason": str(exc)}, 2)
         return c.fail(str(exc))
 
 

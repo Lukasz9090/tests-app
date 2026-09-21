@@ -43,7 +43,7 @@ class Repo:
         self.root = root
         self.by_stem = {}
         for path in root.rglob("*.java"):
-            if SKIP_DIRS.intersection(path.parts):
+            if SKIP_DIRS.intersection(path.relative_to(root).parts):
                 continue
             self.by_stem.setdefault(path.stem, []).append(path)
         self._text = {}

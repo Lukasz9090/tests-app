@@ -1,21 +1,30 @@
 #!/usr/bin/env python3
-"""Deterministic context pack builder for the Test Planner.
+"""Deterministic context pack builder for the Planner and the Generator.
 
 Discovers the target's context slice mechanically (no LLM, no tokens):
 target source, level-1 dependencies (full), level-2 (signatures only),
-existing tests, builders/fixtures, enums. Enforces the context budget in
-code and writes a single context-pack.md the agent reads as its ONLY input.
+existing tests (with a count of their @aiGenerated methods and placeholders),
+builders/fixtures, enums, and the REPO CONVENTIONS section: the repository's
+own instruction files, filtered by `applyTo`. Enforces the context budget in
+code and writes a single context-pack.md the agents read as their main input.
+
+Subagents start with a fresh context, so the pack is the reliable channel for
+repo instructions; whether the host also injects them is not relied on.
 
 Stdlib only. Usage:
-    python tc_build_context.py <ClassName[.method] | path/to/Class.java> [--repo .]
+    python tc_build_context.py <ClassName[.method]> --repo . --run <id|latest>
 Output:
-    .test-agent/context/<TargetSlug>/context-pack.md
+    .test-agent/runs/<slug>/<run-id>/context-pack.md
 """
 
 import argparse
 import re
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import tc_common as c  # noqa: E402
+import tc_javadoc as tj  # noqa: E402
 
 # The planner has to READ this pack, so the budget is bounded by its context
 # window, not by disk. ~150k chars is roughly 37k tokens, which leaves room for
@@ -31,33 +40,11 @@ CLASS_DECL = "(class|interface|enum|record)"
 SKIP_DIRS = {"target", "build", "out", ".git", ".idea", ".test-agent", "node_modules"}
 
 
-def find_roots(repo: Path):
-    """Maven source/test roots. Maven only — a Gradle repo yields no roots here
-    and the planner must stop with UNSUPPORTED_REPOSITORY, because every check
-    script downstream drives mvn."""
-    src, test = [], []
-    # Maven copies the pom into target/classes/META-INF/maven/..., so an
-    # unfiltered walk invents modules that live inside the build output.
-    poms = (p for p in repo.rglob("pom.xml") if not SKIP_DIRS.intersection(p.parts))
-    for pom_dir in {p.parent for p in poms}:
-        m, t = pom_dir / "src/main/java", pom_dir / "src/test/java"
-        if m.is_dir():
-            src.append(m)
-        if t.is_dir():
-            test.append(t)
-    return src or [repo], test
-
-
 def java_files(roots):
     for r in roots:
         for f in r.rglob("*.java"):
-            if not SKIP_DIRS.intersection(f.parts):
+            if not SKIP_DIRS.intersection(f.relative_to(r).parts):
                 yield f
-
-
-def find_class_file(name, roots):
-    hits = [f for f in java_files(roots) if f.stem == name]
-    return hits
 
 
 _CACHE = {}
@@ -103,36 +90,127 @@ def local_deps(text, all_by_name, own_pkg_files):
     return deps
 
 
+FRONTMATTER = re.compile(r"\A---\s*\n(.*?)\n---\s*\n", re.S)
+PRECEDENCE = ("Precedence, rule by rule: pipeline integrity (tc-contracts.md, "
+              "tc-test-conventions.md §A) > these files > agent defaults "
+              "(tc-test-conventions.md §B). A rule here that contradicts §A is void.")
+
+
+def glob_regex(pattern: str) -> re.Pattern:
+    """A VS Code / Copilot style glob (`**`, `*`, `?`, `{a,b}`) as a regex."""
+    out, i = "", 0
+    while i < len(pattern):
+        ch = pattern[i]
+        if pattern.startswith("**/", i):
+            out += "(?:.*/)?"
+            i += 3
+            continue
+        if pattern.startswith("**", i):
+            out += ".*"
+            i += 2
+            continue
+        if ch == "*":
+            out += "[^/]*"
+        elif ch == "?":
+            out += "[^/]"
+        elif ch == "{":
+            end = pattern.find("}", i)
+            if end == -1:
+                out += re.escape(ch)
+            else:
+                out += "(?:" + "|".join(re.escape(x) for x in pattern[i + 1:end].split(",")) + ")"
+                i = end
+        else:
+            out += re.escape(ch)
+        i += 1
+    return re.compile("^" + out + "$")
+
+
+def apply_to(text: str) -> list | None:
+    """The `applyTo` globs of an .instructions.md file; None = applies everywhere."""
+    front = FRONTMATTER.match(text)
+    if not front:
+        return None
+    for line in front.group(1).splitlines():
+        m = re.match(r"^\s*applyTo\s*:\s*(.+?)\s*$", line)
+        if m:
+            value = m.group(1).strip().strip("'\"")
+            globs = [v.strip().strip("'\"") for v in value.split(",") if v.strip()]
+            return globs or None
+    return None
+
+
+def instruction_applies(text: str, paths: list) -> tuple[bool, str]:
+    globs = apply_to(text)
+    if globs is None:
+        return True, "no applyTo"
+    for pattern in globs:
+        rx = glob_regex(pattern)
+        for p in paths:
+            if rx.match(p):
+                return True, f"applyTo: {pattern}"
+    return False, f"applyTo: {', '.join(globs)}"
+
+
+def repo_instructions(repo: Path, relevant_paths: list) -> list:
+    """[(path, reason)] of repo instruction files that apply to these paths, in order."""
+    found = []
+    seen = set()
+
+    def take(path: Path, reason: str):
+        key = path.resolve()
+        if key in seen or not path.is_file():
+            return
+        seen.add(key)
+        found.append((path, reason))
+
+    take(repo / ".github" / "copilot-instructions.md", "repository-wide")
+    idir = repo / ".github" / "instructions"
+    if idir.is_dir():
+        for f in sorted(idir.rglob("*.instructions.md")):
+            ok, why = instruction_applies(f.read_text(encoding="utf-8", errors="replace"), relevant_paths)
+            if ok:
+                take(f, why)
+    take(repo / "AGENTS.md", "repository-wide")
+    for extra in c.instruction_paths(repo):
+        path = repo / extra
+        if path.is_file():
+            ok, why = instruction_applies(path.read_text(encoding="utf-8", errors="replace"), relevant_paths)
+            if ok:
+                take(path, f"tc-project-profile.md instruction_paths ({why})")
+    return found
+
+
+def test_summary(f: Path) -> str:
+    try:
+        methods, _ = tj.parse_file(f)
+    except OSError:
+        return ""
+    ai = sum(1 for m in methods if m.meta.ai and not m.is_placeholder)
+    ph = sum(1 for m in methods if m.is_placeholder)
+    return f"{len(methods)} test methods: {ai} @aiGenerated, {ph} placeholders, {len(methods) - ai - ph} human"
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("target")
     ap.add_argument("--repo", default=".")
+    ap.add_argument("--run", default="latest")
     a = ap.parse_args()
 
     repo = Path(a.repo).resolve()
-    if not any(p for p in repo.rglob("pom.xml") if not SKIP_DIRS.intersection(p.parts)):
-        sys.exit("UNSUPPORTED_REPOSITORY: no pom.xml found. This pipeline is "
-                 "Maven-only - every check script drives mvn.")
-    src_roots, test_roots = find_roots(repo)
-
-    # --- resolve target ---
-    method = None
-    tpath = Path(a.target)
-    if a.target.endswith(".java") and (repo / tpath).exists():
-        target_file = (repo / tpath).resolve()
-        cname = target_file.stem
-    else:
-        parts = a.target.split(".")
-        cname = parts[0]
-        method = parts[1] if len(parts) > 1 else None
-        hits = find_class_file(cname, src_roots)
-        if not hits:
-            sys.exit(f"TARGET_NOT_FOUND: no {cname}.java under source roots")
-        if len(hits) > 1:
-            sys.exit("TARGET_AMBIGUOUS:\n" + "\n".join(f"  {h}" for h in hits))
-        target_file = hits[0]
-
-    slug = cname + (f".{method}" if method else "")
+    try:
+        target = c.resolve_target(repo, a.target)
+        run_dir = c.run_dir(repo, a.target, a.run)
+    except c.TargetError as exc:
+        if exc.code == "TARGET_AMBIGUOUS":
+            sys.exit(f"TARGET_AMBIGUOUS: {exc}")
+        sys.exit(str(exc))
+    except c.CheckError as exc:
+        sys.exit(f"CANNOT_RUN: {exc}")
+    src_roots, test_roots = c.find_roots(repo)
+    src_roots = src_roots or [repo]
+    target_file, cname, method, slug = target.file, target.cls, target.method, target.slug
     target_text = read(target_file)
 
     all_src = list(java_files(src_roots))
@@ -160,9 +238,15 @@ def main():
              if d in all_by_name
              and re.search(rf"\benum\s+{re.escape(d)}\b", read(all_by_name[d]))]
 
+    # paths the repo instructions are matched against (applyTo)
+    rel_target = target_file.relative_to(repo).as_posix()
+    package_dir = target_file.parent.relative_to(repo).as_posix().replace("src/main/java", "src/test/java", 1)
+    relevant = [rel_target, f"{package_dir}/{cname}Test.java"]
+    relevant += [f.relative_to(repo).as_posix() for f in tests]
+
     # --- assemble with budget ---
     out = [f"# Context Pack: {slug}", "",
-           f"Repo: {repo}", f"Target file: {target_file.relative_to(repo)}",
+           f"Repo: {repo}", f"Target file: {rel_target}",
            f"Method focus: {method or '(whole class)'}",
            f"Source roots: {[str(r.relative_to(repo)) for r in src_roots]}",
            f"Test roots: {[str(r.relative_to(repo)) for r in test_roots]}", ""]
@@ -178,17 +262,25 @@ def main():
         out.append(block)
         budget -= len(block)
 
-    # Repo-provided conventions (documentation, NOT behavioral evidence)
-    for conv in [repo / ".github" / "copilot-instructions.md",
-                 repo / "AGENTS.md",
-                 repo / ".test-agent" / "conventions.md"]:
-        if conv.exists():
-            block = (f"\n## CONVENTIONS (repo-provided, style/naming only — "
-                     f"not behavioral evidence): {conv.relative_to(repo)}\n\n"
-                     f"{read(conv)}\n")
-            if len(block) <= budget:
-                out.append(block)
-                budget -= len(block)
+    # Repo-provided conventions (style only, NOT behavioral evidence)
+    instructions = repo_instructions(repo, relevant)
+    header = ["\n## REPO CONVENTIONS (repo-provided — style/naming only, NOT behavioural evidence)\n",
+              PRECEDENCE, ""]
+    if instructions:
+        header.append("Sources: " + "; ".join(f"{p.relative_to(repo).as_posix()} ({why})"
+                                              for p, why in instructions))
+    else:
+        header.append("none found — agent defaults (tc-test-conventions.md §B) apply.")
+    block = "\n".join(header) + "\n"
+    out.append(block)
+    budget -= len(block)
+    for path, why in instructions:
+        body = f"\n### {path.relative_to(repo).as_posix()} ({why})\n\n{read(path)}\n"
+        if len(body) <= budget:
+            out.append(body)
+            budget -= len(body)
+        else:
+            notes.append(f"BUDGET: omitted repo instructions {path.relative_to(repo)}")
 
     # Order = priority, because `add` drops what no longer fits. Existing tests,
     # builders and enums come before the dependency dump: they are the EVIDENCE
@@ -196,7 +288,8 @@ def main():
     # twelve dependencies is the worst trade this script can make.
     add("TARGET", target_file, target_text)
     for f in sorted(set(tests)):
-        add("EXISTING TEST", f, read(f))
+        summary = test_summary(f)
+        add(f"EXISTING TEST ({summary})" if summary else "EXISTING TEST", f, read(f))
     for f in sorted(set(builders)):
         add("BUILDER/FIXTURE", f, read(f))
     for f in sorted(set(enums)):
@@ -219,14 +312,13 @@ def main():
         out.append("\n## NOTES\n")
         out.extend(f"- {n}" for n in notes)
 
-    dest = repo / ".test-agent" / "context" / slug / "context-pack.md"
-    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest = run_dir / "context-pack.md"
     dest.write_text("\n".join(out), encoding="utf-8")
-    print(f"WRITTEN: {dest.relative_to(repo)}")
+    print(f"WRITTEN: {dest.relative_to(repo).as_posix()}")
     print(f"  target={cname} method={method or '-'} "
           f"deps_l1={len(l1)} deps_l2={len(l2)} tests={len(tests)} "
           f"builders={len(builders)} enums={len(enums)} "
-          f"size={MAX_TOTAL_CHARS - budget} chars")
+          f"instructions={len(instructions)} size={MAX_TOTAL_CHARS - budget} chars")
 
 
 if __name__ == "__main__":

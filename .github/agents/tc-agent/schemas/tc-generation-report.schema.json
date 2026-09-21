@@ -1,64 +1,104 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "tc-generation-report.schema.json",
-  "title": "generation-report",
+  "title": "generation-report (Model B)",
   "type": "object",
-  "required": ["schema_version", "plan_version", "target", "test_files", "results"],
+  "required": [
+    "schema_version",
+    "plan_version",
+    "target",
+    "test_files",
+    "results"
+  ],
   "additionalProperties": false,
   "properties": {
-    "schema_version": { "const": 1 },
-    "plan_version": { "type": "integer", "minimum": 1 },
+    "schema_version": {
+      "const": 1
+    },
+    "plan_version": {
+      "type": "integer",
+      "minimum": 1
+    },
     "target": {
       "type": "object",
-      "required": ["class"],
+      "required": [
+        "class"
+      ],
       "additionalProperties": false,
       "properties": {
-        "class": { "type": "string" },
-        "method": { "type": "string" }
+        "class": {
+          "type": "string"
+        },
+        "method": {
+          "type": "string"
+        }
       }
     },
     "test_files": {
       "type": "array",
-      "items": { "type": "string" },
-      "description": "May legitimately be empty when every scenario was SKIPPED or OBSOLETE. `results` still accounts for every scenario."
+      "items": {
+        "type": "string",
+        "pattern": "\\.java$"
+      },
+      "description": "Every test file this generation wrote or changed (repo-relative). `finish --commit` stages exactly these."
     },
     "notes": {
       "type": "array",
-      "items": { "type": "string" },
-      "description": "Run-level facts the Reviewer must see, such as a missing context pack."
+      "items": {
+        "type": "string"
+      },
+      "description": "Run-level facts the Reviewer must see, e.g. a missing context pack, or a repo instruction that contradicted §A and was not followed."
     },
     "results": {
       "type": "array",
       "minItems": 1,
       "items": {
         "type": "object",
-        "required": ["id", "status"],
+        "required": [
+          "id",
+          "status",
+          "test_method"
+        ],
         "additionalProperties": false,
         "properties": {
-          "id": { "type": "string", "pattern": "^TC[0-9]+$" },
-          "status": {
-            "enum": ["IMPLEMENTED", "BLOCKED", "SKIPPED", "OBSOLETE"],
-            "description": "SKIPPED = nothing to do, the scenario stays covered. OBSOLETE = the plan says change: REMOVED and a test still exists — a DELETION CANDIDATE reported to the human, never deleted here."
+          "id": {
+            "type": "string",
+            "pattern": "^TC[0-9]+$"
           },
-          "test_method": { "type": "string" },
-          "reason": { "type": "string" },
-          "notes": { "type": "string" }
+          "status": {
+            "enum": [
+              "IMPLEMENTED",
+              "PLACEHOLDER",
+              "SKIPPED"
+            ],
+            "description": "IMPLEMENTED = a working test was written or repaired. PLACEHOLDER = an @Disabled method with @deferred was written (deferred scenario, or one that cannot be implemented soundly, including a compile error you could not fix). SKIPPED = a repair round left this method untouched."
+          },
+          "test_method": {
+            "type": "string",
+            "pattern": "^[A-Za-z_$][\\w$]*$"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          }
         },
         "allOf": [
           {
-            "if": { "properties": { "status": { "const": "BLOCKED" } } },
-            "then": { "required": ["reason"] }
-          },
-          {
-            "if": { "properties": { "status": { "const": "IMPLEMENTED" } } },
-            "then": { "required": ["test_method"] }
-          },
-          {
-            "if": { "required": ["status"], "properties": { "status": { "const": "OBSOLETE" } } },
+            "if": {
+              "properties": {
+                "status": {
+                  "const": "PLACEHOLDER"
+                }
+              }
+            },
             "then": {
-              "required": ["reason", "test_method"],
-              "errorMessage": "OBSOLETE must name the existing test method that is now a deletion candidate (`test_method`) and why the behaviour is gone (`reason`) — otherwise nobody can act on it."
-            }
+              "required": [
+                "reason"
+              ]
+            },
+            "errorMessage": "a PLACEHOLDER must say why (`reason`) - the same text goes into its @deferred tag."
           }
         ]
       }
@@ -67,12 +107,27 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["related", "suggestion", "rationale"],
+        "required": [
+          "related",
+          "suggestion",
+          "rationale"
+        ],
         "additionalProperties": false,
         "properties": {
-          "related": { "type": "array", "minItems": 1, "items": { "type": "string", "pattern": "^TC[0-9]+$" } },
-          "suggestion": { "type": "string" },
-          "rationale": { "type": "string" }
+          "related": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "pattern": "^TC[0-9]+$"
+            }
+          },
+          "suggestion": {
+            "type": "string"
+          },
+          "rationale": {
+            "type": "string"
+          }
         }
       }
     }

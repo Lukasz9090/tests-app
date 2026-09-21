@@ -1,20 +1,34 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "tc-test-plan.schema.json",
-  "title": "test-plan",
+  "title": "test-plan (Model B)",
   "type": "object",
-  "required": ["schema_version", "plan_version", "status"],
+  "required": [
+    "schema_version",
+    "plan_version",
+    "status"
+  ],
   "additionalProperties": false,
   "properties": {
-    "schema_version": { "const": 1 },
-    "plan_version": { "type": "integer", "minimum": 1 },
-    "based_on_version": { "type": "integer", "minimum": 1 },
+    "schema_version": {
+      "const": 1
+    },
+    "plan_version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Numbering inside ONE run only (plan_cap). Never read across runs."
+    },
     "target": {
       "type": "object",
-      "required": ["class"],
+      "required": [
+        "class"
+      ],
       "additionalProperties": false,
       "properties": {
-        "class": { "type": "string", "minLength": 1 },
+        "class": {
+          "type": "string",
+          "minLength": 1
+        },
         "method": {
           "type": "string",
           "minLength": 1,
@@ -22,188 +36,527 @@
         }
       }
     },
-    "mode": { "enum": ["legacy", "spec-driven", "tdd"] },
-    "interactive": { "type": "boolean", "description": "Modifier orthogonal to `mode`: the planner may ask the human one closed question where evidence is short. Combines with either base mode." },
-    "characterization": { "type": "boolean" },
-    "status": {
-      "enum": ["READY", "READY_PARTIAL", "COMPLETE", "NEEDS_CLARIFICATION", "BLOCKED", "UNSUPPORTED_REPOSITORY"],
-      "description": "COMPLETE = valid plan, every scenario already COVERED or REMOVED, nothing to generate. A success state, not a cancellation."
+    "mode": {
+      "enum": [
+        "legacy",
+        "spec-driven"
+      ],
+      "description": "Copied from run.json."
     },
-    "missing": { "type": "array", "items": { "type": "string" } },
+    "interactive": {
+      "type": "boolean",
+      "description": "Copied from run.json."
+    },
+    "characterization": {
+      "type": "boolean"
+    },
+    "status": {
+      "enum": [
+        "READY",
+        "READY_PARTIAL",
+        "COMPLETE",
+        "NEEDS_CLARIFICATION",
+        "BLOCKED",
+        "UNSUPPORTED_REPOSITORY"
+      ],
+      "description": "COMPLETE = nothing to generate: the whole gap derive-state reported is explained by existing tests or placeholders (`gap_explanation`). A success state."
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 5
+    },
+    "gap_explanation": {
+      "type": "string",
+      "minLength": 10
+    },
+    "missing": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
     "conflict": {
       "type": "object",
-      "required": ["specification", "implementation"],
+      "required": [
+        "specification",
+        "implementation"
+      ],
       "additionalProperties": false,
       "properties": {
-        "specification": { "type": "string" },
-        "implementation": { "type": "string" }
+        "specification": {
+          "type": "string"
+        },
+        "implementation": {
+          "type": "string"
+        }
       }
     },
     "context": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "source_roots": { "type": "array", "items": { "type": "string" } },
-        "test_roots": { "type": "array", "items": { "type": "string" } },
-        "related_classes": { "type": "array", "items": { "type": "string" } },
-        "existing_tests": { "type": "array", "items": { "type": "string" } },
-        "builders": { "type": "array", "items": { "type": "string" } },
-        "fixtures": { "type": "array", "items": { "type": "string" } },
-        "relevant_enums": { "type": "array", "items": { "type": "string" } },
+        "source_roots": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "test_roots": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "related_classes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "existing_tests": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "builders": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "fixtures": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "relevant_enums": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "target_sha": {
           "type": "string",
           "pattern": "^[0-9a-f]{7,40}$",
-          "description": "Commit that last touched the target file. It dates what the plan describes, and a characterization test that quotes it stays checkable after a refactor."
+          "description": "Abbreviated sha (%h) of the last commit that touched the target - copy git.current_sha from derive-state.md. Every legacy test written from this plan quotes it in @characterizes."
         },
-        "notes": { "type": "array", "items": { "type": "string" } }
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
       }
     },
-    "scenarios": { "type": "array", "items": { "$ref": "#/$defs/scenario" } },
-    "deferred": { "type": "array", "items": { "$ref": "#/$defs/deferredScenario" } }
+    "scenarios": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/scenario"
+      }
+    },
+    "deferred": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/deferredScenario"
+      }
+    },
+    "obsolete": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "test",
+          "reason"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "test": {
+            "type": "string",
+            "pattern": "^[A-Za-z_$][\\w$]*#[A-Za-z_$][\\w$]*$"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 5
+          }
+        }
+      },
+      "description": "Existing tests whose behaviour is gone. A recommendation to a human, never deleted by the pipeline."
+    }
   },
   "allOf": [
     {
-      "if": { "properties": { "status": { "const": "READY" } } },
-      "then": { "required": ["target", "mode", "scenarios"] }
+      "if": {
+        "properties": {
+          "status": {
+            "const": "READY"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "target",
+          "mode",
+          "scenarios"
+        ],
+        "properties": {
+          "scenarios": {
+            "minItems": 1
+          },
+          "deferred": {
+            "maxItems": 0
+          }
+        }
+      },
+      "errorMessage": "READY = at least one scenario and nothing deferred. With deferred scenarios the status is READY_PARTIAL."
     },
     {
-      "if": { "properties": { "status": { "const": "READY_PARTIAL" } } },
-      "then": { "required": ["target", "mode", "scenarios", "deferred"] }
+      "if": {
+        "properties": {
+          "status": {
+            "const": "READY_PARTIAL"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "target",
+          "mode",
+          "scenarios",
+          "deferred"
+        ],
+        "properties": {
+          "deferred": {
+            "minItems": 1
+          }
+        }
+      }
     },
     {
-      "if": { "properties": { "status": { "const": "COMPLETE" } } },
-      "then": { "required": ["target", "mode", "scenarios"] }
+      "if": {
+        "properties": {
+          "status": {
+            "const": "COMPLETE"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "target",
+          "mode",
+          "gap_explanation"
+        ],
+        "properties": {
+          "scenarios": {
+            "maxItems": 0
+          },
+          "deferred": {
+            "maxItems": 0
+          }
+        }
+      },
+      "errorMessage": "COMPLETE means there is nothing for the Generator to write: no scenarios, no deferred entries, and `gap_explanation` says why the remaining gap needs no new test (which placeholders or tests explain it)."
     },
     {
-      "if": { "properties": { "status": { "const": "UNSUPPORTED_REPOSITORY" } } },
-      "then": { "required": ["missing"] }
+      "if": {
+        "properties": {
+          "status": {
+            "const": "BLOCKED"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "reason"
+        ]
+      }
     },
     {
-      "if": { "properties": { "status": { "enum": ["READY", "READY_PARTIAL"] } } },
+      "if": {
+        "properties": {
+          "status": {
+            "const": "NEEDS_CLARIFICATION"
+          }
+        }
+      },
+      "then": {
+        "anyOf": [
+          {
+            "required": [
+              "conflict"
+            ]
+          },
+          {
+            "required": [
+              "reason"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "UNSUPPORTED_REPOSITORY"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "missing"
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "enum": [
+              "READY",
+              "READY_PARTIAL"
+            ]
+          }
+        }
+      },
       "then": {
         "properties": {
-          "scenarios": { "items": { "required": ["evidence_strength"] } }
-        },
-        "errorMessage": "every scenario of a READY / READY_PARTIAL plan needs `evidence_strength`, which the planner fills in Phase 5 (tc_evidence_strength.py). A plan without it skipped Phase 5, so nothing decided whether a scenario belongs in `scenarios` or in `deferred`."
-      }
+          "scenarios": {
+            "items": {
+              "required": [
+                "evidence_strength"
+              ]
+            }
+          }
+        }
+      },
+      "errorMessage": "every scenario of a READY / READY_PARTIAL plan needs `evidence_strength`, which tc_evidence_strength.py fills. A plan without it skipped that step, so nothing decided whether a scenario belongs in `scenarios` or in `deferred`."
     },
     {
-      "if": { "required": ["based_on_version"] },
-      "then": {
+      "if": {
+        "required": [
+          "mode"
+        ],
         "properties": {
-          "scenarios": { "items": { "required": ["change", "implementation"] } }
-        },
-        "errorMessage": "a revision (based_on_version is set) must state BOTH axes on every scenario: `change` (did the scenario definition change?) and `implementation` (does a test for it already exist?). Never encode 'already implemented' as change: REMOVED."
-      }
-    },
-    {
-      "if": { "required": ["mode"], "properties": { "mode": { "const": "legacy" } } },
-      "then": { "required": ["characterization"] }
-    },
-    {
-      "if": { "required": ["characterization"], "properties": { "characterization": { "const": true } } },
+          "mode": {
+            "const": "legacy"
+          }
+        }
+      },
       "then": {
-        "required": ["context"],
-        "properties": { "context": { "required": ["target_sha"] } },
-        "errorMessage": "a characterization plan freezes the behaviour of one version of the code, so `context.target_sha` must name it (git log -1 --format=%H -- <target file>). Without it nobody can tell later whether the frozen behaviour is still the current one."
+        "required": [
+          "characterization"
+        ],
+        "properties": {
+          "characterization": {
+            "const": true
+          }
+        }
       }
+    },
+    {
+      "if": {
+        "required": [
+          "characterization"
+        ],
+        "properties": {
+          "characterization": {
+            "const": true
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "context"
+        ],
+        "properties": {
+          "context": {
+            "required": [
+              "target_sha"
+            ]
+          }
+        }
+      },
+      "errorMessage": "a characterization plan freezes one version of the code, so `context.target_sha` must name it (git.current_sha from derive-state.md). Every test written from the plan quotes it in @characterizes."
     }
   ],
   "$defs": {
     "evidence": {
       "type": "object",
-      "required": ["type", "ref"],
+      "required": [
+        "type",
+        "ref"
+      ],
       "additionalProperties": false,
       "properties": {
         "type": {
-          "enum": ["human_decision", "existing_test", "builder", "fixture", "usage", "implementation", "enum", "db_constraint", "api_schema"],
+          "enum": [
+            "human_decision",
+            "existing_test",
+            "builder",
+            "fixture",
+            "usage",
+            "implementation",
+            "enum",
+            "db_constraint",
+            "api_schema"
+          ],
           "description": "`implementation` = the source lines of the code under test. In legacy/characterization mode it is legitimate evidence on its own, because such a plan freezes what the code does today; in spec-driven mode it is not a substitute for the spec."
         },
-        "ref": { "type": "string", "minLength": 1 }
+        "ref": {
+          "type": "string",
+          "minLength": 1
+        }
       }
     },
-    "strength": { "enum": ["strong", "medium", "weak"] },
+    "strength": {
+      "enum": [
+        "strong",
+        "medium",
+        "weak"
+      ]
+    },
     "scenario": {
       "type": "object",
-      "required": ["id", "change", "description", "priority", "evidence"],
+      "required": [
+        "id",
+        "description",
+        "priority",
+        "evidence",
+        "implementation_hints"
+      ],
       "additionalProperties": false,
       "properties": {
-        "id": { "type": "string", "pattern": "^TC[0-9]+$" },
-        "change": {
-          "enum": ["UNCHANGED", "MODIFIED", "NEW", "REMOVED"],
-          "description": "Delta of the SCENARIO DEFINITION only. REMOVED = the behaviour is no longer to be tested and any test for it is a deletion candidate; it NEVER means 'already implemented' — that is `implementation`."
+        "id": {
+          "allOf": [
+            {
+              "type": "string",
+              "pattern": "^TC[0-9]+$"
+            }
+          ],
+          "description": "Valid inside this run only; never written into the code."
         },
-        "implementation": {
-          "enum": ["PENDING", "COVERED", "BLOCKED"],
-          "description": "ORTHOGONAL to `change`. PENDING (default when absent) = no test yet. COVERED = a test exists and passes, named by `covered_by`. BLOCKED = the generator could not implement it soundly."
-        },
-        "covered_by": {
+        "description": {
           "type": "string",
-          "minLength": 3,
-          "description": "Required when implementation is COVERED: TestClass#method or path/File.java:NN-MM."
+          "minLength": 5
         },
-        "split_from": {
-          "type": "string",
-          "pattern": "^TC[0-9]+$",
-          "description": "For a NEW scenario extracted from a previously bundled one."
+        "priority": {
+          "enum": [
+            "high",
+            "medium",
+            "low"
+          ]
         },
-        "change_reason": {
-          "type": "string",
-          "description": "Mandatory for REMOVED: why the behaviour ceased to exist."
+        "replaces": {
+          "allOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z_$][\\w$]*#[A-Za-z_$][\\w$]*$"
+            }
+          ],
+          "description": "An existing test the Generator rewrites: a stale characterization test to re-characterize, or a placeholder this scenario now implements."
         },
-        "description": { "type": "string", "minLength": 5 },
-        "priority": { "enum": ["high", "medium", "low"] },
-        "data": { "type": "object" },
+        "data": {
+          "type": "object"
+        },
         "implementation_hints": {
           "type": "object",
+          "required": [
+            "test_method",
+            "test_file"
+          ],
           "additionalProperties": false,
+          "description": "The traceability key of Model B: the scenario lives in the code as THIS method. Name it by the naming rule in force (tc-test-conventions.md §B1 unless REPO CONVENTIONS override it).",
           "properties": {
-            "test_class": { "type": "string" },
-            "test_method": { "type": "string" },
-            "test_file": { "type": "string" }
-          }
-        },
-        "evidence": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/evidence" } },
-        "evidence_strength": { "$ref": "#/$defs/strength" }
-      },
-      "allOf": [
-        {
-          "if": { "required": ["change"], "properties": { "change": { "const": "REMOVED" } } },
-          "then": { "required": ["change_reason"] }
-        },
-        {
-          "if": { "required": ["change"], "properties": { "change": { "const": "REMOVED" } } },
-          "then": {
-            "properties": {
-              "change_reason": { "not": { "pattern": "(?i)cover|already|exist|implement|passing|green|no work|done|nothing to" } }
+            "test_class": {
+              "type": "string"
             },
-            "errorMessage": "MISLABELLED_REMOVED: change_reason describes a scenario that is already tested, which is NOT a removal. REMOVED is only for a behaviour that ceased to exist (deleted code path, withdrawn requirement) and whose test should be deleted. Set change to UNCHANGED/MODIFIED and implementation: COVERED with covered_by instead."
+            "test_method": {
+              "type": "string",
+              "pattern": "^[A-Za-z_$][\\w$]*$"
+            },
+            "test_file": {
+              "type": "string",
+              "pattern": "\\.java$"
+            }
           }
         },
-        {
-          "if": { "required": ["implementation"], "properties": { "implementation": { "const": "COVERED" } } },
-          "then": {
-            "required": ["covered_by"],
-            "errorMessage": "implementation: COVERED must name the test that covers it in `covered_by` (TestClass#method or path:lines) — an unverifiable 'already covered' claim is how a scenario silently leaves the plan's scope."
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/evidence"
           }
+        },
+        "evidence_strength": {
+          "$ref": "#/$defs/strength"
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 3
+          },
+          "description": "Each entry becomes an @note line on the test method (a frozen known bug, a human's answer from interactive mode)."
         }
-      ]
+      }
     },
     "deferredScenario": {
       "type": "object",
-      "required": ["id", "description", "reason"],
+      "required": [
+        "id",
+        "description",
+        "reason",
+        "placeholder_method"
+      ],
       "additionalProperties": false,
+      "description": "Becomes an @Disabled placeholder in the code (tc-test-conventions.md §A2).",
       "properties": {
-        "id": { "type": "string", "pattern": "^TC[0-9]+$" },
-        "change": {
-          "enum": ["UNCHANGED", "MODIFIED", "NEW", "REMOVED"],
-          "description": "Same meaning as on a scenario: definition delta only."
+        "id": {
+          "type": "string",
+          "pattern": "^TC[0-9]+$"
         },
-        "description": { "type": "string", "minLength": 5 },
-        "reason": { "type": "string", "minLength": 5 },
-        "question": { "type": "string" },
-        "evidence": { "type": "array", "items": { "$ref": "#/$defs/evidence" } },
-        "evidence_strength": { "$ref": "#/$defs/strength" }
+        "description": {
+          "type": "string",
+          "minLength": 5
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 5
+        },
+        "question": {
+          "type": "string"
+        },
+        "placeholder_method": {
+          "type": "string",
+          "pattern": "^[A-Za-z_$][\\w$]*$"
+        },
+        "test_file": {
+          "type": "string",
+          "pattern": "\\.java$"
+        },
+        "replaces": {
+          "type": "string",
+          "pattern": "^[A-Za-z_$][\\w$]*#[A-Za-z_$][\\w$]*$"
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidence"
+          }
+        },
+        "evidence_strength": {
+          "$ref": "#/$defs/strength"
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 3
+          },
+          "description": "Each entry becomes an @note line on the test method (a frozen known bug, a human's answer from interactive mode)."
+        }
       }
     }
   }

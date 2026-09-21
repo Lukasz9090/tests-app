@@ -1,7 +1,19 @@
-# Shared contracts
+# Shared contracts (Model B)
 
 Rules that all four agents of the test pipeline follow. Read this before your
 own agent file. Your agent file only adds what is special about your role.
+
+## 0. Where the truth lives
+
+**The truth is the committed code, the tests and git history.** Nothing the
+pipeline writes to `.test-agent/` is ever read as state by a later run.
+
+- Between runs, `tc_orchestrate.py start` derives what a target needs from the
+  real world (`tc_derive_state.py`): the code, the test methods and their
+  Javadoc tags, git, coverage and mutations.
+- Inside one run, the roles hand work to each other through files in that
+  run's directory, `.test-agent/runs/<slug>/<run-id>/`. Never read, cite or
+  continue from another run's directory. Old runs stay on disk for people only.
 
 ## 1. Artifacts
 
@@ -16,16 +28,21 @@ JSON is right and the prose is the defect to fix. Write strict JSON — double
 quotes, no trailing commas, no comments, never a second fence. (The container is
 Markdown because org policy blocks .json and .yaml files for Copilot.)
 
-Each artifact has a schema, and the schema is the contract — an example is only
-an example.
-
-| artifact | schema |
-|---|---|
-| `plan-v<N>.md` | `$SCH/tc-test-plan.schema.json` |
-| `generation-report-v<N>[-r<M>].md` | `$SCH/tc-generation-report.schema.json` |
-| `review-v<N>-r<M>.md` | `$SCH/tc-review.schema.json` |
+| artifact (in the run directory) | written by | schema |
+|---|---|---|
+| `run.json` | `tc_orchestrate.py start` | — (mode, interactive, spec, caps, commit) |
+| `derive-state.md` | `tc_derive_state.py` | — (read it, never edit it) |
+| `context-pack.md` | `tc_build_context.py` | — |
+| `plan-v<N>.md` | tc-planner | `$SCH/tc-test-plan.schema.json` |
+| `generation-report-v<N>[-r<M>].md` | tc-generator | `$SCH/tc-generation-report.schema.json` |
+| `review-v<N>-r<M>.md` | tc-reviewer | `$SCH/tc-review.schema.json` |
+| `checks/*-<label>.md` | check scripts | — |
+| `run-report.md` | `tc_orchestrate.py finish` | — |
 
 `$SCH` = `.github/agents/tc-agent/schemas`, `$C` = `.github/agents/tc-agent/scripts`.
+
+`run.json` is where `mode`, `interactive` and `spec` live. Read them from there;
+nobody passes them to you in the prompt.
 
 Validate before you finish:
 
@@ -37,40 +54,47 @@ The tool reports defects in YOUR artifact, and there is one correct answer: fix
 the field it names. Never delete a field, drop a scenario or make a value vaguer
 to make the check pass, because that hides the defect instead of fixing it.
 
-## 2. File names and versions
+## 2. Numbering inside a run
 
-All artifacts live in `.test-agent/plans/<TargetSlug>/`. `<TargetSlug>` is
-`ClassName` or `ClassName.methodName`.
+The orchestrator's `state` tells you the exact path to write (`dispatch`). The
+numbers exist only to count rounds against the caps:
 
 | file | when the number grows |
 |---|---|
-| `plan-v<N>.md` | N + 1 for each new plan version |
-| `generation-report-v<N>.md` | first round; later rounds add `-r2`, `-r3` |
+| `plan-v<N>.md` | N + 1 when the reviewer asks for REPAIR_PLAN |
+| `generation-report-v<N>.md` | first round; repair rounds add `-r2`, `-r3` |
 | `review-v<N>-r<M>.md` | M matches the generation round it reviews |
 
-NEVER overwrite or delete an artifact; write the next version instead, because
-the file history is how a run is resumed and audited.
+Never overwrite an artifact of the run; write the next number.
 
-## 3. The two scenario axes
+## 3. The code is the database
 
-Every scenario carries two flags that are independent of each other, and one can
-never stand for the other.
+Every test the pipeline writes carries its metadata in a Javadoc on the test
+METHOD (never on the class). The full rules are in `tc-test-conventions.md` §A;
+the tags are:
 
-| field | the question it answers | values |
-|---|---|---|
-| `change` | did the scenario DEFINITION change since `based_on_version`? | `NEW` / `MODIFIED` / `UNCHANGED` / `REMOVED` |
-| `implementation` | does a test for it exist? | `PENDING` / `COVERED` / `BLOCKED` |
+| tag | meaning |
+|---|---|
+| `@aiGenerated` | the agent wrote this method |
+| `@mode legacy` / `@mode spec-driven` | how it was generated |
+| `@interactive` | a human answered questions during that run |
+| `@characterizes <Class>@<sha>` | legacy only: the version of the code this test froze |
+| `@deferred <reason>` | on an `@Disabled` placeholder: a scenario deliberately not tested |
+| `@note <text>` | a frozen known bug or a human decision about THIS test |
 
-`REMOVED` means the BEHAVIOUR is gone, because the code path was deleted or the
-requirement was withdrawn. A test for it is now a deletion candidate, so
-`change_reason` is required and must name that cause.
+**Invariant:** every scenario of a plan ends up in the code as a test OR as a
+placeholder. That is how the next run knows a gap is known and deliberate.
 
-`REMOVED` NEVER means "already implemented", "already covered by a passing test"
-or "nothing to do here". That is `implementation: COVERED`, with `covered_by`
-naming the test, while `change` stays `UNCHANGED` or `MODIFIED`.
+**Traceability:** a scenario id (`TC01`) exists only inside the run's
+artifacts. It never goes into the code. A scenario and its test are linked by
+the method name: `implementation_hints.test_method` in the plan,
+`results[].test_method` in the generation report.
 
-Pick the label for what it MEANS, never for what it makes the next agent skip:
-a person who reads `REMOVED` will delete a working test.
+**Stale** = a legacy test whose `@characterizes` sha no longer names the last
+commit of the target file (or the target has uncommitted changes). A stale test
+that still passes only needs its sha moved (`reseal`, done by a script); a
+stale test that fails means the frozen behaviour changed and goes back to the
+planner.
 
 ## 4. Scripts
 
@@ -97,3 +121,19 @@ source. It tells you nothing the report does not, it spends the context you need
 for the plan and the tests, and it invites you to reason about how a check works
 instead of acting on what it found. A script that behaves unexpectedly is
 something to report, not something to debug.
+
+## 5. Conventions
+
+Before you write or judge a test, read `.github/agents/tc-agent/tc-test-conventions.md`
+and the **REPO CONVENTIONS** section of the run's `context-pack.md`.
+
+Precedence, rule by rule:
+
+1. **pipeline integrity** — this file and `tc-test-conventions.md` §A. Never
+   overridable. A repo instruction that contradicts it is void; follow §A and
+   say so in your artifact's notes.
+2. **repo instructions** — the files listed in REPO CONVENTIONS.
+3. **agent defaults** — `tc-test-conventions.md` §B.
+
+Repo instructions are about style and technique. They are never evidence about
+business behaviour.
