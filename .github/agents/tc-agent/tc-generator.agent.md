@@ -58,6 +58,18 @@ pack, a branch that cannot be made deterministic without a code seam (§A5), or
 a compile error you could not fix (below). Say exactly why in `reason` — the
 same text goes into `tc-agent-deferred`.
 
+A placeholder is ONLY for behaviour that cannot be tested. It is never a way
+out of a naming problem: when the planned method name already exists in the
+class (and the scenario does not `replaces` it), append the operation under
+test to the planned name (`…ForIsOdd`), implement the test, and say so in that
+result's `notes` ("renamed from X: name taken by Y"). Never rename or touch the
+existing method.
+
+Report only what is in the file. After writing, check that every method you
+report as `IMPLEMENTED` / `PLACEHOLDER` actually exists in `test_file` under
+that name; a result for a method you did not write is the worst report you can
+give.
+
 **In a repair round** (review given):
 - re-implement every scenario named in `feedback.implementation`, whatever else
   the plan says;
@@ -172,6 +184,7 @@ reach the user's final report; never apply them yourself.
   the code as a test or a placeholder
 - [ ] every method you wrote or repaired has the §A1 Javadoc with the right
   `tc-agent-mode`, `tc-agent-interactive` and (legacy) `tc-agent-characterizes: <Target>@<target_sha>`
+- [ ] `plan_version` in the report equals the plan you implemented
 - [ ] every placeholder has `tc-agent-deferred`, `@Disabled("AI deferred: …")` and an
   empty body
 - [ ] no metadata on the class, no `@aiGenerated`-style tags, no `// TC-nn`, no scenario ids in the code

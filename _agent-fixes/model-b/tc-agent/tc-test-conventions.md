@@ -111,6 +111,11 @@ underscores, no `test` prefix.
     shouldSaveScheduledAppointmentWhenRequestIsValid
     shouldReturnAllActiveOffers                 (no meaningful condition)
 
+The outcome names the operation, so that tests of sibling methods never share
+a name: `shouldReportEvenWhenNumberIsEven` (isEven) vs
+`shouldReportOddWhenNumberIsOdd` (isOdd) — not two different tests both called
+`shouldReturnTrueWhenNumberIsOdd`.
+
 This applies to new methods even in a class whose existing (human) methods use
 another style: only an explicit repo instruction changes the rule.
 

@@ -62,6 +62,12 @@ target class, then check that:
 - no metadata on the test class, no `// TC-nn` or scenario ids in the code;
   metadata written as old `@aiGenerated` / `@mode` Javadoc tags is a
   `metadata_defect` (the parser reports it as "old @-tag format");
+- a `PLACEHOLDER` whose reason is not untestable behaviour (a name clash, a
+  convenience) is a misused placeholder: `scenario_not_implemented` against the
+  implementation — the scenario was testable;
+- a scenario `notes` entry that is an instruction to the Generator rather than
+  a fact about the test ("replace the placeholder …") need not appear as
+  `tc-agent-note`; its absence is not a finding;
 - a scenario with `replaces` rewrote THAT method (same name unless the plan
   says otherwise) rather than adding a second one;
 - a `SKIPPED` result is a method left untouched in a repair round, and the
@@ -94,6 +100,13 @@ Does it repeat an existing test? Is the setup readable? Any flakiness smell
 it follow the naming and structure rules in force — the REPO CONVENTIONS where
 they set one, otherwise §B1–§B7? A naming or structure deviation is a
 `convention` finding. Existing human methods in another style are NOT a finding.
+
+**Only findings about what a test PROVES block** (weak or missing assertion,
+bare "throws", duplicate of an existing test, flakiness). `convention` findings
+are always `severity: minor`, go without `feedback`, and never lead to a
+repair on their own: a style nit is not worth a generation round, and a
+class-level refactor (e.g. moving construction into a field) cannot be done
+inside one method's `scope` anyway.
 
 Every Stage 2 finding lands on a test that PASSED in step 1, so scope its
 feedback to the narrowest part that can fix it: `scope: "assertion"` for a weak
@@ -134,7 +147,7 @@ the decision: that is ACCEPT_PARTIAL, not a repair.
    agree with the code: that certifies the bug.
 6. Stage 1 failed, or the coverage / mutation GATE failed → follow
    **Attribution**. A passed gate never leads here, whatever survived.
-7. Stage 2 failed → **REPAIR_IMPLEMENTATION**.
+7. Stage 2 has a blocking (non-`minor`) finding → **REPAIR_IMPLEMENTATION**.
 8. Every test passed but `flaky` is not empty → **REPAIR_IMPLEMENTATION**, with
    `checks.tests.flaky_only: true` and each flaky test named.
 9. All green with placeholders in this plan or explaining the remaining gap →

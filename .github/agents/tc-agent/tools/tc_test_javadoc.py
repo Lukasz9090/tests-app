@@ -269,5 +269,31 @@ def test_discovery_and_target():
             expect("TARGET_NOT_FOUND", exc.code, "TARGET_NOT_FOUND")
 
 
+def test_verify_refs_catches_name_collisions():
+    import json, subprocess
+    from tc_testkit import TC
+    with FixtureRepo() as repo:
+        rel = repo.write_test("OrderServiceTest", ai_test("shouldReturnFalseWhenNumberIsEven", repo.sha()))
+        def plan(scenarios, deferred=()):
+            body = {"schema_version": 1, "plan_version": 1, "status": "READY",
+                    "scenarios": scenarios, "deferred": list(deferred)}
+            path = repo.root / "plan.md"
+            path.write_text("# p\n\n```json\n" + json.dumps(body) + "\n```\n", encoding="utf-8")
+            return subprocess.run([sys.executable, str(TC / "scripts" / "tc_verify_refs.py"), str(path),
+                                   "--repo", str(repo.root)], capture_output=True, text=True)
+        ev = [{"type": "implementation", "ref": repo.target_path}]
+        sc = lambda tc, name, **kw: {"id": tc, "evidence": ev, "implementation_hints":
+                                     {"test_method": name, "test_file": rel}, **kw}
+        r = plan([sc("TC01", "shouldReturnFalseWhenNumberIsEven")])
+        expect("existing name without replaces -> exit 1", (r.returncode, "NAME_COLLISION" in r.stdout), (1, True))
+        r = plan([sc("TC01", "shouldReturnFalseWhenNumberIsEven",
+                     replaces="OrderServiceTest#shouldReturnFalseWhenNumberIsEven")])
+        expect("same name with replaces is fine", r.returncode, 0)
+        r = plan([sc("TC01", "shouldA"), sc("TC02", "shouldA")])
+        expect("duplicate inside the plan -> exit 1", (r.returncode, "also planned" in r.stdout), (1, True))
+        r = plan([sc("TC01", "shouldReportOddWhenNumberIsOdd")])
+        expect("unique name passes", r.returncode, 0)
+
+
 if __name__ == "__main__":
     sys.exit(run_all(globals(), "METADATA_AND_GIT_OK"))

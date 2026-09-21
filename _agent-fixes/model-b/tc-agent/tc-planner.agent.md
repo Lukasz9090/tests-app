@@ -147,7 +147,12 @@ and `test_file` (and optionally `test_class`):
   instruction sets one, otherwise `tc-test-conventions.md` §B1
   (`should<Outcome>When<Condition>`). It is the ONLY link between the scenario
   and the code, so it must be unique in the class and must not collide with an
-  existing method you are not replacing.
+  existing method you are not replacing — `tc_verify_refs.py` checks this.
+  With sibling operations (isEven / isOdd, add / subtract) the outcome must name
+  the operation, or two scenarios end up with the same name.
+- `notes` are FACTS that go into the code as `tc-agent-note` lines (a frozen
+  known bug, a human's answer). Never put instructions for the Generator there
+  ("replace the placeholder …") — `replaces` and the description carry those.
 - `test_file` follows §B7: the existing test class of the target, or
   `<Target>Test` in the target's package under the test root.
 
@@ -226,6 +231,10 @@ python .github/agents/tc-agent/scripts/tc_validate_plan.py <plan_path> .github/a
 ```
 
 Both report defects in YOUR artifact (tc-contracts.md §1):
+- `NAME_COLLISION` — a planned `test_method` / `placeholder_method` already
+  exists in the test file (and the entry does not `replaces` it), or two
+  entries share a name. Pick a name that says which operation is tested
+  (§B1). Never solve it by reusing or renaming an existing test.
 - `INVALID_EVIDENCE` — the ref is wrong. Correct it, or move the scenario to
   `deferred` when nothing backs it. Making a ref vaguer to pass is forbidden.
 - `INVALID_ARTIFACT` — it names a path such as `$.scenarios[3].evidence[0]`. Fix

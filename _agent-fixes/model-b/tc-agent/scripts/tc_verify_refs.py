@@ -155,12 +155,60 @@ def main() -> int:
                 if not ok:
                     failures.append((sc.get("id"), ev.get("ref")))
 
+    collisions = name_collisions(plan, repo.root)
+    for c in collisions:
+        print(f"  [FAIL] {c}")
+
     if failures:
         print(f"\nINVALID_EVIDENCE: {len(failures)}/{checked} refs unverified.")
         print("A plan with fabricated or unverifiable refs must not be used.")
+    if collisions:
+        print(f"\nNAME_COLLISION: {len(collisions)} planned test method name(s) already exist "
+              f"or repeat inside the plan. Choose names that are unique in the test class "
+              f"(tc-test-conventions.md §B1: the outcome names the operation, e.g. "
+              f"shouldReportOddWhenNumberIsOdd vs shouldReportEvenWhenNumberIsEven), or set "
+              f"`replaces` when you really mean to rewrite that method.")
+    if failures or collisions:
         return 1
-    print(f"\nALL_REFS_VERIFIED: {checked}/{checked}")
+    print(f"\nALL_REFS_VERIFIED: {checked}/{checked}; test method names unique")
     return 0
+
+
+def name_collisions(plan: dict, root: Path) -> list:
+    """Planned method names that already exist in their test file, or repeat in the plan.
+
+    A name that exists is fine only when the entry `replaces` exactly that method.
+    """
+    try:
+        import tc_javadoc as tj
+    except ImportError:
+        return []
+    out, seen, cache = [], {}, {}
+    entries = [(sc, (sc.get("implementation_hints") or {}).get("test_method"),
+                (sc.get("implementation_hints") or {}).get("test_file")) for sc in plan.get("scenarios") or []]
+    entries += [(d, d.get("placeholder_method"), d.get("test_file")) for d in plan.get("deferred") or []]
+    for entry, name, test_file in entries:
+        if not name:
+            continue
+        key = (test_file or "", name)
+        if key in seen:
+            out.append(f"{entry.get('id')}: method name {name} is also planned for {seen[key]}")
+        seen[key] = entry.get("id")
+        if not test_file:
+            continue
+        path = root / test_file
+        if not path.is_file():
+            continue
+        if test_file not in cache:
+            try:
+                cache[test_file] = {m.name: m.key for m in tj.parse_file(path)[0]}
+            except OSError:
+                cache[test_file] = {}
+        existing = cache[test_file].get(name)
+        if existing and entry.get("replaces") != existing:
+            out.append(f"{entry.get('id')}: {name} already exists in {test_file} ({existing}) "
+                       f"and the entry does not replace it")
+    return out
 
 
 if __name__ == "__main__":
