@@ -72,7 +72,8 @@ Mockito for repositories, class under test as a field, class `<Target>Test`.
 
 - Only on `DONE` or `DONE_PARTIAL`, and only the test files this run wrote.
 - On a protected branch it first creates a new branch `tc-agent/<target>/<run-id>`.
-- Message = short title + 2–5 sentence summary from the reviewer + numbers (gates, counts).
+- Message: title `[TC-AGENT] Add tests for <target>.`, a 2–5 sentence summary of the whole run
+  (written by the reviewer), then numbers (gates, counts, outcome, run id).
 - Never pushes.
 
 ## What you get
@@ -84,8 +85,7 @@ Old runs are never read again and never deleted.
 
 Each generated test method has a Javadoc with plain-text metadata:
 
-    tc-agent: generated
-    tc-agent-mode: legacy
+    tc-agent-mode: legacy, interactive: false
     tc-agent-characterizes: SimpleCalculatorService@29aeef6a
 
 A scenario that cannot be tested (e.g. code reads `LocalDateTime.now()`) becomes an
@@ -95,5 +95,4 @@ Do not delete placeholders — they tell the next run the gap is known.
 ## Good to know
 
 - Only the scripts run Maven; the agents never do. To start again, just run again.
-- In PowerShell, quote `-D` args: `mvn "-Dtest=FooTest"`.
-- Dev tests: `tools/tc_test_*.py`; real Maven smoke test: `python .github/agents/tc-agent/tools/tc_smoke_pipeline.py`.
+- In PowerShell, quote `-D` args: `mvn "-Dtest=FooTest"`. Dev tests: `tools/tc_test_*.py`; real Maven smoke test: `python .github/agents/tc-agent/tools/tc_smoke_pipeline.py`.

@@ -49,8 +49,7 @@ class OrderServiceTest {
     /**
      * AI-generated test. Characterizes current behaviour of OrderService (a freeze, not a spec).
      *
-     * tc-agent: generated
-     * tc-agent-mode: legacy
+     * tc-agent-mode: legacy, interactive: true
      * tc-agent-characterizes: OrderService@29aeef6a
      * tc-agent-note: business-hours guard rejects 17:00 exactly — reported
      *       as a defect
@@ -72,8 +71,7 @@ class OrderServiceTest {
     @ValueSource(ints = {1, 2})
     /**
      * AI-generated test.
-     * tc-agent: generated
-     * tc-agent-mode: spec-driven
+     * tc-agent-mode: spec-driven, interactive: false
      */
     public void paramTest(int x) { }
 
@@ -106,7 +104,7 @@ def test_attaches_javadoc_to_the_right_methods():
     expect("the class Javadoc does not leak into a human test", methods[1].meta.ai, False)
     expect("javadoc placed after annotations still attaches", methods[2].meta.mode, "spec-driven")
     expect("no file-level defects", defects, [])
-    expect("line number points at the method name", first.line, 25)
+    expect("line number points at the method name", first.line, 24)
 
 
 def test_placeholder():
@@ -124,37 +122,47 @@ def doc(*lines: str) -> str:
     return "/**\n" + "".join(f" * {l}\n" for l in lines) + " */\n"
 
 
-G, L, SD = "tc-agent: generated", "tc-agent-mode: legacy", "tc-agent-mode: spec-driven"
+G, L, SD = "tc-agent: generated", "tc-agent-mode: legacy, interactive: false", \
+    "tc-agent-mode: spec-driven, interactive: false"
 
 
 def test_defects():
     cases = {
-        "legacy without sha": (doc(G, L) + "@Test void a() {}", "tc-agent-mode legacy without tc-agent-characterizes"),
-        "no mode": (doc(G) + "@Test void a() {}", "'tc-agent: generated' without tc-agent-mode"),
-        "bad mode": (doc(G, "tc-agent-mode: tdd") + "@Test void a() {}",
-                     "tc-agent-mode: 'tdd' is not one of legacy, spec-driven"),
-        "bad sha": (doc(G, L, "tc-agent-characterizes: OrderService") + "@Test void a() {}",
+        "legacy without sha": (doc(L) + "@Test void a() {}", "tc-agent-mode legacy without tc-agent-characterizes"),
+        "no mode": (doc("tc-agent-note: x") + "@Test void a() {}", "tc-agent metadata without tc-agent-mode"),
+        "bad mode": (doc("tc-agent-mode: tdd") + "@Test void a() {}",
+                     "tc-agent-mode: 'tdd' is not '<mode>, interactive: true|false' "
+                     "with a mode in legacy, spec-driven"),
+        "mode without interactive is still read": (doc("tc-agent-mode: legacy") + "@Test void a() {}",
+                                                   "tc-agent-mode legacy without tc-agent-characterizes"),
+        "bad sha": (doc(L, "tc-agent-characterizes: OrderService") + "@Test void a() {}",
                     "tc-agent-characterizes: 'OrderService' is not <Class>@<sha>"),
-        "keys without generated": (doc(L) + "@Test void a() {}", "metadata lines without 'tc-agent: generated'"),
-        "wrong generated value": (doc("tc-agent: yes", SD) + "@Test void a() {}",
-                                  "'tc-agent: yes' - the value must be 'generated'"),
-        "unknown key": (doc(G, SD, "tc-agent-foo: x") + "@Test void a() {}",
+        "unknown key": (doc(SD, "tc-agent-foo: x") + "@Test void a() {}",
                         "unknown metadata key 'tc-agent-foo:' (allowed: tc-agent, tc-agent-mode, "
                         "tc-agent-interactive, tc-agent-characterizes, tc-agent-deferred, tc-agent-note)"),
-        "interactive not true": (doc(G, SD, "tc-agent-interactive: maybe") + "@Test void a() {}",
-                                 "'tc-agent-interactive: maybe' - write 'true' or leave the line out"),
-        "spec-driven with sha": (doc(G, SD, "tc-agent-characterizes: X@1234567") + "@Test void a() {}",
+        "interactive not boolean": (doc(SD, "tc-agent-interactive: maybe") + "@Test void a() {}",
+                                    "'tc-agent-interactive: maybe' - write 'true' or 'false'"),
+        "spec-driven with sha": (doc(SD, "tc-agent-characterizes: X@1234567") + "@Test void a() {}",
                                  "tc-agent-mode spec-driven must not carry tc-agent-characterizes"),
-        "deferred without Disabled": (doc(G, SD, "tc-agent-deferred: why") + "@Test void a() {}",
+        "deferred without Disabled": (doc(SD, "tc-agent-deferred: why") + "@Test void a() {}",
                                       "tc-agent-deferred placeholder without @Disabled"),
-        "deferred with body": (doc(G, SD, "tc-agent-deferred: why") + '@Test @Disabled("AI deferred: why") void a() { x(); }',
+        "deferred with body": (doc(SD, "tc-agent-deferred: why") + '@Test @Disabled("AI deferred: why") void a() { x(); }',
                                "tc-agent-deferred placeholder must have an empty body"),
-        "Disabled marker without deferred": (doc(G, SD) + '@Test @Disabled("AI deferred: why") void a() { }',
+        "Disabled marker without deferred": (doc(SD) + '@Test @Disabled("AI deferred: why") void a() { }',
                                              '@Disabled("AI deferred: ...") without tc-agent-deferred in the Javadoc'),
     }
     for label, (body, wanted) in cases.items():
         (m,), _ = parse("class T {\n" + body + "\n}\n")
         expect(f"defect: {label}", wanted in m.meta.defects, True)
+
+
+def test_older_line_format_is_read_without_complaint():
+    """The first shape: a separate marker line and a separate interactive line."""
+    body = doc(G, "tc-agent-mode: legacy", "tc-agent-interactive: true",
+               "tc-agent-characterizes: OrderService@29aeef6a") + "@Test void a() {}"
+    (m,), _ = parse("class T {\n" + body + "\n}\n")
+    expect("read as AI", (m.meta.ai, m.meta.mode, m.meta.interactive), (True, "legacy", True))
+    expect("no defects", m.meta.defects, [])
 
 
 def test_old_at_format_is_read_and_flagged():

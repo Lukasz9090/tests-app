@@ -138,6 +138,56 @@ def all_reports(d: Path) -> list:
     return out
 
 
+def run_results(d: Path) -> tuple:
+    """Merge the results of EVERY generation report of the run, oldest first.
+
+    A later round reports the methods it left alone as SKIPPED; that must not
+    erase what an earlier round of THIS run wrote. The newest real status
+    (IMPLEMENTED / PLACEHOLDER) wins. Returns (results, test_files, suggestions).
+    """
+    results, test_files, suggestions = {}, [], []
+    for report_path in all_reports(d):
+        report = _safe(report_path)
+        if "__error__" in report:
+            continue
+        for f in report.get("test_files", []) or []:
+            if f not in test_files:
+                test_files.append(f)
+        for r in report.get("results", []) or []:
+            key = r.get("test_method") or r.get("id")
+            if r.get("status") == "SKIPPED" and key in results:
+                continue
+            results[key] = r
+        for s in report.get("suggestions", []) or []:
+            if s.get("suggestion") not in [x.get("suggestion") for x in suggestions]:
+                suggestions.append(s)
+    return results, test_files, suggestions
+
+
+def review_history(d: Path) -> list:
+    """Every review of the run, oldest first: `v1-r1 REPAIR_PLAN`, ..."""
+    out = []
+    for n in plan_versions(d):
+        for m in review_iterations(d, n):
+            rv = _safe(review_path(d, n, m))
+            out.append(f"v{n}-r{m} {rv.get('decision', '?') if '__error__' not in rv else 'unreadable'}")
+    return out
+
+
+def run_digest(d: Path) -> dict:
+    """What the WHOLE run has produced so far — the reviewer writes the commit
+    summary from this, so it never describes only its own round."""
+    results, test_files, _ = run_results(d)
+    return {
+        "tests_written": [{"test_method": k, **({"notes": r["notes"]} if r.get("notes") else {})}
+                          for k, r in results.items() if r.get("status") == "IMPLEMENTED"],
+        "placeholders_written": [{"test_method": k, "reason": r.get("reason")}
+                                 for k, r in results.items() if r.get("status") == "PLACEHOLDER"],
+        "test_files": test_files,
+        "rounds": review_history(d),
+    }
+
+
 # ------------------------------------------------------------------ start ---
 
 
@@ -281,7 +331,8 @@ def compute_state(repo: Path, directory: Path) -> dict:
                            "report_path": rel(gen_path(directory, n, gen_m), repo),
                            "previous_review_path": rel(latest_review, repo) if latest_review else None,
                            "review_path": rel(review_path(directory, n, gen_m), repo),
-                           "label": f"v{n}-r{gen_m}"}
+                           "label": f"v{n}-r{gen_m}",
+                           "run_digest": run_digest(directory)}
         return out
 
     r_path = review_path(directory, n, rev_m)
@@ -380,19 +431,7 @@ def collect(repo: Path, directory: Path, state: dict) -> dict:
     r_path = newest_review(directory)
     review = _safe(r_path) if r_path else {}
 
-    results, test_files, suggestions = {}, [], []
-    for report_path in all_reports(directory):
-        report = _safe(report_path)
-        if "__error__" in report:
-            continue
-        for f in report.get("test_files", []) or []:
-            if f not in test_files:
-                test_files.append(f)
-        for r in report.get("results", []) or []:
-            results[r.get("test_method") or r.get("id")] = r
-        for s in report.get("suggestions", []) or []:
-            if s.get("suggestion") not in [x.get("suggestion") for x in suggestions]:
-                suggestions.append(s)
+    results, test_files, suggestions = run_results(directory)
 
     written = [k for k, r in results.items() if r.get("status") == "IMPLEMENTED"]
     placeholders_written = [k for k, r in results.items() if r.get("status") == "PLACEHOLDER"]
@@ -433,7 +472,14 @@ def collect(repo: Path, directory: Path, state: dict) -> dict:
     if mut.get("score") is not None:
         gates["mutation"] = {"ratio": mut.get("score"), "gate": mut.get("gate")}
 
-    notes = ((plan.get("context") or {}).get("notes") or []) if "__error__" not in plan else []
+    history = review_history(directory)
+
+    # CONFIRM questions from EVERY plan version, not only the last one.
+    notes = []
+    for n in versions:
+        pv = _safe(plan_path(directory, n))
+        if "__error__" not in pv:
+            notes += (pv.get("context") or {}).get("notes") or []
     return {
         "run": run,
         "derive": derive,
@@ -454,6 +500,7 @@ def collect(repo: Path, directory: Path, state: dict) -> dict:
         "confirm": confirm_lines(notes),
         "red": red,
         "gates": gates,
+        "history": history,
     }
 
 
@@ -500,7 +547,7 @@ def template_summary(info: dict, outcome: str) -> str:
 
 def commit_message(info: dict, outcome: str, summary: str, report_rel: str) -> str:
     run = info["run"]
-    lines = [f"test({run['slug']}): tc-agent {outcome} [run {run['run_id']}]", ""]
+    lines = [f"[TC-AGENT] Add tests for {run['slug']}.", ""]
     lines += textwrap.wrap(summary, 72) or ["(no summary)"]
     lines.append("")
     mode = run["mode"] + (" (interactive)" if run.get("interactive") else "")
@@ -518,6 +565,7 @@ def commit_message(info: dict, outcome: str, summary: str, report_rel: str) -> s
         lines.append("Gates: " + ", ".join(gate_parts))
     if info["suggestions"]:
         lines.append("Suggestions: " + "; ".join(s.get("suggestion", "") for s in info["suggestions"][:3]))
+    lines.append(f"Outcome: {outcome} | run: {run['run_id']}")
     lines.append(f"Report: {report_rel}")
     return "\n".join(lines) + "\n"
 
@@ -598,6 +646,8 @@ def render_report(info: dict, state: dict, outcome: str, summary: str, commit: d
     lines.append("")
     lines.append(f"- mode: {run['mode']}{' (interactive)' if run.get('interactive') else ''}; "
                  f"target {info['target_class']}@{info['sha'] or '?'}")
+    if info.get("history"):
+        lines.append("- rounds: " + " -> ".join(info["history"]))
     lines.append(f"- tests written: {len(info['written'])}; placeholders written: "
                  f"{len(info['placeholders_written'])}; resealed: {len(info['resealed'])}; "
                  f"placeholders now in the code: {len(info['placeholders_in_code'])}")

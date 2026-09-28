@@ -78,9 +78,7 @@ Javadoc `@tags`, so no IDE flags them. The full rules are in
 
 | line | meaning |
 |---|---|
-| `tc-agent: generated` | the agent wrote this method |
-| `tc-agent-mode: legacy` / `tc-agent-mode: spec-driven` | how it was generated |
-| `tc-agent-interactive: true` | a human answered questions during that run |
+| `tc-agent-mode: <mode>, interactive: <true\|false>` | the agent wrote this method: how it was generated, and whether a human answered questions during that run |
 | `tc-agent-characterizes: <Class>@<sha>` | legacy only: the version of the code this test froze |
 | `tc-agent-deferred: <reason>` | on an `@Disabled` placeholder: a scenario deliberately not tested |
 | `tc-agent-note: <text>` | a frozen known bug or a human decision about THIS test |

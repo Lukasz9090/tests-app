@@ -16,7 +16,7 @@ never from an artifact an earlier run left behind:
 It works in tiers, cheapest first, and stops at the first tier that decides:
 
     tier 0  target        slug -> file, FQCN, module
-    tier 1  git + Javadoc discovery, tc-agent: generated / tc-agent-characterizes: / tc-agent-deferred,
+    tier 1  git + Javadoc discovery, tc-agent-mode: / tc-agent-characterizes: / tc-agent-deferred,
                           current sha, dirty, age           (no build)
     tier 2  tests + coverage                                (build)
     tier 3  mutations (PIT)                                 (slow)

@@ -306,6 +306,52 @@ def test_reviewer_summary_is_used():
                     "Added one characterization test for OrderService.create." in prose)
 
 
+def test_reviewer_dispatch_carries_the_run_digest():
+    with FixtureRepo() as repo:
+        run = Run(repo)
+        run.derive_raw("PLAN")
+        run.plan(1)
+        run.report(1, results=[{"id": "TC01", "status": "IMPLEMENTED", "test_method": "shouldT1"},
+                               {"id": "TC02", "status": "IMPLEMENTED", "test_method": "shouldT2"}])
+        run.review(1, 1, "REPAIR_PLAN")
+        run.plan(2)
+        run.report(2, results=[{"id": "TC01", "status": "SKIPPED", "test_method": "shouldT1"},
+                               {"id": "TC03", "status": "PLACEHOLDER", "test_method": "shouldT3",
+                                "reason": "no seam"}])
+        st = run.state()
+        expect("next", st["next_action"], "REVIEW")
+        dg = st["dispatch"]["run_digest"]
+        expect("digest tests span rounds", [x["test_method"] for x in dg["tests_written"]],
+               ["shouldT1", "shouldT2"])
+        expect("digest placeholders", dg["placeholders_written"], [{"test_method": "shouldT3", "reason": "no seam"}])
+        expect("digest rounds", dg["rounds"], ["v1-r1 REPAIR_PLAN"])
+
+
+def test_counts_span_every_round_of_the_run():
+    """v1 wrote five tests, v2 added one and reported the rest SKIPPED."""
+    with FixtureRepo() as repo:
+        run = Run(repo)
+        run.derive_raw("PLAN")
+        run.plan(1, context={"notes": ["CONFIRM: A.java:1 — first question"]})
+        run.report(1, results=[{"id": f"TC0{i}", "status": "IMPLEMENTED", "test_method": f"shouldT{i}"}
+                               for i in range(1, 6)])
+        run.review(1, 1, "REPAIR_PLAN")
+        run.plan(2, context={"notes": ["CONFIRM: A.java:9 — second question"]})
+        run.report(2, results=[{"id": f"TC0{i}", "status": "SKIPPED", "test_method": f"shouldT{i}"}
+                               for i in range(1, 6)]
+                   + [{"id": "TC06", "status": "IMPLEMENTED", "test_method": "shouldT6"},
+                      {"id": "TC07", "status": "PLACEHOLDER", "test_method": "shouldT7"}])
+        run.review(2, 1, "ACCEPT_PARTIAL", commit_summary="x.")
+        info = o.collect(repo.root, run.dir, run.state())
+        expect("all six tests of the run", sorted(info["written"]), [f"shouldT{i}" for i in range(1, 7)])
+        expect("one placeholder", info["placeholders_written"], ["shouldT7"])
+        expect("history", info["history"], ["v1-r1 REPAIR_PLAN", "v2-r1 ACCEPT_PARTIAL"])
+        expect("CONFIRM from both plans", len(info["confirm"]), 2)
+        code, prose = run.finish()
+        expect_true("rounds line", "rounds: v1-r1 REPAIR_PLAN -> v2-r1 ACCEPT_PARTIAL" in prose)
+        expect_true("count line", "tests written: 6;" in prose)
+
+
 # ------------------------------------------------------------------ commit ---
 
 
@@ -343,7 +389,8 @@ def test_commit_on_master_creates_a_branch():
         expect("master untouched", repo.git("rev-parse", "master"), base)
         expect("only the run's test file", repo.git("show", "--name-only", "--format=", "HEAD"), rel)
         message = log(repo)
-        expect("title", message.split("\n")[0], "test(OrderService): tc-agent DONE [run 20260101-000000]")
+        expect("title", message.split("\n")[0], "[TC-AGENT] Add tests for OrderService.")
+        expect_true("outcome and run in the footer", "Outcome: DONE | run: 20260101-000000" in message)
         expect_true("reviewer summary in the body", "positive amount path." in message)
         expect_true("facts: gates", "Gates: branch coverage 84% (gate 80%), mutation 76% (gate 70%)" in message)
         expect_true("facts: suggestions", "Suggestions: Inject java.time.Clock" in message)

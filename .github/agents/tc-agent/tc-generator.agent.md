@@ -91,14 +91,13 @@ give.
 /**
  * AI-generated test. Characterizes current behaviour of AppointmentService (a freeze, not a spec).
  *
- * tc-agent: generated
- * tc-agent-mode: legacy
+ * tc-agent-mode: legacy, interactive: false
  * tc-agent-characterizes: AppointmentService@4b1c2aa9
  */
 ```
 
-- `tc-agent-mode` and `tc-agent-interactive: true` come from `run.json`; write the
-  interactive line only when it is true;
+- `tc-agent-mode: <mode>, interactive: <true|false>` — both values from
+  `run.json`, and the interactive part is always written, also when false;
 - `tc-agent-characterizes: <TargetClass>@<plan.context.target_sha>` in legacy, never in
   spec-driven;
 - each entry of the scenario's `notes` becomes one `tc-agent-note` line;
@@ -184,7 +183,8 @@ reach the user's final report; never apply them yourself.
 - [ ] every scenario and every deferred entry appears in `results` once, and in
   the code as a test or a placeholder
 - [ ] every method you wrote or repaired has the §A1 Javadoc with the right
-  `tc-agent-mode`, `tc-agent-interactive` and (legacy) `tc-agent-characterizes: <Target>@<target_sha>`
+  `tc-agent-mode: <mode>, interactive: <true|false>` and (legacy)
+  `tc-agent-characterizes: <Target>@<target_sha>`
 - [ ] `plan_version` in the report equals the plan you implemented
 - [ ] every placeholder has `tc-agent-deferred`, `@Disabled("AI deferred: …")` and an
   empty body

@@ -86,9 +86,7 @@ public class OrderService {
 
 def ai_test(name: str, sha: str | None, mode: str = "legacy", deferred: str | None = None,
             notes: list | None = None, interactive: bool = False, cls: str = "OrderService") -> str:
-    tags = ["tc-agent: generated", f"tc-agent-mode: {mode}"]
-    if interactive:
-        tags.append("tc-agent-interactive: true")
+    tags = [f"tc-agent-mode: {mode}, interactive: {'true' if interactive else 'false'}"]
     if sha:
         tags.append(f"tc-agent-characterizes: {cls}@{sha}")
     if deferred:

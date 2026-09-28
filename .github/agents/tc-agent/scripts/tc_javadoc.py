@@ -6,10 +6,13 @@ agent writes carries a Javadoc with metadata lines (tc-test-conventions.md §A1)
     /**
      * AI-generated test. Characterizes current behaviour of OrderService (a freeze, not a spec).
      *
-     * tc-agent: generated
-     * tc-agent-mode: legacy
+     * tc-agent-mode: legacy, interactive: false
      * tc-agent-characterizes: OrderService@29aeef6a
      */
+
+`tc-agent-mode` is the marker: a method that has one was written by the agent.
+The earlier separate `tc-agent: generated` and `tc-agent-interactive: true`
+lines are still read (they cost nothing and keep older tests intact).
 
 The lines are plain text, not Javadoc `@tags`, so no IDE or doclint flags them.
 The earlier `@aiGenerated` / `@mode` draft format is still read (and reported as
@@ -37,6 +40,7 @@ from pathlib import Path
 
 AI_TAGS = ("aiGenerated", "mode", "interactive", "characterizes", "deferred", "note")
 MODES = ("legacy", "spec-driven")
+MODE_LINE = re.compile(r"^(legacy|spec-driven)(?:\s*,\s*interactive\s*:\s*(true|false))?$")
 TEST_ANNOTATIONS = {"Test", "ParameterizedTest", "RepeatedTest", "TestFactory", "TestTemplate"}
 PLACEHOLDER_PREFIX = "AI deferred:"
 CHARACTERIZES = re.compile(r"^([A-Za-z_$][\w$]*)@([0-9a-fA-F]{7,40})$")
@@ -257,20 +261,24 @@ def build_meta(tags: list, unknown: list | None = None) -> Meta:
             continue
         label = f"@{name}" if form == "at" else f"{LABEL[name]}:"
         if name == "aiGenerated":
-            meta.ai = True
-            if form == "line" and value != "generated":
-                meta.defects.append(f"'tc-agent: {value}' - the value must be 'generated'")
-            elif form == "at" and value:
+            # Older format: a separate marker line. Harmless, still read.
+            if form == "at" and value:
                 meta.defects.append(f"{label} is followed by '{value}' - write one key per line")
         elif name == "mode":
-            if value in MODES:
-                meta.mode = value
+            m = MODE_LINE.match(value)
+            if m:
+                meta.mode = m.group(1)
+                if m.group(2) == "true":
+                    meta.interactive = True
             else:
-                meta.defects.append(f"{label} '{value}' is not one of {', '.join(MODES)}")
+                meta.defects.append(
+                    f"{label} '{value}' is not '<mode>, interactive: true|false' "
+                    f"with a mode in {', '.join(MODES)}")
         elif name == "interactive":
-            meta.interactive = True
-            if form == "line" and value != "true":
-                meta.defects.append(f"'tc-agent-interactive: {value}' - write 'true' or leave the line out")
+            # Older format: the flag on its own line.
+            meta.interactive = value != "false"
+            if form == "line" and value not in ("true", "false"):
+                meta.defects.append(f"'tc-agent-interactive: {value}' - write 'true' or 'false'")
             elif form == "at" and value:
                 meta.defects.append(f"{label} is followed by '{value}' - write one key per line")
         elif name == "characterizes":
@@ -286,11 +294,9 @@ def build_meta(tags: list, unknown: list | None = None) -> Meta:
         elif name == "note":
             if value:
                 meta.notes.append(value)
-    if not meta.ai:
-        meta.defects.append("metadata lines without 'tc-agent: generated'")
-        return meta
+    meta.ai = True
     if meta.mode is None and not any("mode" in d for d in meta.defects):
-        meta.defects.append("'tc-agent: generated' without tc-agent-mode")
+        meta.defects.append("tc-agent metadata without tc-agent-mode")
     if meta.mode == "legacy" and meta.characterizes_class is None \
             and not any("characterizes" in d for d in meta.defects):
         meta.defects.append("tc-agent-mode legacy without tc-agent-characterizes")
