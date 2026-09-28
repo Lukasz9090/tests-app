@@ -44,7 +44,7 @@ EXPECTED = {
     "tc-planner.agent.md": TC / "schemas" / "tc-test-plan.schema.json",
     "tc-generator.agent.md": TC / "schemas" / "tc-generation-report.schema.json",
     "tc-reviewer.agent.md": TC / "schemas" / "tc-review.schema.json",
-    "tc-project-profile.md": TC / "schemas" / "tc-project-profile.schema.json",
+    "references/tc-project-profile.md": TC / "schemas" / "tc-project-profile.schema.json",
 }
 
 

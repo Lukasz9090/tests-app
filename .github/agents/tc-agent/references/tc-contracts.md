@@ -101,7 +101,7 @@ planner.
 
 Run every script with the plain `python` on PATH (`python3` where that is its
 name). There is one dependency, `jsonschema`, used by `tc_validate_plan.py`:
-`pip install -r .github/agents/tc-agent/tc-requirements.txt`. Everything else
+`pip install -r .github/agents/tc-agent/references/tc-requirements.txt`. Everything else
 is standard library, so there is no virtualenv to set up.
 
 This pipeline supports **Maven only**. Every check script drives `mvn`; roles
@@ -132,7 +132,7 @@ something to report, not something to debug.
 
 ## 5. Conventions
 
-Before you write or judge a test, read `.github/agents/tc-agent/tc-test-conventions.md`
+Before you write or judge a test, read `.github/agents/tc-agent/references/tc-test-conventions.md`
 and the **REPO CONVENTIONS** section of the run's `context-pack.md`.
 
 Precedence, rule by rule:

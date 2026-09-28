@@ -426,7 +426,8 @@ def module_for_target(repo: Path, target_file: Path) -> str | None:
 
 
 PROFILE_PATHS = (
-    Path(".github") / "agents" / "tc-agent" / "tc-project-profile.md",  # committed config
+    Path(".github") / "agents" / "tc-agent" / "references" / "tc-project-profile.md",  # committed config
+    Path(".github") / "agents" / "tc-agent" / "tc-project-profile.md",  # pre-references layout
 )
 
 

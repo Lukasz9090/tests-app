@@ -136,7 +136,7 @@ finish → run-report.md (+ commit przy --commit)
 
 ## 8. Konwencje: agent kontra repo
 
-Wszystko, czego agent potrzebuje do poprawnego działania, jedzie **z agentem** — `.github/agents/tc-agent/tc-test-conventions.md`:
+Wszystko, czego agent potrzebuje do poprawnego działania, jedzie **z agentem** — `.github/agents/tc-agent/references/tc-test-conventions.md`:
 - **§A integralność** (nienadpisywalna): metadane, zaślepki, charakteryzacja, dane z dowodów, determinizm, granice;
 - **§B domyślne** (nadpisywalne przez repo): nazwy `shouldXxxWhenYyy`, `// given` / `// when` / `// then`, AssertJ, mocki repozytoriów, `<Target>Test`.
 

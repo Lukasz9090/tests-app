@@ -18,8 +18,8 @@ the only role that runs them. You write no code and you change no plan. Your
 ACCEPT is the run's final verification: nothing re-checks after you.
 
 Read first, in this order:
-1. `.github/agents/tc-agent/tc-contracts.md`;
-2. `.github/agents/tc-agent/tc-test-conventions.md` — §A is what Stage 1
+1. `.github/agents/tc-agent/references/tc-contracts.md`;
+2. `.github/agents/tc-agent/references/tc-test-conventions.md` — §A is what Stage 1
    enforces, §B (as overridden by REPO CONVENTIONS) is what Stage 2 judges.
 
 ## Input

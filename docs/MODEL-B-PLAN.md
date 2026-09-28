@@ -48,6 +48,7 @@ Wszystkie pozycje w §1 są zaakceptowanymi decyzjami.
 | D32 | Raport z całego przebiegu | `finish` liczy testy ze WSZYSTKICH raportów generacji przebiegu (SKIPPED z późniejszej rundy nie kasuje IMPLEMENTED z wcześniejszej), zbiera CONFIRM ze wszystkich wersji planu i pokazuje historię rund (`v1-r1 REPAIR_PLAN -> v2-r1 ACCEPT_PARTIAL`). `commit_summary` recenzenta opisuje wynik netto całego przebiegu, nie ostatniej rundy. | DECYZJA (§14) |
 | D33 | Streszczenie przebiegu dla recenzenta, tytuł commita | Dispatch REVIEW niesie `run_digest` (skrypt: wszystkie testy i zaślepki przebiegu, rundy); recenzent pisze `commit_summary` z niego, nie z własnej rundy. Tytuł commita: `[TC-AGENT] Add tests for <slug>.`; outcome i run-id w stopce. | DECYZJA (§14) |
 | D34 | Skrócone metadane | Zamiast trzech linii jedna: `tc-agent-mode: <tryb>, interactive: <true\|false>` (zawsze, też w spec-driven). `tc-agent: generated` znika — markerem jest `tc-agent-mode`. Stary układ linii jest nadal czytany bez zgłaszania defektu; format `@aiGenerated` dalej jest defektem. | DECYZJA (§3) |
+| D35 | Układ katalogu agenta | `tc-contracts.md`, `tc-test-conventions.md`, `tc-project-profile.md` i `tc-requirements.txt` przeniesione do `references/`. W katalogu głównym zostają prompty ról i README. Ścieżki w promptach, skryptach i dokumentach zaktualizowane; `tc_common.profile()` czyta `references/tc-project-profile.md`, a stare miejsce zostaje jako fallback. | DECYZJA (§9) |
 ---
 
 ## 2. Przebieg z lotu ptaka
@@ -600,14 +601,16 @@ Nowe pola scenariusza: `replaces` (opcjonalny `Class#method` — test stale do p
 
 ```
 .github/agents/tc-agent/
-  tc-contracts.md                  przepisany (§6.5)
-  tc-test-conventions.md           NOWY — domyślne konwencje testów agenta (§10)
+  README.md                        NOWY — instrukcja dla developera
   tc-orchestrator.agent.md         przepisany (§6.1)
   tc-planner.agent.md              przepisany (§6.2)
   tc-generator.agent.md            przepisany (§6.3)
   tc-reviewer.agent.md             zmieniony  (§6.4)
-  tc-project-profile.md            + freshness_days, instruction_paths
-  tc-requirements.txt              bez zmian
+  references/                      materiały czytane przez role i skrypty (D35)
+    tc-contracts.md                przepisany (§6.5)
+    tc-test-conventions.md         NOWY — domyślne konwencje testów agenta (§10)
+    tc-project-profile.md          + freshness_days, instruction_paths
+    tc-requirements.txt            bez zmian
   schemas/                         §8
   scripts/
     tc_common.py                   zmieniony
@@ -786,7 +789,7 @@ Wszystkie reguły z dzisiejszego pliku przechodzą do agenta:
 | Time and determinism — „produkcja woła `LocalDateTime.now()` bez Clock” | nigdzie: to fakt o kodzie, który agent i tak widzi w context-packu |
 | „quarter-aligned time about now+30min”, „now+91 days” | nigdzie jako reguła. To przykłady dla guardów tego repo, które wynikają z kodu i dowodów w planie |
 
-W `tests-app` `AGENTS.md` **zostaje z sekcji testowych opróżniony**. Zostaje w nim tylko krótka informacja dla ludzi („testy w tym repo generuje tc-agent; konwencje: `.github/agents/tc-agent/tc-test-conventions.md`”) oraz ewentualnie linia `tc-agent-protected-branches:` (§5.6). To konfiguracja repo, a nie reguła pisania testów, więc nie narusza zasady, że konwencje testów należą do agenta. Dzięki temu repo nie ma nadpisań i agent działa na swoich domyślnych regułach, czyli dokładnie tak, jak będzie działał na nowym repo.
+W `tests-app` `AGENTS.md` **zostaje z sekcji testowych opróżniony**. Zostaje w nim tylko krótka informacja dla ludzi („testy w tym repo generuje tc-agent; konwencje: `.github/agents/tc-agent/references/tc-test-conventions.md`”) oraz ewentualnie linia `tc-agent-protected-branches:` (§5.6). To konfiguracja repo, a nie reguła pisania testów, więc nie narusza zasady, że konwencje testów należą do agenta. Dzięki temu repo nie ma nadpisań i agent działa na swoich domyślnych regułach, czyli dokładnie tak, jak będzie działał na nowym repo.
 
 Nadpisania repo testuje osobny scenariusz akceptacyjny E13 na tymczasowym pliku instrukcji.
 
@@ -876,3 +879,4 @@ Otwartych decyzji nie ma. Następny krok: etap 1 (aktualizacja `MODEL-B-SPEC.md`
 - **Fałszywe zaślepki (przebieg AmlConfirmationValidationService 20260921-112318, D31):** generator zamienił scenariusze „klucz pasuje” / „klucz nie pasuje” w zaślepki, bo „brak fixture DTO i evidenced wartości klucza”; recenzent przyjął je jako `unimplementable` i dał ACCEPT_PARTIAL przy pokryciu 60% (bramka 80%). A4 było stosowane za szeroko: wartość klucza jest relacyjna (test kontroluje obie strony porównania), a DTO ma własny konstruktor. Poprawki w §A4, planerze, generatorze, recenzencie; `finish` pisze `NOT MET` i ostrzeżenie przy niespełnionej bramce.
 - **Podsumowanie tylko z ostatniej rundy (SurveyService 20260921-144210, D32):** przebieg dodał 5 testów w v1, recenzent dał REPAIR_PLAN, v2 dodał 1 test i zaślepkę. Raport i commit mówiły „tests written: 1” i „Repaired the characterization test…”, bo raport v2 oznaczał testy z v1 jako SKIPPED (nadpisywały IMPLEMENTED), a recenzent pisał `commit_summary` tylko o swojej rundzie. Poprawione w `collect` i w instrukcji recenzenta.
 - **Skrócone metadane (D34):** `tc-agent: generated` nic nie wnosiło (wiadomo, że test jest od agenta, bo ma linie `tc-agent-…`), a `tc-agent-interactive` było osobną, warunkową linią. Teraz jeden wiersz `tc-agent-mode: legacy, interactive: false` niesie oba fakty i jest pisany zawsze, w obu trybach. Parser czyta stare testy bez zmian.
+- **Układ katalogu (D35):** materiały referencyjne (kontrakty, konwencje, profil, requirements) wylądowały w `references/`, żeby w katalogu agenta zostały tylko prompty ról i README.

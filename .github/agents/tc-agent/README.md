@@ -15,7 +15,7 @@ It trusts only the committed code, the tests and git — no memory between runs.
 ## Setup (once per repo)
 
 1. Maven project with JUnit 5. JaCoCo and PIT (with `pitest-junit5-plugin`) in the pom, or they are called from the CLI.
-2. Git, and Python 3 with `pip install -r .github/agents/tc-agent/tc-requirements.txt`.
+2. Git, and Python 3 with `pip install -r .github/agents/tc-agent/references/tc-requirements.txt`.
 3. Copilot custom agents enabled; `.test-agent/` in `.gitignore` (run files live there).
 
 ## How to run
@@ -55,7 +55,7 @@ Commit your production code first — a dirty target is always BLOCKED.
 
 ## Configuration
 
-- **`.github/agents/tc-agent/tc-project-profile.md`** (json block):
+- **`.github/agents/tc-agent/references/tc-project-profile.md`** (json block):
   - `branch_coverage_target_scope` (0.80), `mutation_score_target_scope` (0.70) — the gates;
   - `freshness_days` (7) — legacy refuses code committed less than N days ago (use `--interactive` to override);
   - `instruction_paths` — extra style files for the agents;
@@ -81,6 +81,9 @@ Mockito for repositories, class under test as a field, class `<Target>Test`.
 Every run has its own folder `.test-agent/runs/<target>/<run-id>/`:
 `run.json`, `derive-state.md`, `context-pack.md`, `plan-vN.md`,
 `generation-report-vN[-rM].md`, `review-vN-rM.md`, `checks/`, `run-report.md`.
+The agent's own files: role prompts and this README at the top; what they read
+(contracts, conventions, profile, requirements) under `references/`; plus
+`schemas/`, `scripts/` and `tools/`.
 Old runs are never read again and never deleted.
 
 Each generated test method has a Javadoc with plain-text metadata:

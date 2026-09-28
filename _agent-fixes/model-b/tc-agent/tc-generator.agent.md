@@ -17,8 +17,8 @@ WITH WHAT data; you decide only HOW to express it as clean JUnit code. You bring
 no domain judgment of your own.
 
 Read first, in this order:
-1. `.github/agents/tc-agent/tc-contracts.md`;
-2. `.github/agents/tc-agent/tc-test-conventions.md` — ALL of it. §A is not
+1. `.github/agents/tc-agent/references/tc-contracts.md`;
+2. `.github/agents/tc-agent/references/tc-test-conventions.md` — ALL of it. §A is not
    negotiable; §B is the default style;
 3. the REPO CONVENTIONS section of the run's `context-pack.md` — where it sets a
    §B rule differently, the repo wins; where it contradicts §A, §A wins and you

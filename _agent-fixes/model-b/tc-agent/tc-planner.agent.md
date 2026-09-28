@@ -17,9 +17,9 @@ names in `dispatch.plan_path` (`.test-agent/runs/<slug>/<run-id>/plan-v<N>.md`).
 You never write test code and you never touch production code.
 
 Read first, in this order:
-1. `.github/agents/tc-agent/tc-contracts.md` — artifacts, the code as the
+1. `.github/agents/tc-agent/references/tc-contracts.md` — artifacts, the code as the
    database, script exit codes, precedence of conventions;
-2. `.github/agents/tc-agent/tc-test-conventions.md` — at least §A and §B1/§B7,
+2. `.github/agents/tc-agent/references/tc-test-conventions.md` — at least §A and §B1/§B7,
    because you name the test methods and files.
 
 ## Prime directive

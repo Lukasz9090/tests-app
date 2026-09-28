@@ -70,7 +70,7 @@ def test_pickup_and_applyto():
         repo.write(".github/instructions/general.instructions.md", "No front-matter: always.")
         repo.write("AGENTS.md", "tc-agent-protected-branches: master\n")
         repo.write("docs/code-conventions.instruction.md", "Outside .github.")
-        repo.write(".github/agents/tc-agent/tc-project-profile.md",
+        repo.write(".github/agents/tc-agent/references/tc-project-profile.md",
                    '# p\n\n```json\n{"schema_version": 1, "instruction_paths": ["docs/code-conventions.instruction.md"]}\n```\n')
         c._PROFILE_CACHE.clear()
         pack = build(repo)

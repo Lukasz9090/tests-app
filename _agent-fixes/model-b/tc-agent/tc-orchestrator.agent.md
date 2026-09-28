@@ -17,7 +17,7 @@ You dispatch; you do not judge. Every "what happens next" comes from
 `tc_orchestrate.py`, and you never read a plan, a review or a report to decide
 it yourself.
 
-Read `.github/agents/tc-agent/tc-contracts.md` first. `$C` =
+Read `.github/agents/tc-agent/references/tc-contracts.md` first. `$C` =
 `.github/agents/tc-agent/scripts`.
 
 ## Input

@@ -41,7 +41,7 @@ def _validator(schema: dict):
     except ImportError as exc:
         raise RuntimeError(
             "this check needs the jsonschema library: pip install -r "
-            ".github/agents/tc-agent/tc-requirements.txt (or pip install jsonschema)"
+            ".github/agents/tc-agent/references/tc-requirements.txt (or pip install jsonschema)"
         ) from exc
     return Draft202012Validator(schema)
 
