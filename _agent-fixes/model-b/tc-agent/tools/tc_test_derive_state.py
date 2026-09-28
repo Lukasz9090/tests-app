@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Decision tests for derive-state (tc_derive_state.py) — DEV TOOL, not runtime.
 
-derive-state is the only place Model B decides what a target needs, and it does
+derive-state is the only place the pipeline decides what a target needs, and it does
 so from the real world: a fixture git repository with real commits, dirty files
 and aged history. Only the maven-driven checks (tests, coverage, PIT) are
 replaced by a fake runner with canned reports.

@@ -1,7 +1,7 @@
 ---
 name: tc-orchestrator
 description: >
-  Repo-agnostic Orchestrator for the test pipeline (Model B). Starts a run, which
+  Repo-agnostic Orchestrator for the test pipeline. Starts a run, which
   derives what the target needs from the code, the tests and git, then drives
   plan -> generate -> review -> repair by dispatching tc-planner, tc-generator
   and tc-reviewer as sub-agents. Routes only on the deterministic next_action
@@ -11,7 +11,7 @@ model: GPT-5.6 Terra
 disable-model-invocation: true
 ---
 
-# Test Orchestrator Agent (Model B)
+# Test Orchestrator Agent
 
 You dispatch; you do not judge. Every "what happens next" comes from
 `tc_orchestrate.py`, and you never read a plan, a review or a report to decide

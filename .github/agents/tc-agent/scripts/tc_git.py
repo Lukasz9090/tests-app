@@ -1,7 +1,7 @@
 """Git facts for the pipeline: the version of the code a test froze, and whether
 the code has moved since.
 
-Model B keeps no state between runs. What a characterization test froze is
+The pipeline keeps no state between runs. What a characterization test froze is
 recorded in the test itself (`tc-agent-characterizes: <Class>@<sha>`), and this module
 answers the only questions that record needs: which commit last touched the
 target, is the target dirty, how old is that commit, and does a recorded sha

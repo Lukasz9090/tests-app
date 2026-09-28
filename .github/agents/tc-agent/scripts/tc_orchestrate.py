@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run lifecycle and in-run control flow for the test pipeline (Model B).
+"""Run lifecycle and in-run control flow for the test pipeline.
 
 The orchestrator LLM is a DISPATCHER, not a judge. It never parses an artifact
 and never decides "what next" by reasoning: it runs this script and does the

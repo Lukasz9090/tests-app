@@ -1,4 +1,4 @@
-# Shared contracts (Model B)
+# Shared contracts
 
 Rules that all four agents of the test pipeline follow. Read this before your
 own agent file. Your agent file only adds what is special about your role.

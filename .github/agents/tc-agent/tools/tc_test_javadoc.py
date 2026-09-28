@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Tests for the in-code metadata (tc_javadoc.py) and the git facts (tc_git.py) — DEV TOOL.
 
-In Model B the Javadoc tags ARE the pipeline's database, so a parser that
+The Javadoc tags ARE the pipeline's database, so a parser that
 attaches a Javadoc to the wrong method, loses a tag, or rewrites more than the
 `tc-agent-characterizes` line corrupts state silently. Covered:
 

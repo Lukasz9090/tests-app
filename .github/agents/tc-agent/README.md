@@ -1,4 +1,4 @@
-# tc-agent — AI test pipeline (Model B)
+# tc-agent — AI test pipeline
 
 tc-agent writes JUnit tests for one Java class (or method) in a Maven project.
 It trusts only the committed code, the tests and git — no memory between runs.

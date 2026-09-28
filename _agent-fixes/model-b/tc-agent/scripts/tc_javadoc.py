@@ -1,6 +1,6 @@
-"""Read and rewrite the per-test metadata that Model B keeps in the code.
+"""Read and rewrite the per-test metadata the pipeline keeps in the code.
 
-In Model B the committed test suite IS the pipeline's database. Every test the
+The committed test suite IS the pipeline's database. Every test the
 agent writes carries a Javadoc with metadata lines (tc-test-conventions.md §A1):
 
     /**

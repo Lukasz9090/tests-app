@@ -1,4 +1,4 @@
-"""Shared helpers for the pipeline scripts (Model B).
+"""Shared helpers for the pipeline scripts.
 
 Nothing here reads a plan or a generation report. The target, its Maven module
 and the test classes that exercise it are derived from the slug and the file

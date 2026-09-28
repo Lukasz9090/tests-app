@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Tests for the run lifecycle (tc_orchestrate.py) — DEV TOOL, not runtime.
 
-Replaces the Model A tc_test_orchestrate.py. Covered:
+Covered:
 
-  * the in-run state machine: every row of MODEL-B-PLAN §5.4 (derive verdicts,
+  * the in-run state machine (derive verdicts,
     RESEAL, plan statuses, generation/review loop, both caps),
   * that a run only ever reads its own directory (an older run's artifacts do
     not leak into a new one),

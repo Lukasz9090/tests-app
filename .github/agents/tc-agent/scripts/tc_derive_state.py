@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """derive-state: what should happen to a target, computed from the real world.
 
-Model B keeps no state between runs. Every run starts here and answers one
+The pipeline keeps no state between runs. Every run starts here and answers one
 question from the committed code, the tests, git, coverage and mutations -
 never from an artifact an earlier run left behind:
 

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "tc-test-plan.schema.json",
-  "title": "test-plan (Model B)",
+  "title": "test-plan",
   "type": "object",
   "required": [
     "schema_version",
@@ -467,7 +467,7 @@
             "test_file"
           ],
           "additionalProperties": false,
-          "description": "The traceability key of Model B: the scenario lives in the code as THIS method. Name it by the naming rule in force (tc-test-conventions.md §B1 unless REPO CONVENTIONS override it).",
+          "description": "The traceability key: the scenario lives in the code as THIS method. Name it by the naming rule in force (tc-test-conventions.md §B1 unless REPO CONVENTIONS override it).",
           "properties": {
             "test_class": {
               "type": "string"

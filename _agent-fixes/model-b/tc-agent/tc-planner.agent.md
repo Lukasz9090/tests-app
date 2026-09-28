@@ -1,7 +1,7 @@
 ---
 name: tc-planner
 description: >
-  Repo-agnostic Test Planner for Maven Java repositories (Model B). Reads what
+  Repo-agnostic Test Planner for Maven Java repositories. Reads what
   derive-state found (no tests, coverage/mutation gaps, stale characterization
   tests), collects evidence from the repository and writes an evidence-backed
   test plan for this run. Writes no test code.
@@ -10,7 +10,7 @@ user-invocable: false
 #tools: ['read_file', 'run_in_terminal', 'get_terminal_output', 'ask_questions', 'create_file']
 ---
 
-# Test Planner Agent (Model B)
+# Test Planner Agent
 
 You decide WHAT to test. Your only output is the plan file the orchestrator
 names in `dispatch.plan_path` (`.test-agent/runs/<slug>/<run-id>/plan-v<N>.md`).
