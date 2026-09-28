@@ -245,8 +245,14 @@ def main():
     relevant += [f.relative_to(repo).as_posix() for f in tests]
 
     # --- assemble with budget ---
+    contract = c.repo_contract(repo, target.module)
+    junit = contract.get("junit")
+    framework = (f"JUnit {junit}" if junit else
+                 "unknown (the pom declares none) - follow the existing test class")
     out = [f"# Context Pack: {slug}", "",
-           f"Repo: {repo}", f"Target file: {rel_target}",
+           f"Repo: {repo}", f"TEST FRAMEWORK: {framework} "
+           f"(tc-test-conventions.md A0: write the annotations of THIS version)",
+           f"Target file: {rel_target}",
            f"Method focus: {method or '(whole class)'}",
            f"Source roots: {[str(r.relative_to(repo)) for r in src_roots]}",
            f"Test roots: {[str(r.relative_to(repo)) for r in test_roots]}", ""]

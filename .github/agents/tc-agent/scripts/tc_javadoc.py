@@ -26,7 +26,7 @@ regex over raw text: string literals such as `@DisplayName("a (b)")` and comment
 would otherwise break the annotation and brace matching.
 
 It never guesses silently. A key it cannot read, metadata on the class, a
-placeholder without its `@Disabled` — each becomes a `defect` that derive-state
+placeholder without its `@Disabled` / `@Ignore` — each becomes a `defect` that derive-state
 reports instead of dropping the test from the picture.
 
 Standard library only.
@@ -55,7 +55,10 @@ METHOD = re.compile(
 )
 ANN_NAME = re.compile(r"@([A-Za-z_][\w.]*)")
 CLASS_DECL = re.compile(r"\b(class|interface|enum|record)\s+([A-Za-z_$][\w$]*)")
-DISABLED = re.compile(r'@(?:[\w.]*\.)?Disabled\s*(?:\(\s*(?:value\s*=\s*)?"((?:[^"\\]|\\.)*)"\s*\))?')
+# JUnit 5 disables with @Disabled, JUnit 4 with @Ignore. Both carry the reason
+# as their single string value, so one pattern reads either.
+DISABLED = re.compile(r'@(?:[\w.]*\.)?(?:Disabled|Ignore)\s*(?:\(\s*(?:value\s*=\s*)?"((?:[^"\\]|\\.)*)"\s*\))?')
+DISABLE_ANNOTATION = "@Disabled / @Ignore"
 
 
 # ------------------------------------------------------------------ model ---
@@ -346,13 +349,13 @@ def parse_text(text: str, file: str = "") -> tuple[list, list]:
         placeholder_marked = bool(reason and reason.startswith(PLACEHOLDER_PREFIX))
         if meta.ai and meta.deferred is not None:
             if not disabled:
-                meta.defects.append("tc-agent-deferred placeholder without @Disabled")
+                meta.defects.append(f"tc-agent-deferred placeholder without {DISABLE_ANNOTATION}")
             elif not placeholder_marked:
-                meta.defects.append(f'placeholder @Disabled reason must start with "{PLACEHOLDER_PREFIX}"')
+                meta.defects.append(f'placeholder {DISABLE_ANNOTATION} reason must start with "{PLACEHOLDER_PREFIX}"')
             if not body_empty:
                 meta.defects.append("tc-agent-deferred placeholder must have an empty body")
         elif placeholder_marked:
-            meta.defects.append(f'@Disabled("{PLACEHOLDER_PREFIX} ...") without tc-agent-deferred in the Javadoc')
+            meta.defects.append(f'{DISABLE_ANNOTATION} ("{PLACEHOLDER_PREFIX} ...") without tc-agent-deferred in the Javadoc')
 
         methods.append(TestMethod(
             file=file,

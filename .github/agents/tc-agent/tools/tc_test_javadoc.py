@@ -145,15 +145,23 @@ def test_defects():
         "spec-driven with sha": (doc(SD, "tc-agent-characterizes: X@1234567") + "@Test void a() {}",
                                  "tc-agent-mode spec-driven must not carry tc-agent-characterizes"),
         "deferred without Disabled": (doc(SD, "tc-agent-deferred: why") + "@Test void a() {}",
-                                      "tc-agent-deferred placeholder without @Disabled"),
+                                      "tc-agent-deferred placeholder without @Disabled / @Ignore"),
         "deferred with body": (doc(SD, "tc-agent-deferred: why") + '@Test @Disabled("AI deferred: why") void a() { x(); }',
                                "tc-agent-deferred placeholder must have an empty body"),
         "Disabled marker without deferred": (doc(SD) + '@Test @Disabled("AI deferred: why") void a() { }',
-                                             '@Disabled("AI deferred: ...") without tc-agent-deferred in the Javadoc'),
+                                             '@Disabled / @Ignore ("AI deferred: ...") without tc-agent-deferred in the Javadoc'),
     }
     for label, (body, wanted) in cases.items():
         (m,), _ = parse("class T {\n" + body + "\n}\n")
         expect(f"defect: {label}", wanted in m.meta.defects, True)
+
+
+def test_junit4_ignore_is_a_placeholder():
+    body = doc(L, "tc-agent-characterizes: OrderService@29aeef6a", "tc-agent-deferred: needs a seam") \
+        + '@Test @Ignore("AI deferred: needs a seam") public void a() {}'
+    (m,), _ = parse("class T {\n" + body + "\n}\n")
+    expect("JUnit 4 @Ignore counts as disabled", (m.disabled, m.is_placeholder), (True, True))
+    expect("no defects", m.meta.defects, [])
 
 
 def test_older_line_format_is_read_without_complaint():

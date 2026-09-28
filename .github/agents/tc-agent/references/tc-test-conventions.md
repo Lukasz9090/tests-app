@@ -13,6 +13,15 @@ it tries, follow §A and mention the conflict in your artifact's `notes`.
 
 ## §A — Pipeline integrity (not overridable)
 
+**A0. The test framework is the repo's, not a default.** The run's
+`derive-state.md` carries `repo.junit` (`"5"`, `"4"` or null) and the context
+pack repeats it as TEST FRAMEWORK. Write every test with the annotations and
+assertions of THAT version, and never add a dependency to make your favourite
+one available. Where a rule below differs, it says "JUnit 5" and "JUnit 4"
+explicitly. Both present (JUnit 4 plus the vintage engine) counts as JUnit 5.
+When the pack says the framework is unknown, follow the existing test class;
+with no test class either, write JUnit 5 and say so in your artifact's `notes`.
+
 **A1. Metadata.** Every test method you write carries a Javadoc: one prose line,
 a blank line, then one `tc-agent` metadata line per fact. Metadata goes on
 METHODS only — never on the test class, not even when the whole class is yours.
@@ -61,14 +70,15 @@ fix — becomes an empty, disabled method:
  * tc-agent-deferred: business-hours guard reads LocalDateTime.now() directly; needs an injected java.time.Clock
  */
 @Test
-@Disabled("AI deferred: needs a Clock seam")
-@DisplayName("appointment outside business hours is rejected")
+@Disabled("AI deferred: needs a Clock seam")          // JUnit 4: @Ignore("AI deferred: needs a Clock seam")
+@DisplayName("appointment outside business hours is rejected")   // JUnit 5 only
 void shouldRejectAppointmentWhenOutsideBusinessHours() {
 }
 ```
 
 - the body is empty (no comments needed, no given/when/then);
-- the `@Disabled` text starts with `AI deferred:`;
+- the disabling annotation is `@Disabled` in JUnit 5 and `@Ignore` in JUnit 4,
+  and its text starts with `AI deferred:`;
 - `tc-agent-deferred` carries the full reason; for a compile error, quote the compiler
   message;
 - **every plan scenario ends up in the code as a test OR a placeholder.** A
@@ -109,9 +119,10 @@ values, execution order or sleeps.
 **A6. Boundaries.** Never modify production code. Never mock the class under
 test. Never delete a test — recommend it instead.
 
-**A7. One scenario, one method.** A parameterized test may cover sibling
-scenarios of the same shape; list each covered scenario's description in a
-`tc-agent-note`.
+**A7. One scenario, one method.** In JUnit 5 a parameterized test may cover
+sibling scenarios of the same shape; list each covered scenario's description in
+a `tc-agent-note`. In JUnit 4 do NOT parameterize: `@RunWith(Parameterized)`
+takes over the whole class, so write one plain method per scenario.
 
 ## §B — Defaults (a repo instruction may replace any of these)
 
@@ -130,7 +141,9 @@ a name: `shouldReportEvenWhenNumberIsEven` (isEven) vs
 This applies to new methods even in a class whose existing (human) methods use
 another style: only an explicit repo instruction changes the rule.
 
-**B2. `@DisplayName`:** the scenario description, in plain English.
+**B2. `@DisplayName`:** the scenario description, in plain English. JUnit 5
+only — JUnit 4 has no such annotation, so there the method name carries it and
+nothing is added.
 
 **B3. Structure:** three commented sections, separated by a blank line.
 
@@ -157,14 +170,19 @@ assertThatThrownBy(() -> service.create(request))
 A section with nothing in it is left out (a test with no arrangement starts at
 `// when`). Placeholders (A2) have no sections.
 
-**B4. Assertions:** AssertJ when it is on the classpath, otherwise JUnit 5
-assertions. An exception assertion checks the type AND the property that tells
+**B4. Assertions:** AssertJ when it is on the classpath, otherwise the
+assertions of the JUnit version in use (`Assertions` in JUnit 5, `Assert` in
+JUnit 4; for an exception there, `assertThrows` does not exist — use
+`@Test(expected = ...)` only when no property has to be checked, otherwise
+try/fail/catch and assert on the caught exception). An exception assertion checks the type AND the property that tells
 it apart (status, code, message) — never a bare "throws". Not `assertNotNull`
 alone, not `verify` alone.
 
 **B5. Collaborators:** mock the classes that stand for a database or a network
 boundary (repositories, gateways, clients) with Mockito; build real domain
-objects, DTOs and value types.
+objects, DTOs and value types. Wire Mockito the way the version wires it:
+`@ExtendWith(MockitoExtension.class)` in JUnit 5,
+`@RunWith(MockitoJUnitRunner.class)` in JUnit 4.
 
 **B6. Setup:** the class under test, when every test builds it the same way,
 is a field of the test class (`private final Calculator calculator = new

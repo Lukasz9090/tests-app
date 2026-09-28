@@ -56,6 +56,8 @@ def test_glob():
 def test_none_found():
     with FixtureRepo() as repo:
         pack = build(repo)
+        expect_true("names the test framework from the pom",
+                    "TEST FRAMEWORK: JUnit" in pack or "TEST FRAMEWORK: unknown" in pack)
         expect_true("says agent defaults apply", "none found — agent defaults (tc-test-conventions.md §B) apply" in pack)
         expect_true("precedence header always present", "pipeline integrity" in section(pack))
 

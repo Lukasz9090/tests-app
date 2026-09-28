@@ -1,6 +1,6 @@
 # tc-agent — AI test pipeline (Model B)
 
-tc-agent writes JUnit 5 tests for one Java class (or method) in a Maven project.
+tc-agent writes JUnit tests for one Java class (or method) in a Maven project.
 It trusts only the committed code, the tests and git — no memory between runs.
 
 ## Agents
@@ -14,9 +14,10 @@ It trusts only the committed code, the tests and git — no memory between runs.
 
 ## Setup (once per repo)
 
-1. Maven project with JUnit 5. JaCoCo and PIT (with `pitest-junit5-plugin`) in the pom, or they are called from the CLI.
-2. Git, and Python 3 with `pip install -r .github/agents/tc-agent/references/tc-requirements.txt`.
-3. Copilot custom agents enabled; `.test-agent/` in `.gitignore` (run files live there).
+1. Maven project with JUnit 5 or JUnit 4. The version comes from the pom: on JUnit 4 the agent writes `@Ignore`, no `@DisplayName` and no parameterized tests.
+2. JaCoCo and PIT in the pom or called from the CLI; with JUnit 5, PIT also needs `pitest-junit5-plugin`.
+3. Git, and Python 3 with `pip install -r .github/agents/tc-agent/references/tc-requirements.txt`.
+4. Copilot custom agents enabled; `.test-agent/` in `.gitignore` (run files live there).
 
 ## How to run
 
@@ -50,8 +51,7 @@ The orchestrator turns this into `tc_orchestrate.py start` with these options:
 3. **RESEAL** — tests that are still green after a code change get the new commit sha.
 4. **FINISH** — writes `run-report.md`, prints it, and commits if `--commit` was given.
 
-Outcomes: `DONE`, `DONE_PARTIAL` (some scenarios are placeholders), `BLOCKED`, `RED`, `ESCALATED` (a cap was hit or a human decision is needed).
-Commit your production code first — a dirty target is always BLOCKED.
+Outcomes: `DONE`, `DONE_PARTIAL` (some scenarios are placeholders), `BLOCKED`, `RED`, `ESCALATED` (a cap was hit or a human decision is needed). Commit your production code first — a dirty target is always BLOCKED.
 
 ## Configuration
 
@@ -82,10 +82,8 @@ Every run has its own folder `.test-agent/runs/<target>/<run-id>/`:
 `run.json`, `derive-state.md`, `context-pack.md`, `plan-vN.md`,
 `generation-report-vN[-rM].md`, `review-vN-rM.md`, `checks/`, `run-report.md`.
 The agent's own files: role prompts and this README at the top; what they read
-(contracts, conventions, profile, requirements) under `references/`; plus
-`schemas/`, `scripts/` and `tools/`.
+(contracts, conventions, profile, requirements) under `references/`; plus `schemas/`, `scripts/`, `tools/`.
 Old runs are never read again and never deleted.
-
 Each generated test method has a Javadoc with plain-text metadata:
 
     tc-agent-mode: legacy, interactive: false
@@ -97,5 +95,5 @@ Do not delete placeholders — they tell the next run the gap is known.
 
 ## Good to know
 
-- Only the scripts run Maven; the agents never do. To start again, just run again.
+- Only the scripts run Maven; the agents never do; to start again, just run again.
 - In PowerShell, quote `-D` args: `mvn "-Dtest=FooTest"`. Dev tests: `tools/tc_test_*.py`; real Maven smoke test: `python .github/agents/tc-agent/tools/tc_smoke_pipeline.py`.

@@ -20,7 +20,10 @@ ACCEPT is the run's final verification: nothing re-checks after you.
 Read first, in this order:
 1. `.github/agents/tc-agent/references/tc-contracts.md`;
 2. `.github/agents/tc-agent/references/tc-test-conventions.md` — §A is what Stage 1
-   enforces, §B (as overridden by REPO CONVENTIONS) is what Stage 2 judges.
+   enforces, §B (as overridden by REPO CONVENTIONS) is what Stage 2 judges. §A0:
+   judge the annotations against the pack's TEST FRAMEWORK line — on JUnit 4 a
+   placeholder carries `@Ignore`, and a missing `@DisplayName` or a
+   non-parameterized set of sibling tests is correct, not a finding.
 
 ## Input
 
@@ -50,8 +53,9 @@ target class, then check that:
   `scenario_not_implemented` (or `missing_placeholder`) finding;
 - every `IMPLEMENTED` method tests the branch its `evidence` points at, with
   data that matches the scenario's `data`, and is NOT disabled;
-- every `PLACEHOLDER` is an empty method with `@Disabled("AI deferred: …")` and
-  `tc-agent-deferred: <reason>`;
+- every `PLACEHOLDER` is an empty method with `tc-agent-deferred: <reason>` and
+  the framework's disabling annotation (`@Disabled` in JUnit 5, `@Ignore` in
+  JUnit 4) whose text starts with `AI deferred:`;
 - every method the Generator wrote or repaired carries the §A1 Javadoc:
   `tc-agent-mode: <mode>, interactive: <true|false>` with both values equal to
   `run.json`; in legacy `tc-agent-characterizes: <TargetClass>@<sha>` where the

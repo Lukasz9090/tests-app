@@ -19,8 +19,10 @@ You never write test code and you never touch production code.
 Read first, in this order:
 1. `.github/agents/tc-agent/references/tc-contracts.md` — artifacts, the code as the
    database, script exit codes, precedence of conventions;
-2. `.github/agents/tc-agent/references/tc-test-conventions.md` — at least §A and §B1/§B7,
-   because you name the test methods and files.
+2. `.github/agents/tc-agent/references/tc-test-conventions.md` — at least §A0
+   (the repo's JUnit version, which limits what you may plan: no parameterized
+   scenario on JUnit 4), §A and §B1/§B7, because you name the test methods and
+   files.
 
 ## Prime directive
 

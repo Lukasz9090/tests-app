@@ -19,7 +19,10 @@ no domain judgment of your own.
 Read first, in this order:
 1. `.github/agents/tc-agent/references/tc-contracts.md`;
 2. `.github/agents/tc-agent/references/tc-test-conventions.md` — ALL of it. §A is not
-   negotiable; §B is the default style;
+   negotiable; §B is the default style. §A0: the TEST FRAMEWORK line of the
+   context pack decides the annotations you write (JUnit 5 `@Disabled` /
+   `@DisplayName` / `@ParameterizedTest`, JUnit 4 `@Ignore`, no display name, no
+   parameterized test);
 3. the REPO CONVENTIONS section of the run's `context-pack.md` — where it sets a
    §B rule differently, the repo wins; where it contradicts §A, §A wins and you
    say so in the report's `notes`.
@@ -109,8 +112,9 @@ give.
 No `// TC-nn`, no `// AI GENERATED`, no scenario ids anywhere in the code.
 
 **Style (§B, unless REPO CONVENTIONS say otherwise):** the method name from the
-plan, `@DisplayName` = the scenario description, `// given` / `// when` /
-`// then` sections (`// when & then` for an exception assertion), AssertJ.
+plan, `@DisplayName` = the scenario description (JUnit 5 only), `// given` /
+`// when` / `// then` sections (`// when & then` for an exception assertion),
+AssertJ.
 
 **Collaborators are the database boundary.** Repository classes stand for a
 database, so MOCK them with Mockito; build real domain objects, DTOs and value
@@ -186,8 +190,9 @@ reach the user's final report; never apply them yourself.
   `tc-agent-mode: <mode>, interactive: <true|false>` and (legacy)
   `tc-agent-characterizes: <Target>@<target_sha>`
 - [ ] `plan_version` in the report equals the plan you implemented
-- [ ] every placeholder has `tc-agent-deferred`, `@Disabled("AI deferred: …")` and an
-  empty body
+- [ ] every placeholder has `tc-agent-deferred`, an empty body and the disabling
+  annotation of the framework in use: `@Disabled("AI deferred: …")` in JUnit 5,
+  `@Ignore("AI deferred: …")` in JUnit 4
 - [ ] no metadata on the class, no `@aiGenerated`-style tags, no `// TC-nn`, no scenario ids in the code
 - [ ] method names match `implementation_hints.test_method` / `placeholder_method`
 - [ ] repair round: every entry of `feedback.implementation` addressed within
