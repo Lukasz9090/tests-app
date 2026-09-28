@@ -71,7 +71,8 @@ target class, then check that:
   a finding — only a method this run wrote must use the one-line form;
 - a `PLACEHOLDER` whose reason is not untestable behaviour (a name clash, a
   convenience, "no fixture / no evidenced value" for a relational value or an
-  object shape — conventions §A4) is a misused placeholder:
+  object shape — conventions §A4, or "the type / signature is not in the context
+  pack", which is a lookup problem) is a misused placeholder:
   `scenario_not_implemented` against the implementation, the scenario was
   testable. The same reason on a plan `deferred` entry is a plan gap
   (REPAIR_PLAN). A misused placeholder never goes to `unimplementable` and

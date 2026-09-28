@@ -62,6 +62,26 @@ def test_none_found():
         expect_true("precedence header always present", "pipeline integrity" in section(pack))
 
 
+def test_generated_sources_and_external_types():
+    """An OpenAPI-style client generated into target/ is API the target calls."""
+    with FixtureRepo() as repo:
+        repo.write("target/generated-sources/openapi/com/acme/api/DictClient.java",
+                   "package com.acme.api;\npublic class DictClient {\n"
+                   "    public DictResponse fetch(String key) { return null; }\n}\n")
+        repo.write(repo.target_path,
+                   "package com.acme;\n"
+                   "import com.acme.api.DictClient;\n"
+                   "import com.thirdparty.sdk.PaymentGateway;\n"
+                   "public class OrderService {\n"
+                   "    public int create(int amount) { return amount; }\n}\n")
+        pack = build(repo)
+        expect_true("generated client is in the pack", "DictClient.java" in pack)
+        expect_true("labelled as build output", "GENERATED SOURCE" in pack)
+        expect_true("jar-only type is named", "com.thirdparty.sdk.PaymentGateway" in pack)
+        expect_true("and is not a reason to defer",
+                    "NOT a reason to defer" in pack)
+
+
 def test_pickup_and_applyto():
     with FixtureRepo() as repo:
         repo.write(".github/copilot-instructions.md", "Use British spelling.")

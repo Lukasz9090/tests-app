@@ -125,6 +125,16 @@ Escape hatch: when the pack clearly lacks something you need, read AT MOST 5
 extra files and list each one under `context.notes` with the reason. When 5 is
 not enough, stop with `BLOCKED`.
 
+**A type the pack does not contain is never a reason to defer a scenario.**
+Classes from a dependency jar have no file in the repo (the pack lists them
+under TYPES FROM DEPENDENCIES); generated code appears as GENERATED SOURCE. In
+both cases the target's own lines show how the type is built, called and
+returned, and that call site is legitimate `implementation` evidence — a mocked
+collaborator's return value is shaped by the test, not by the repo (§A4). Defer
+only what cannot be TESTED: no seam, a value whose meaning is unknowable, a
+guard that cannot be made deterministic. "The signature is not in the pack" is a
+lookup problem — use the escape hatch, or plan the scenario from the call site.
+
 ### Phase 3 — collect evidence
 
 Every scenario, and every value it needs, gets evidence entries. The allowed

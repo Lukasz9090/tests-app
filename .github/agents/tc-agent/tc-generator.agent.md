@@ -122,8 +122,15 @@ types. Never mock the class under test.
 
 **Data comes from the plan.** Each scenario's `data` and `evidence` refs point
 at concrete shapes: seeder rows, DTO records, builders. Mirror them exactly,
-changing only what the scenario demands. A value with no source in the plan or
-the pack makes the scenario a placeholder — invention is not an option.
+changing only what the scenario demands. A BUSINESS value with no source in the
+plan or the pack makes the scenario a placeholder — invention is not an option.
+
+A type you cannot see in full is a different case. Classes from a dependency
+jar (the pack lists them under TYPES FROM DEPENDENCIES) and generated code
+(GENERATED SOURCE) are still testable: build them exactly as the TARGET builds
+them, or as an existing test does, and check the result with `get_errors`. A
+missing signature is a lookup problem, not an untestable behaviour — never a
+placeholder reason.
 
 **Time (§A5).** When production code reads the wall clock directly, build test
 times RELATIVE to now so the guards evaluate the same way on every run, and

@@ -38,6 +38,15 @@ CLASS_DECL = "(class|interface|enum|record)"
 # Build output holds generated and copied sources. A ref that "verifies" against
 # target/generated-sources points at a file nobody edits.
 SKIP_DIRS = {"target", "build", "out", ".git", ".idea", ".test-agent", "node_modules"}
+# ... with one exception: code GENERATED into the build directory (an OpenAPI
+# client, MapStruct mappers, protobuf) is real API the target calls, and without
+# it every scenario that touches such a type looks unevidenced.
+GENERATED_DIRS = ("target/generated-sources", "target/generated-test-sources",
+                  "build/generated", "build/generated-sources")
+# Imports that need no explanation: nobody defers a test because java.util is
+# not in the pack.
+STDLIB_PREFIXES = ("java.", "javax.", "jakarta.", "org.junit", "org.mockito",
+                   "org.assertj", "org.hamcrest", "lombok.")
 
 
 def java_files(roots):
@@ -48,6 +57,16 @@ def java_files(roots):
 
 
 _CACHE = {}
+
+
+def generated_roots(repo: Path) -> list:
+    """Build-output directories that hold generated SOURCE, if any exist."""
+    out = []
+    for rel in GENERATED_DIRS:
+        for d in repo.glob(f"**/{rel}"):
+            if d.is_dir():
+                out.append(d)
+    return out
 
 
 def read(f: Path):
@@ -214,7 +233,12 @@ def main():
     target_text = read(target_file)
 
     all_src = list(java_files(src_roots))
+    gen_roots = generated_roots(repo)
+    generated = list(java_files(gen_roots))
     all_by_name = {f.stem: f for f in all_src}
+    for f in generated:                        # generated code never shadows source
+        all_by_name.setdefault(f.stem, f)
+    generated_names = {f.stem for f in generated} - {f.stem for f in all_src}
     own_pkg = [f for f in target_file.parent.glob("*.java") if f != target_file]
 
     # --- deps: level 1 full, level 2 signatures ---
@@ -237,6 +261,14 @@ def main():
     enums = [all_by_name[d] for d in (l1 | l2)
              if d in all_by_name
              and re.search(rf"\benum\s+{re.escape(d)}\b", read(all_by_name[d]))]
+
+    # Types the target imports that this pack could not include: they live in a
+    # dependency jar. Naming them beats silence — a role that knows the type
+    # exists can look it up; a role that sees nothing calls the scenario
+    # unevidenced and writes a placeholder.
+    external = sorted({imp for imp in IMPORT_RE.findall(target_text)
+                       if not imp.startswith(STDLIB_PREFIXES)
+                       and imp.rsplit(".", 1)[-1] not in all_by_name})
 
     # paths the repo instructions are matched against (applyTo)
     rel_target = target_file.relative_to(repo).as_posix()
@@ -303,11 +335,23 @@ def main():
     for name in sorted(l1):
         f = all_by_name.get(name)
         if f:
-            add("DEPENDENCY (level 1, full)", f, read(f))
+            add("GENERATED SOURCE (build output, full)" if name in generated_names
+                else "DEPENDENCY (level 1, full)", f, read(f))
     for name in sorted(l2):
         f = all_by_name.get(name)
         if f:
-            add("DEPENDENCY (level 2, signatures)", f, signatures_only(read(f)))
+            label = "DEPENDENCY (level 2, signatures)"
+            if name in generated_names:
+                label = "GENERATED SOURCE (build output, signatures)"
+            add(label, f, signatures_only(read(f)))
+
+    if external:
+        out.append("\n## TYPES FROM DEPENDENCIES (not in this pack)\n")
+        out.append("The target imports these; they come from a jar, so no file of "
+                   "theirs can be included or cited. This is NOT a reason to defer a "
+                   "scenario: build such a value the way the TARGET builds it, or the "
+                   "way an existing test does, and cite that line as evidence.\n")
+        out.extend(f"- {i}" for i in external)
 
     out.append("\n## MANIFEST (all files included above)\n")
     for f in [target_file, *[all_by_name[n] for n in sorted(l1 | l2)
@@ -322,7 +366,8 @@ def main():
     dest.write_text("\n".join(out), encoding="utf-8")
     print(f"WRITTEN: {dest.relative_to(repo).as_posix()}")
     print(f"  target={cname} method={method or '-'} "
-          f"deps_l1={len(l1)} deps_l2={len(l2)} tests={len(tests)} "
+          f"deps_l1={len(l1)} deps_l2={len(l2)} generated={len(generated_names & (l1 | l2))} "
+          f"external={len(external)} tests={len(tests)} "
           f"builders={len(builders)} enums={len(enums)} "
           f"instructions={len(instructions)} size={MAX_TOTAL_CHARS - budget} chars")
 
