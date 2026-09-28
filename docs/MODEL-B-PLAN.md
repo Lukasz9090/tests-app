@@ -45,6 +45,9 @@ Wszystkie pozycje w §1 są zaakceptowanymi decyzjami.
 
 | D30 | Nowy kod a bramka | Bramka klasy nie wystarcza przy nowym kodzie. derive-state daje PLAN także, gdy (a) metoda targetu nie ma żadnej pokrytej linii (`UNTESTED_METHODS`), (b) linie zmienione od ostatniego zamrożenia (`git diff <sha>..HEAD`) nie są pokryte (`CHANGED_CODE_UNCOVERED`). | DECYZJA (§4) |
 | D31 | Wartości relacyjne i kształty obiektów | Wartość, której jedyną rolą jest równość z inną wartością kontrolowaną przez test (klucz vs `dictKey` z mocka), oraz DTO budowane własnym konstruktorem/setterami NIE są danymi biznesowymi — nie są powodem do zaślepki. Zaślepka z takim powodem = błąd (REPAIR_IMPLEMENTATION / REPAIR_PLAN), nie tłumaczy niespełnionej bramki. Raport oznacza niespełnioną bramkę `NOT MET`. | DECYZJA (§14) |
+| D32 | Raport z całego przebiegu | `finish` liczy testy ze WSZYSTKICH raportów generacji przebiegu (SKIPPED z późniejszej rundy nie kasuje IMPLEMENTED z wcześniejszej), zbiera CONFIRM ze wszystkich wersji planu i pokazuje historię rund (`v1-r1 REPAIR_PLAN -> v2-r1 ACCEPT_PARTIAL`). `commit_summary` recenzenta opisuje wynik netto całego przebiegu, nie ostatniej rundy. | DECYZJA (§14) |
+| D33 | Streszczenie przebiegu dla recenzenta, tytuł commita | Dispatch REVIEW niesie `run_digest` (skrypt: wszystkie testy i zaślepki przebiegu, rundy); recenzent pisze `commit_summary` z niego, nie z własnej rundy. Tytuł commita: `[TC-AGENT] Add tests for <slug>.`; outcome i run-id w stopce. | DECYZJA (§14) |
+| D34 | Skrócone metadane | Zamiast trzech linii jedna: `tc-agent-mode: <tryb>, interactive: <true\|false>` (zawsze, też w spec-driven). `tc-agent: generated` znika — markerem jest `tc-agent-mode`. Stary układ linii jest nadal czytany bez zgłaszania defektu; format `@aiGenerated` dalej jest defektem. | DECYZJA (§3) |
 ---
 
 ## 2. Przebieg z lotu ptaka
@@ -89,9 +92,7 @@ Wszystkie tagi są **wyłącznie na metodach** (D6).
 
 | tag | wymagany | znaczenie |
 |---|---|---|
-| `tc-agent: generated` | zawsze | metodę napisał agent |
-| `tc-agent-mode: legacy` / `tc-agent-mode: spec-driven` | zawsze | tryb generacji |
-| `tc-agent-interactive` | gdy przebieg miał interactive | modyfikator był włączony |
+| `tc-agent-mode: <tryb>, interactive: <true\|false>` | zawsze | metodę napisał agent; tryb i modyfikator z `run.json` |
 | `tc-agent-characterizes: <Class>@<sha>` | tylko legacy (także w zaślepce) | punkt zamrożenia do wykrywania driftu |
 | `tc-agent-deferred: <powód>` | tylko w zaślepce | scenariusz świadomie nieprzetestowany i powód |
 | `tc-agent-note: <tekst>` | opcjonalny, może się powtarzać | zamrożony znany bug, odpowiedź człowieka z interactive, uwaga |
@@ -104,8 +105,7 @@ Pierwsza linia Javadoca to proza dla człowieka. Tagi są maszynowe: jeden tag n
 /**
  * AI-generated test. Characterizes current behaviour of AppointmentService (a freeze, not a spec).
  *
- * tc-agent: generated
- * tc-agent-mode: legacy
+ * tc-agent-mode: legacy, interactive: false
  * tc-agent-characterizes: AppointmentService@29aeef6a
  */
 @Test
@@ -131,9 +131,7 @@ Nazwa metody i sekcje `given/when/then` to domyślne konwencje agenta (§10), a 
 /**
  * AI-generated test. Characterizes current behaviour of AppointmentService (a freeze, not a spec).
  *
- * tc-agent: generated
- * tc-agent-mode: legacy
- * tc-agent-interactive: true
+ * tc-agent-mode: legacy, interactive: true
  * tc-agent-characterizes: AppointmentService@29aeef6a
  * tc-agent-note: business-hours guard rejects 17:00 exactly — human reported it as a defect; frozen as current behaviour, not fixed
  */
@@ -153,8 +151,7 @@ Odpowiedzi człowieka z interactive lądują tak (to zastępuje dzisiejsze `huma
 /**
  * AI-generated test. Based on a specification provided at generation time (not stored in the repo).
  *
- * tc-agent: generated
- * tc-agent-mode: spec-driven
+ * tc-agent-mode: spec-driven, interactive: false
  */
 ```
 
@@ -166,8 +163,7 @@ Test spec-driven nie ma sha, więc nigdy nie staje się stale (świadomy trade-o
 /**
  * AI-generated placeholder. Scenario deliberately NOT tested — see tc-agent-deferred.
  *
- * tc-agent: generated
- * tc-agent-mode: legacy
+ * tc-agent-mode: legacy, interactive: false
  * tc-agent-characterizes: AppointmentService@29aeef6a
  * tc-agent-deferred: business-hours guard reads LocalDateTime.now() directly; needs an injected java.time.Clock
  */
@@ -385,7 +381,7 @@ Pierwsza pasująca reguła wygrywa:
 
 Uproszczenia względem Modelu A:
 - **carry-forward znika.** Generator zawsze czyta **najnowsze review w tym przebiegu**, niezależnie od wersji planu. Finding żyje, dopóki późniejsze review go nie zamknie.
-- **REPAIR_PLAN = planowanie od zera.** Planer v2 widzi w kodzie testy napisane w r1 (z `tc-agent: generated`) i planuje tylko to, czego brakuje. Nie ma delta-integrity, osi `change`/`implementation` ani `split_from`.
+- **REPAIR_PLAN = planowanie od zera.** Planer v2 widzi w kodzie testy napisane w r1 (z linią `tc-agent-mode`) i planuje tylko to, czego brakuje. Nie ma delta-integrity, osi `change`/`implementation` ani `split_from`.
 - `dispatch` w wyjściu `state` zawiera tylko `agent`, `run_dir` oraz ścieżki plik do zapisania / przeczytania.
 
 ### 5.5 `run-report.md` (`finish`)
@@ -418,7 +414,7 @@ Gdy `run.json.commit == true`, `finish`:
 **Wiadomość commita (D27):**
 
 ```
-test(AppointmentService): tc-agent DONE_PARTIAL [run 20260921-101500]
+[TC-AGENT] Add tests for AppointmentService.
 
 Added 9 characterization tests for AppointmentService.create and cancel,
 covering the notice-period, horizon and inactive-offer guards. Two scenarios
@@ -429,6 +425,7 @@ Existing tests for reschedule were only resealed - their behaviour did not chang
 Mode: legacy | target: AppointmentService@4b1c2aa9
 Tests: +9 new, 2 placeholders, 3 resealed, 0 human tests touched
 Gates: branch coverage 84% (gate 80%), mutation 76% (gate 70%)
+Outcome: DONE_PARTIAL | run: 20260921-101500
 Suggestions: inject java.time.Clock into AppointmentService
 Report: .test-agent/runs/AppointmentService/20260921-101500/run-report.md
 ```
@@ -535,7 +532,7 @@ Nowe pola scenariusza: `replaces` (opcjonalny `Class#method` — test stale do p
 |---|---|---|
 | wejście | najwyższy plan, najnowsze review linii, carry | najwyższy plan w `run_dir` i najnowsze review w `run_dir` (jeśli jest) |
 | tabela `change` × `implementation` | tak | **znika**. Reguła: każdy scenariusz → test; każdy `deferred` → zaślepka; `replaces` → przepisz wskazaną metodę; scenariusz niemożliwy → zaślepka z powodem |
-| znakowanie | `// TC-nn`, `// AI GENERATED`, `// CHARACTERIZATION` | Javadoc z §3. `tc-agent-characterizes` bierze sha z `plan.context.target_sha`; `tc-agent-mode` i `tc-agent-interactive` z `run.json` |
+| znakowanie | `// TC-nn`, `// AI GENERATED`, `// CHARACTERIZATION` | Javadoc z §3. `tc-agent-characterizes` bierze sha z `plan.context.target_sha`; `tc-agent-mode: <tryb>, interactive: <true|false>` z `run.json` |
 | klasa testowa | — | bez tagów klasowych (D6). Jeśli klasa nie istnieje, tworzy ją wg `implementation_hints.test_file` |
 | styl kodu | z `AGENTS.md` repo przez pack | `tc-test-conventions.md` (nazwy, `given/when/then`, czas, mocki, asercje), nadpisane tam, gdzie REPO CONVENTIONS w packu mówi inaczej (D19) |
 | review feedback, `scope` | zostaje | zostaje (mapowanie po `test_method`, a nie po TC) |
@@ -552,7 +549,7 @@ Nowe pola scenariusza: `replaces` (opcjonalny `Class#method` — test stale do p
 |---|---|
 | wejście | plan, raport i poprzednie review z `run_dir` |
 | krok 1 (testy) | `tc_run_tests.py` sam znajduje klasy (D11), zamiast brać je z raportu |
-| Stage 1 — konformancja | każdy scenariusz → metoda o nazwie `test_method` istnieje; `IMPLEMENTED` → test aktywny; `PLACEHOLDER` → `@Disabled("AI deferred: …")` z pustym ciałem i `tc-agent-deferred`; Javadoc ma `tc-agent: generated`, `tc-agent-mode` zgodny z `run.json`, `tc-agent-interactive` zgodny z `run.json`, w legacy `tc-agent-characterizes: <Class>@<sha>` zgodny z `target_sha`; brak `// TC-nn` i tagów na klasie |
+| Stage 1 — konformancja | każdy scenariusz → metoda o nazwie `test_method` istnieje; `IMPLEMENTED` → test aktywny; `PLACEHOLDER` → `@Disabled("AI deferred: …")` z pustym ciałem i `tc-agent-deferred`; Javadoc ma `tc-agent-mode: <tryb>, interactive: <true|false>` zgodny z `run.json`, w legacy `tc-agent-characterizes: <Class>@<sha>` zgodny z `target_sha`; brak `// TC-nn` i tagów na klasie |
 | findingi | `missing_characterization_marker` zastąpiony przez `metadata_defect` (który tag, jaka metoda) |
 | konwencje | Stage 2 sprawdza obowiązującą regułę nazewnictwa i strukturę sekcji (domyślne agenta albo nadpisane przez repo). Naruszenie = finding `convention` ze `scope: "test"`. Naruszenie reguły **integralności** (metadane, zaślepki) jest w Stage 1 i nie jest „stylem” |
 | atrybucja | uncovered / survivor na linii scenariusza `IMPLEMENTED` → REPAIR_IMPLEMENTATION; na linii zaślepki → `unimplementable`, poza bramką; brak scenariusza → REPAIR_PLAN |
@@ -582,7 +579,7 @@ Nowe pola scenariusza: `replaces` (opcjonalny `Class#method` — test stale do p
 | `tc_run_tests.py` | `<slug> --repo . --run-dir <d> --label <entry\|r1…> [--repeat N]`; klasy z `discover_test_classes`; `--tests` zostaje jako override |
 | `tc_coverage.py` | target z `resolve_target`, gate z profilu, exec z `<run_dir>/checks`; `--label` zamiast `--iteration` |
 | `tc_mutation.py` | jak wyżej, testy z discovery |
-| `tc_build_context.py` | zapis do `<run_dir>/context-pack.md`; przy każdym EXISTING TEST krótki nagłówek z liczbą metod `tc-agent: generated` i zaślepek; usunięte `.test-agent/conventions.md`. **Sekcja REPO CONVENTIONS** zbudowana wg §10.3: pliki instrukcji repo, filtrowanie `.instructions.md` po `applyTo`, nagłówek z zasadą pierwszeństwa. Gdy repo nie ma żadnych instrukcji, pack mówi to wprost („none — agent defaults apply”) |
+| `tc_build_context.py` | zapis do `<run_dir>/context-pack.md`; przy każdym EXISTING TEST krótki nagłówek z liczbą metod z metadanymi tc-agent i zaślepek; usunięte `.test-agent/conventions.md`. **Sekcja REPO CONVENTIONS** zbudowana wg §10.3: pliki instrukcji repo, filtrowanie `.instructions.md` po `applyTo`, nagłówek z zasadą pierwszeństwa. Gdy repo nie ma żadnych instrukcji, pack mówi to wprost („none — agent defaults apply”) |
 | `tc_evidence_strength.py`, `tc_verify_refs.py`, `tc_validate_plan.py`, `tc_md_payload.py` | bez zmian logiki, tylko ścieżki |
 
 ---
@@ -693,7 +690,7 @@ Nie polegamy na tym, że host (Copilot) sam wstrzyknie instrukcje repo do subage
 
 Każda rola czyta `tc-contracts.md` jako pierwszy plik, a jego nowa §5 odsyła do `tc-test-conventions.md`. Dzięki temu nie ma ryzyka, że któraś rola „nie wie”, nawet jeśli jej własny prompt tego nie powtórzy.
 
-**D22** Nadpisać domyślne reguły może **tylko jawna instrukcja**. Jeśli istniejąca klasa testowa ma metody w innym stylu, a repo nie ma instrukcji, agent i tak pisze `shouldXxxWhenYyy`, więc w jednej klasie mogą być dwa style. Recenzent nie zgłasza starych metod jako naruszenia, bo ocenia tylko metody `tc-agent: generated`.
+**D22** Nadpisać domyślne reguły może **tylko jawna instrukcja**. Jeśli istniejąca klasa testowa ma metody w innym stylu, a repo nie ma instrukcji, agent i tak pisze `shouldXxxWhenYyy`, więc w jednej klasie mogą być dwa style. Recenzent nie zgłasza starych metod jako naruszenia, bo ocenia tylko metody z metadanymi tc-agent.
 
 ### 10.5 Treść `tc-test-conventions.md` (pełna propozycja)
 
@@ -712,9 +709,7 @@ tries, follow §A and mention the conflict in your report's notes.
 
 A1. Metadata. Every test method you write carries a Javadoc: one prose line, then
     one tag per line. Tags on METHODS only — never on the test class.
-      tc-agent: generated                      always
-      tc-agent-mode: legacy | spec-driven        always (from run.json)
-      tc-agent-interactive                      when run.json says so
+      tc-agent-mode: legacy|spec-driven, interactive: true|false   always (from run.json)
       tc-agent-characterizes: <Class>@<sha>      legacy only; sha = plan.context.target_sha
       tc-agent-note: <text>                      optional, repeatable; about THIS test
     Never add these tags to a method you did not write.
@@ -854,7 +849,7 @@ Każdy etap kończy się moim krótkim podsumowaniem i Twoją weryfikacją, zani
 | R2 | Discovery po nazwie klasy łapie też testy, które tylko wspominają target (np. w stringu) | Zawyża tylko zestaw uruchamianych testów, a nie wynik coverage. Akceptowalne |
 | R3 | Człowiek usuwa zaślepkę bez powodu → pipeline ponownie zapyta / odroczy | Świadomy trade-off „zero plików” (spec §13) |
 | R4 | Sha per plik → szum przy dużych klasach | Reseal (D15). Bez niego: szum idzie do planera |
-| R5 | Parser Javadoc na nietypowym formatowaniu (Javadoc po adnotacjach, komentarze w środku) | Nierozpoznane metody z `tc-agent: generated` w treści trafiają do `metadata_defects`, a nie znikają po cichu |
+| R5 | Parser Javadoc na nietypowym formatowaniu (Javadoc po adnotacjach, komentarze w środku) | Nierozpoznane metody z metadanymi `tc-agent-…` w treści trafiają do `metadata_defects`, a nie znikają po cichu |
 | R6 | Testy z konwencją Modelu A (`// TC-nn`) w innych repo | Traktowane jak ludzkie. Opcjonalny skrypt migracyjny, poza zakresem |
 | R7 | Bez `--commit` kolega nie widzi nowych testów przed ręcznym commitem | Zgodne z D1; `run-report.md` mówi wprost „zacommituj”; w CI `--commit` |
 | R8 | `%h` przy małym repo może mieć 7 znaków, a przy dużym 9+ | Porównanie po prefiksie (D10), zapis zawsze w pełnym `%h` z chwili generacji |
@@ -879,3 +874,5 @@ Otwartych decyzji nie ma. Następny krok: etap 1 (aktualizacja `MODEL-B-SPEC.md`
 - **Nowy kod a bramka (D30):** dodana metoda w `SimpleCalculatorService` nie wywołała dopisania testów, bo pokrycie klasy (83%) nadal mieściło się w bramce 80%. derive-state sprawdza teraz dodatkowo pokrycie per metoda (JaCoCo `method` counters) i pokrycie linii zmienionych od ostatniego `tc-agent-characterizes` sha.
 - **Pętla z kolizją nazw (przebieg 20260921-095632):** planer nadał scenariuszowi `isOdd(4)` nazwę `shouldReturnFalseWhenNumberIsEven`, zajętą już przez test `isEven`. Generator zrobił z tego zaślepkę, recenzent kazał naprawiać styl (§B6) i brakującą notatkę będącą instrukcją — 5 rund. Poprawki: `tc_verify_refs.py` mechanicznie odrzuca kolizje nazw (`NAME_COLLISION`); §B1 — wynik w nazwie nazywa operację; generator nigdy nie robi zaślepki z powodu nazwy i sprawdza, że raportowane metody istnieją; recenzent: findingi `convention` zawsze `minor` i nieblokujące, zaślepka bez powodu behawioralnego to błąd, instrukcje w `notes` nie są wymagane w kodzie; planer: `notes` tylko fakty.
 - **Fałszywe zaślepki (przebieg AmlConfirmationValidationService 20260921-112318, D31):** generator zamienił scenariusze „klucz pasuje” / „klucz nie pasuje” w zaślepki, bo „brak fixture DTO i evidenced wartości klucza”; recenzent przyjął je jako `unimplementable` i dał ACCEPT_PARTIAL przy pokryciu 60% (bramka 80%). A4 było stosowane za szeroko: wartość klucza jest relacyjna (test kontroluje obie strony porównania), a DTO ma własny konstruktor. Poprawki w §A4, planerze, generatorze, recenzencie; `finish` pisze `NOT MET` i ostrzeżenie przy niespełnionej bramce.
+- **Podsumowanie tylko z ostatniej rundy (SurveyService 20260921-144210, D32):** przebieg dodał 5 testów w v1, recenzent dał REPAIR_PLAN, v2 dodał 1 test i zaślepkę. Raport i commit mówiły „tests written: 1” i „Repaired the characterization test…”, bo raport v2 oznaczał testy z v1 jako SKIPPED (nadpisywały IMPLEMENTED), a recenzent pisał `commit_summary` tylko o swojej rundzie. Poprawione w `collect` i w instrukcji recenzenta.
+- **Skrócone metadane (D34):** `tc-agent: generated` nic nie wnosiło (wiadomo, że test jest od agenta, bo ma linie `tc-agent-…`), a `tc-agent-interactive` było osobną, warunkową linią. Teraz jeden wiersz `tc-agent-mode: legacy, interactive: false` niesie oba fakty i jest pisany zawsze, w obu trybach. Parser czyta stare testy bez zmian.

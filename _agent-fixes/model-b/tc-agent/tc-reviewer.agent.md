@@ -26,7 +26,8 @@ Read first, in this order:
 
 From the orchestrator: the slug and `dispatch` with `run_dir`, `plan_path`,
 `report_path`, `previous_review_path` (or null), `review_path` (the file you
-write) and `label` (e.g. `v1-r2`). Also read `run.json` (mode, interactive) and
+write), `label` (e.g. `v1-r2`) and `run_digest` (what the whole run has written
+so far — for the commit summary). Also read `run.json` (mode, interactive) and
 `<run_dir>/context-pack.md` (REPO CONVENTIONS).
 
 `$S` = `.github/agents/tc-agent/scripts`. Every check script takes
@@ -52,8 +53,8 @@ target class, then check that:
 - every `PLACEHOLDER` is an empty method with `@Disabled("AI deferred: …")` and
   `tc-agent-deferred: <reason>`;
 - every method the Generator wrote or repaired carries the §A1 Javadoc:
-  `tc-agent: generated`; `tc-agent-mode` equal to `run.json` mode; `tc-agent-interactive: true` exactly when
-  `run.json` says so; in legacy `tc-agent-characterizes: <TargetClass>@<sha>` where the
+  `tc-agent-mode: <mode>, interactive: <true|false>` with both values equal to
+  `run.json`; in legacy `tc-agent-characterizes: <TargetClass>@<sha>` where the
   sha matches the plan's `context.target_sha`; no `tc-agent-characterizes` in
   spec-driven; `notes` of the scenario present as `tc-agent-note` lines. Any deviation
   is a `metadata_defect` finding against the implementation, naming the method
@@ -61,7 +62,9 @@ target class, then check that:
   found in older tests — do not blame this generation for those;
 - no metadata on the test class, no `// TC-nn` or scenario ids in the code;
   metadata written as old `@aiGenerated` / `@mode` Javadoc tags is a
-  `metadata_defect` (the parser reports it as "old @-tag format");
+  `metadata_defect` (the parser reports it as "old @-tag format"). A separate
+  `tc-agent: generated` or `tc-agent-interactive:` line in an OLDER test is not
+  a finding — only a method this run wrote must use the one-line form;
 - a `PLACEHOLDER` whose reason is not untestable behaviour (a name clash, a
   convenience, "no fixture / no evidenced value" for a relational value or an
   object shape — conventions §A4) is a misused placeholder:
@@ -169,7 +172,16 @@ On `ACCEPT` and `ACCEPT_PARTIAL` write `commit_summary`: **2–5 English
 sentences, past tense**, for the commit message and the top of the run report.
 Say what was added (how many tests, for which methods or behaviours), what was
 deliberately left as a placeholder and why, and what would unblock it. No
-scenario ids, no speculation, no praise. Example:
+scenario ids, no speculation, no praise.
+
+**The summary covers the WHOLE run, not your round.** The commit contains every
+test the run wrote, so write it from `dispatch.run_digest` — the script's list
+of every test and placeholder written in this run (all plan versions, all
+repair rounds) and the rounds so far. Describe that net result; read the plan
+for what each listed method covers. A repair round or a second plan version is
+not the story — "Repaired one test" is wrong when the digest lists six. Mention
+a repair only when it changed what a test asserts. Do not count anything the
+digest does not list. Example:
 
 > Added 9 characterization tests for AppointmentService.create and cancel,
 > covering the notice-period, horizon and inactive-offer guards. Two scenarios

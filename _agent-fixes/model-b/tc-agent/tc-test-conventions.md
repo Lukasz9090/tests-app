@@ -21,17 +21,14 @@ METHODS only — never on the test class, not even when the whole class is yours
 /**
  * AI-generated test. Characterizes current behaviour of OrderService (a freeze, not a spec).
  *
- * tc-agent: generated
- * tc-agent-mode: legacy
+ * tc-agent-mode: legacy, interactive: false
  * tc-agent-characterizes: OrderService@29aeef6a
  */
 ```
 
 | line | when |
 |---|---|
-| `tc-agent: generated` | always |
-| `tc-agent-mode: legacy` / `tc-agent-mode: spec-driven` | always — from `run.json` |
-| `tc-agent-interactive: true` | when `run.json` says `interactive: true` |
+| `tc-agent-mode: <mode>, interactive: <true\|false>` | always — both values from `run.json`; the mode is `legacy` or `spec-driven` and `interactive` is always written, also when it is false |
 | `tc-agent-characterizes: <Class>@<sha>` | legacy only; `<sha>` = the plan's `context.target_sha`, `<Class>` = the target class |
 | `tc-agent-deferred: <reason>` | placeholders only (A2) |
 | `tc-agent-note: <text>` | optional, repeatable, about THIS test (a frozen known bug, a human's answer) |
@@ -46,8 +43,10 @@ one you repair.
 
 They are plain text lines, not Javadoc `@tags`: no IDE or doclint flags them,
 and the scripts read them with a fixed pattern (`tc-agent-<key>: <value>`, one
-per line, lowercase key, a colon, a space). Never write them as `tc-agent: generated`,
-`tc-agent-mode` … — that is an old draft format the scripts report as a defect.
+per line, lowercase key, a colon, a space). Never write them as `@aiGenerated`,
+`@mode` … — that is an old draft format the scripts report as a defect. The
+separate `tc-agent: generated` and `tc-agent-interactive: true` lines are an
+older shape: still read, never written again.
 
 **A2. Placeholders.** A scenario that is deferred, or that cannot be implemented
 soundly — no code seam, a value with no evidence, a compile error you could not
@@ -57,8 +56,7 @@ fix — becomes an empty, disabled method:
 /**
  * AI-generated placeholder. Scenario deliberately NOT tested — see tc-agent-deferred.
  *
- * tc-agent: generated
- * tc-agent-mode: legacy
+ * tc-agent-mode: legacy, interactive: false
  * tc-agent-characterizes: AppointmentService@29aeef6a
  * tc-agent-deferred: business-hours guard reads LocalDateTime.now() directly; needs an injected java.time.Clock
  */
