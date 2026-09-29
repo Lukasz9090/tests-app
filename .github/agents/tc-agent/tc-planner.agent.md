@@ -80,12 +80,15 @@ left. Plan those; keep everything else the previous plan already delivered.
 
 `dispatch.replan_cause` says why you are replanning. `reviewer_repair_plan` is
 the case above. `impl_cap_exhausted` means the repair rounds ran out while a
-gate was still failing: the review blames the implementation, but the repairs
-could not close the gap, so read it as a PLAN gap instead. Take
+GATE was still failing and every test was green (a red suite never lands here —
+it goes to a human). The review blames the implementation, but the repairs could
+not close the gap, so read it as a PLAN gap instead. Take
 `checks.coverage.uncovered` and `checks.mutation` from that review and plan ONE
 scenario per uncovered branch or surviving mutant that no existing scenario
 reaches: the other side of a guard, a null, an empty collection, a thrown
-exception. Do not re-plan what the code already
+exception. `COMPLETE` is the wrong answer here: you were called BECAUSE the gate
+is not met, so a plan with no scenarios means you found no uncovered branch —
+say that in `reason` and use status `BLOCKED` instead, so a human sees it. Do not re-plan what the code already
 tests; the tests written in the earlier rounds are in the file and listed in
 derive-state.
 

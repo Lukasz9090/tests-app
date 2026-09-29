@@ -385,6 +385,17 @@ def compute_state(repo: Path, directory: Path) -> dict:
             # a missing case) only a new plan can add. Spend the plan budget
             # before giving up - the tests already written stay in the code and
             # the next planner sees them.
+            #
+            # ONLY when the tests themselves are green. A run whose tests still
+            # fail has a broken test or broken code, and no new plan fixes that:
+            # the planner would look at a red suite, find every scenario already
+            # written, return COMPLETE and the run would end "DONE" on a red tree.
+            t = (review.get("checks") or {}).get("tests") or {}
+            tests_green = t.get("status") == "PASSED" and not t.get("failed") and not t.get("flaky")
+            if not tests_green:
+                return finish("ESCALATED",
+                              f"tests still fail after {gen_m} repair round(s) at v{n}; a new plan "
+                              f"cannot fix a failing test - a human decides")
             if n < plan_cap:
                 out["next_action"] = "PLAN"
                 out["reason"] = (f"impl_cap {impl_cap} reached at v{n} and the reviewer still asks "
@@ -798,6 +809,11 @@ def do_finish(repo: Path, directory: Path) -> tuple[int, str]:
     outcome = state["outcome"]
     if outcome == "DONE" and info["placeholders_in_code"]:
         outcome = "DONE_PARTIAL"
+    # Last-line guard: whatever the state machine concluded, a run that leaves
+    # failing tests behind is RED. Without this a plan that says COMPLETE ends
+    # the run "DONE" over a broken suite - and with --commit it would commit it.
+    if info["red"] and outcome in ("DONE", "DONE_PARTIAL"):
+        outcome = "RED"
     review_summary = (info["review"].get("commit_summary") or "").strip() \
         if info["review"].get("decision") in ("ACCEPT", "ACCEPT_PARTIAL") else ""
     summary = review_summary or template_summary(info, outcome)

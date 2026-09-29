@@ -99,6 +99,10 @@ class Run:
         return c.load_run(self.dir)
 
 
+GREEN_TESTS = {"tests": {"status": "PASSED", "total": 14, "failed": 0, "flaky": []},
+               "coverage": {"status": "FAILED", "branch_ratio": 0.53, "gate": 0.8}}
+
+
 def step(state: dict) -> tuple:
     return state["next_action"], state.get("outcome")
 
@@ -192,7 +196,7 @@ def test_caps():
         run.review(1, 1, "REPAIR_IMPLEMENTATION")
         expect("below impl_cap", step(run.state()), ("GENERATE", None))
         run.report(1, 2)
-        run.review(1, 2, "REPAIR_IMPLEMENTATION")
+        run.review(1, 2, "REPAIR_IMPLEMENTATION", checks=GREEN_TESTS)
         s = run.state()
         expect("impl_cap reached and no plan budget left", step(s), ("FINISH", "ESCALATED"))
         expect_true("says why", "impl_cap 2" in s["reason"] and "plan_cap 1" in s["reason"])
@@ -236,7 +240,7 @@ def test_spent_impl_cap_replans_while_plan_budget_lasts():
         run.report(1)
         run.review(1, 1, "REPAIR_IMPLEMENTATION")
         run.report(1, 2)
-        run.review(1, 2, "REPAIR_IMPLEMENTATION")
+        run.review(1, 2, "REPAIR_IMPLEMENTATION", checks=GREEN_TESTS)
         s = run.state()
         expect("replans instead of escalating", step(s), ("PLAN", None))
         expect("writes plan v2", s["dispatch"]["plan_path"].endswith("plan-v2.md"), True)
@@ -246,8 +250,22 @@ def test_spent_impl_cap_replans_while_plan_budget_lasts():
         run.report(2)
         run.review(2, 1, "REPAIR_IMPLEMENTATION")
         run.report(2, 2)
-        run.review(2, 2, "REPAIR_IMPLEMENTATION")
+        run.review(2, 2, "REPAIR_IMPLEMENTATION", checks=GREEN_TESTS)
         expect("now both budgets are spent", step(run.state()), ("FINISH", "ESCALATED"))
+
+
+def test_failing_tests_never_replan():
+    """A red suite is not a plan gap: no new plan, a human decides."""
+    with FixtureRepo() as repo:
+        run = Run(repo, impl_cap=1, plan_cap=3)
+        run.derive_raw("PLAN")
+        run.plan(1)
+        run.report(1)
+        run.review(1, 1, "REPAIR_IMPLEMENTATION",
+                   checks={"tests": {"status": "FAILED", "total": 14, "failed": 2}})
+        s = run.state()
+        expect("escalates", step(s), ("FINISH", "ESCALATED"))
+        expect_true("says the tests fail", "tests still fail" in s["reason"])
 
 
 def test_runs_are_isolated():
@@ -340,6 +358,24 @@ def test_red_tree_comes_first():
         first = prose.split("\n")[2]
         expect_true("the red warning is the first thing said", "RED" in first)
         expect_true("location named", "OrderServiceTest.java:12" in prose)
+
+
+def test_complete_plan_over_a_red_suite_is_RED_not_DONE():
+    """A plan that says COMPLETE must not turn a broken suite into a DONE run."""
+    with FixtureRepo() as repo:
+        run = Run(repo, commit=True)
+        run.derive_raw("PLAN")
+        run.plan(1, status="COMPLETE")
+        (run.dir / "checks").mkdir()
+        (run.dir / "checks" / "tests-v1-r1.md").write_text(container("tests", {
+            "status": "FAILED", "failures": [{"test": "com.acme.OrderServiceTest#shouldA",
+                                              "location": "OrderServiceTest.java:20",
+                                              "failure_phase": "assertion", "message": "expected 2"}]}),
+            encoding="utf-8")
+        code, prose = run.finish()
+        expect_true("outcome is RED", "Outcome: RED" in prose)
+        expect_true("no commit over a red tree", "commit" not in prose.lower().split("next steps")[0]
+                    or "RED" in prose)
 
 
 def test_reviewer_summary_is_used():
