@@ -221,49 +221,62 @@ What each base mode changes:
   `conflict` block that quotes both.
 
 **The `interactive` modifier** (from `run.json`): consult the human, and ALWAYS
-record the questions you raise so they survive a host that cannot ask live.
-- **When evidence is short**: ask ONE precise closed question and record the
-  answer as `human_decision` evidence.
-- **In legacy, also confirm what you freeze**: pick the FEW most consequential
-  or non-obvious behaviors (an odd branch, a magic value, a suspect guard) and
-  ask "the code does X here — freeze it as current behavior, or is X a defect
-  to flag?" At most 3–5 questions, NEVER one per scenario.
-- Record each answer on the scenario it concerns, in `notes` — it becomes an
-  `tc-agent-note` on the test: `human-confirmed: <what>` or `reported as defect: <what>`
-  (legacy still freezes the current behavior). "I don't know / skip" moves the
-  scenario to `deferred` with the question in `reason`.
-- ALWAYS also list each question in `context.notes` as `CONFIRM: <ref> — <q>`,
-  so a one-shot run leaves them for review; `finish` puts them in the report.
-- **Ask for the SHAPE of business values — ONE gate question first.** Collect
-  every KIND of value this plan needs that nothing in the repo backs (an id, an
-  account number, a code, a dictionary key a reader would recognize), then ask
-  one question that lists them:
+record the questions you raise so they survive a host that cannot ask live. Two
+separate rounds, in this order, with separate budgets — the freeze questions
+never eat the data question.
+
+**Round 1 — test data (ALWAYS, and FIRST).** In an interactive run you ask the
+data question unless one of these is true, and then you write the reason in
+`context.notes` instead ("test data: covered by docs/test-data.md", "test data:
+every value comes from existing tests"):
+- the pack has a TEST DATA section that covers every kind of value you need;
+- every value you need already comes from an existing test, a builder, a fixture
+  or an enum in the pack, or from `dispatch.known_test_data`.
+
+A value is NOT covered just because the production code contains a literal: the
+code shows what the guard compares, not what a REAL value looks like. Ids,
+account numbers, product and transfer codes, dictionary keys, names, document
+numbers — if you were about to write `"1"`, `"KEY-1"`, `"test"` or an invented
+literal for one of them, it is uncovered and you ask.
+
+Ask ONE question that lists the uncovered kinds:
 
       "I need example values for: customer id, account number, transfer type.
        Do you have a file with such examples, or shall we go through a few
        questions? (no = I use neutral placeholders)"
 
-  On **no**: stop asking about data for this run, use neutral values (§A4), send
-  a kind whose meaning decides a branch to `deferred`, and write one
-  `context.notes` line: "test data declined by the human".
-  On **yes**: the first question is always the file — "do you keep example
-  values in a file? give me the path, or say no and we go through a few
-  questions" — because one path answers every kind at once. Given a path, read
-  that file (it counts against the 5-file escape hatch), use it, and record it in
-  `context.notes`: "test data file: <path> (add it to test_data_paths to use it
-  in every run)". Then, only for the kinds it does not cover — or for all of
-  them when there is no file — ask per KIND, never per field (at most 3
-  questions, inside the budget above): "customer ids in this system: what does a
-  real one look like?"
-  One answer covers `ownerCustomerId` and `coownerCustomerId`. Record each as
-  `{concept, rule, examples, applies_to, used_by}` in `context.test_data`, use it
-  for the scenario's `data`, and cite it as `human_decision` evidence.
-  When the run had no TEST DATA file, add a `context.notes` line with what you
+- **A path**: read that file (it counts against the 5-file escape hatch), use it,
+  and note it: "test data file: <path> (add it to test_data_paths to use it in
+  every run)".
+- **Questions**: ask per KIND, never per field, at most 3. "Customer ids in this
+  system: what does a real one look like?" — one answer covers `ownerCustomerId`
+  and `coownerCustomerId`. Record each as `{concept, rule, examples, applies_to,
+  used_by}` in `context.test_data`, use it for the scenario's `data`, and cite it
+  as `human_decision` evidence. Then add a `context.notes` line with what you
   were told — "test data worth keeping: customer id = 9 digits; transfer type =
-  ELIXIR | SORBNET (put it in a file and list it under test_data_paths)" — so
-  the human answers this once and never again.
+  ELIXIR | SORBNET (put it in a file and list it under test_data_paths)" — so the
+  human answers this once and never again.
+- **No**: use neutral values (§A4), send to `deferred` any kind whose meaning
+  decides a branch, and note "test data declined by the human". Do not ask again
+  in this run.
 
-**Never ask for what you can already find.** Before the gate question, take
+**Round 2 — what you freeze (legacy), and evidence that is short.** After the
+data round:
+- **When evidence is short**: ask ONE precise closed question and record the
+  answer as `human_decision` evidence.
+- **In legacy, confirm what you freeze**: pick the FEW most consequential or
+  non-obvious behaviors (an odd branch, a magic value, a suspect guard) and ask
+  "the code does X here — freeze it as current behavior, or is X a defect to
+  flag?" At most 3–5 questions, NEVER one per scenario.
+- Record each answer on the scenario it concerns, in `notes` — it becomes a
+  `tc-agent-note` on the test: `human-confirmed: <what>` or `reported as defect:
+  <what>` (legacy still freezes the current behavior). "I don't know / skip"
+  moves the scenario to `deferred` with the question in `reason`.
+- ALWAYS also list each question of both rounds in `context.notes` as
+  `CONFIRM: <ref> — <q>`, so a one-shot run leaves them for review; `finish`
+  puts them in the report.
+
+**Never ask for what you can already find.** Before Round 1's question, take
 every kind off the list that is answered by, in this order:
 1. The pack's **TEST DATA** section — the files somebody named for this run
    (profile `test_data_paths`, or `--test-data`). Cite the file as `fixture`
@@ -276,6 +289,11 @@ every kind off the list that is answered by, in this order:
    survives BETWEEN runs.
 4. Builders, fixtures and enums in the pack.
 Ask a human only about what is left, and only in `interactive`.
+
+In an interactive run the plan MUST show what happened with the data round:
+either `context.test_data` entries, or a `context.notes` line saying why no
+question was needed or that the human declined. A plan with neither means you
+skipped a step you were told to take.
 
 ### Phase 5 — classify evidence strength with the script, not by judgement
 
