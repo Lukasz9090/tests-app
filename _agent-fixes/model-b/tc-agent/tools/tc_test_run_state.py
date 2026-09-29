@@ -194,12 +194,35 @@ def test_caps():
         run.report(1, 2)
         run.review(1, 2, "REPAIR_IMPLEMENTATION")
         s = run.state()
-        expect("impl_cap reached", step(s), ("FINISH", "ESCALATED"))
-        expect_true("says why", "impl_cap 2" in s["reason"])
+        expect("impl_cap reached and no plan budget left", step(s), ("FINISH", "ESCALATED"))
+        expect_true("says why", "impl_cap 2" in s["reason"] and "plan_cap 1" in s["reason"])
         run.review(1, 2, "REPAIR_PLAN")
         s = run.state()
         expect("plan_cap reached", step(s), ("FINISH", "ESCALATED"))
         expect_true("says why", "plan_cap 1" in s["reason"])
+
+
+def test_spent_impl_cap_replans_while_plan_budget_lasts():
+    """Three failed repairs of one plan are a plan problem, not an assertion problem."""
+    with FixtureRepo() as repo:
+        run = Run(repo, impl_cap=2, plan_cap=2)
+        run.derive_raw("PLAN")
+        run.plan(1)
+        run.report(1)
+        run.review(1, 1, "REPAIR_IMPLEMENTATION")
+        run.report(1, 2)
+        run.review(1, 2, "REPAIR_IMPLEMENTATION")
+        s = run.state()
+        expect("replans instead of escalating", step(s), ("PLAN", None))
+        expect("writes plan v2", s["dispatch"]["plan_path"].endswith("plan-v2.md"), True)
+        expect("the planner is told why", s["dispatch"]["replan_cause"], "impl_cap_exhausted")
+        expect_true("says why", "impl_cap 2 reached" in s["reason"])
+        run.plan(2)
+        run.report(2)
+        run.review(2, 1, "REPAIR_IMPLEMENTATION")
+        run.report(2, 2)
+        run.review(2, 2, "REPAIR_IMPLEMENTATION")
+        expect("now both budgets are spent", step(run.state()), ("FINISH", "ESCALATED"))
 
 
 def test_runs_are_isolated():
@@ -346,6 +369,11 @@ def test_counts_span_every_round_of_the_run():
         expect("all six tests of the run", sorted(info["written"]), [f"shouldT{i}" for i in range(1, 7)])
         expect("one placeholder", info["placeholders_written"], ["shouldT7"])
         expect("history", info["history"], ["v1-r1 REPAIR_PLAN", "v2-r1 ACCEPT_PARTIAL"])
+        run.review(1, 1, "REPAIR_IMPLEMENTATION")   # same run, but the caps fallback made v2
+        expect("history marks the fallback", o.review_history(run.dir),
+               ["v1-r1 REPAIR_IMPLEMENTATION", "repair rounds spent -> replanned as v2",
+                "v2-r1 ACCEPT_PARTIAL"])
+        run.review(1, 1, "REPAIR_PLAN")
         expect("CONFIRM from both plans", len(info["confirm"]), 2)
         code, prose = run.finish()
         expect_true("rounds line", "rounds: v1-r1 REPAIR_PLAN -> v2-r1 ACCEPT_PARTIAL" in prose)

@@ -65,7 +65,7 @@ Then run `state` again.
 **3. Report.** Show the user the output of `finish` VERBATIM. It already puts a
 red working tree first, lists what changed, what was deliberately left as a
 placeholder, the suggestions, the questions for a human, the commit (or why
-there was none) and the next steps. Do not summarise it into something rosier,
+there was none) and the next steps. Do not summarize it into something rosier,
 and do not add fixes of your own.
 
 ## Dispatch rules

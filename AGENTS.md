@@ -12,7 +12,7 @@ Reading a generated test:
 - a Javadoc with `tc-agent: generated` marks a method written by the agent;
 - `tc-agent-characterizes: <Class>@<sha>` means the test froze what the code did at that
   commit, bugs included — when it fails after a change, first ask whether the
-  old behaviour was right, not how to make the test green;
+  old behavior was right, not how to make the test green;
 - an empty `@Disabled("AI deferred: …")` method with `tc-agent-deferred` is a scenario
   deliberately left untested; delete it (or fix the seam it names) to let the
   agent try again.

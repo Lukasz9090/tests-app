@@ -42,7 +42,7 @@ def strength(evidence_list):
     if types & {"builder", "fixture"}:
         return "strong" if len(types) >= 2 else "medium"
     # The source of the code under test: on its own it is enough to characterize
-    # current behaviour (legacy/characterization), so it is never weak by itself.
+    # current behavior (legacy/characterization), so it is never weak by itself.
     if "implementation" in types:
         return "medium"
     pool = [(t, r) for t, r in entries if t in MEDIUM_POOL]

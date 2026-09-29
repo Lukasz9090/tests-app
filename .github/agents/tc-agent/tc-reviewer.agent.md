@@ -69,7 +69,7 @@ target class, then check that:
   `metadata_defect` (the parser reports it as "old @-tag format"). A separate
   `tc-agent: generated` or `tc-agent-interactive:` line in an OLDER test is not
   a finding — only a method this run wrote must use the one-line form;
-- a `PLACEHOLDER` whose reason is not untestable behaviour (a name clash, a
+- a `PLACEHOLDER` whose reason is not untestable behavior (a name clash, a
   convenience, "no fixture / no evidenced value" for a relational value or an
   object shape — conventions §A4, or "the type / signature is not in the context
   pack", which is a lookup problem) is a misused placeholder:
@@ -105,7 +105,7 @@ gates — a repair here would chase something the pipeline itself calls DONE.
 
 **5. Stage 2 — quality (§B and REPO CONVENTIONS).** Only when Stage 1 passed,
 and only on the methods this run wrote or repaired. Ask about each one: does the
-assertion prove the behaviour in `description` — for an exception, the type AND
+assertion prove the behavior in `description` — for an exception, the type AND
 the property that tells it apart? Is it `assertNotNull` only, or `verify` only?
 Does it repeat an existing test? Is the setup readable? Any flakiness smell
 (`Thread.sleep`, `Random`, `now()` inside an assertion, order dependence)? Does
@@ -175,7 +175,7 @@ repeat goes to REPAIR_PLAN, or to BLOCKED when you cannot attribute it.
 
 On `ACCEPT` and `ACCEPT_PARTIAL` write `commit_summary`: **2–5 English
 sentences, past tense**, for the commit message and the top of the run report.
-Say what was added (how many tests, for which methods or behaviours), what was
+Say what was added (how many tests, for which methods or behaviors), what was
 deliberately left as a placeholder and why, and what would unblock it. No
 scenario ids, no speculation, no praise.
 

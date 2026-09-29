@@ -165,12 +165,20 @@ def run_results(d: Path) -> tuple:
 
 
 def review_history(d: Path) -> list:
-    """Every review of the run, oldest first: `v1-r1 REPAIR_PLAN`, ..."""
-    out = []
-    for n in plan_versions(d):
+    """Every review of the run, oldest first: `v1-r1 REPAIR_PLAN`, ...
+
+    A plan version that follows a REPAIR_IMPLEMENTATION is the caps fallback, not
+    something the reviewer asked for; say so, or the history reads like a bug.
+    """
+    out, versions = [], plan_versions(d)
+    for n in versions:
+        last = None
         for m in review_iterations(d, n):
             rv = _safe(review_path(d, n, m))
-            out.append(f"v{n}-r{m} {rv.get('decision', '?') if '__error__' not in rv else 'unreadable'}")
+            last = rv.get("decision", "?") if "__error__" not in rv else "unreadable"
+            out.append(f"v{n}-r{m} {last}")
+        if n + 1 in versions and last == "REPAIR_IMPLEMENTATION":
+            out.append(f"repair rounds spent -> replanned as v{n + 1}")
     return out
 
 
@@ -348,8 +356,24 @@ def compute_state(repo: Path, directory: Path) -> dict:
         return finish("ESCALATED", f"reviewer decided {decision} at v{n}-r{rev_m}; a human decides")
     if decision == "REPAIR_IMPLEMENTATION":
         if gen_m >= impl_cap:
+            # Three failed repairs of the SAME plan mean the plan is the problem,
+            # not the assertions: what a repair cannot reach (an unplanned branch,
+            # a missing case) only a new plan can add. Spend the plan budget
+            # before giving up - the tests already written stay in the code and
+            # the next planner sees them.
+            if n < plan_cap:
+                out["next_action"] = "PLAN"
+                out["reason"] = (f"impl_cap {impl_cap} reached at v{n} and the reviewer still asks "
+                                 f"for a repair; replanning as v{n + 1} ({n + 1} of {plan_cap})")
+                out["dispatch"] = {"agent": "tc-planner", "run_dir": out["run_dir"],
+                                   "plan_path": rel(plan_path(directory, n + 1), repo),
+                                   "review_path": rel(r_path, repo),
+                                   # The planner is given ONLY this object, so the
+                                   # reason it is replanning has to travel in it.
+                                   "replan_cause": "impl_cap_exhausted"}
+                return out
             return finish("ESCALATED", f"REPAIR_IMPLEMENTATION but impl_cap {impl_cap} reached "
-                                       f"at v{n} (rounds={gen_m})")
+                                       f"at v{n} (rounds={gen_m}) and plan_cap {plan_cap} is spent")
         out["next_action"] = "GENERATE"
         out["reason"] = f"reviewer asked to repair the implementation; round {gen_m + 1} of {impl_cap}"
         out["dispatch"] = {"agent": "tc-generator", "run_dir": out["run_dir"],
@@ -364,7 +388,8 @@ def compute_state(repo: Path, directory: Path) -> dict:
         out["reason"] = f"reviewer asked to repair the plan; writing plan v{n + 1}"
         out["dispatch"] = {"agent": "tc-planner", "run_dir": out["run_dir"],
                            "plan_path": rel(plan_path(directory, n + 1), repo),
-                           "review_path": rel(r_path, repo)}
+                           "review_path": rel(r_path, repo),
+                           "replan_cause": "reviewer_repair_plan"}
         return out
     return finish("ESCALATED", f"unrecognized review decision {decision!r}")
 
@@ -530,7 +555,7 @@ def template_summary(info: dict, outcome: str) -> str:
     parts = []
     if info["resealed"]:
         parts.append(f"Resealed {len(info['resealed'])} characterization test(s) of {cls} to {sha}; "
-                     f"they still pass, so the behaviour they froze did not change.")
+                     f"they still pass, so the behavior they froze did not change.")
     if info["plan_status"] == "COMPLETE":
         k = len(info["placeholders_in_code"])
         parts.append(f"No new tests were generated for {cls}: the planner found the remaining "

@@ -94,7 +94,7 @@ the method name: `implementation_hints.test_method` in the plan,
 **Stale** = a legacy test whose `tc-agent-characterizes` sha no longer names the last
 commit of the target file (or the target has uncommitted changes). A stale test
 that still passes only needs its sha moved (`reseal`, done by a script); a
-stale test that fails means the frozen behaviour changed and goes back to the
+stale test that fails means the frozen behavior changed and goes back to the
 planner.
 
 ## 4. Scripts
@@ -144,4 +144,4 @@ Precedence, rule by rule:
 3. **agent defaults** — `tc-test-conventions.md` §B.
 
 Repo instructions are about style and technique. They are never evidence about
-business behaviour.
+business behavior.

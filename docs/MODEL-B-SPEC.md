@@ -27,12 +27,12 @@ Metadane są w **Javadoc nad METODĄ testu** — nigdy na klasie. Fakty maszynow
 
 ```java
 /**
- * AI-generated test. Characterizes current behaviour of OrderService (a freeze, not a spec).
+ * AI-generated test. Characterizes current behavior of OrderService (a freeze, not a spec).
  *
  * tc-agent: generated
  * tc-agent-mode: legacy
  * tc-agent-characterizes: OrderService@29aeef6a
- * tc-agent-note: business-hours guard off-by-one at 17:00 — reported as a defect, frozen as current behaviour
+ * tc-agent-note: business-hours guard off-by-one at 17:00 — reported as a defect, frozen as current behavior
  */
 @Test
 @DisplayName("active customer can create an order")

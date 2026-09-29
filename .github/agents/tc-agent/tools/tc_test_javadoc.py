@@ -47,7 +47,7 @@ class OrderServiceTest {
     void setUp() { }
 
     /**
-     * AI-generated test. Characterizes current behaviour of OrderService (a freeze, not a spec).
+     * AI-generated test. Characterizes current behavior of OrderService (a freeze, not a spec).
      *
      * tc-agent-mode: legacy, interactive: true
      * tc-agent-characterizes: OrderService@29aeef6a
@@ -111,7 +111,7 @@ def test_placeholder():
     text = make_test_class("OrderServiceTest", ai_test("shouldRejectWhenOutsideHours", "29aeef6a",
                                                   deferred="needs a Clock seam"))
     (m,), _ = parse(text)
-    expect("placeholder recognised", m.is_placeholder, True)
+    expect("placeholder recognized", m.is_placeholder, True)
     expect("disabled", m.disabled, True)
     expect("disabled reason", m.disabled_reason, "AI deferred: needs a Clock seam")
     expect("empty body", m.body_empty, True)
@@ -176,7 +176,7 @@ def test_older_line_format_is_read_without_complaint():
 def test_old_at_format_is_read_and_flagged():
     body = doc("@aiGenerated", "@mode legacy", "@characterizes OrderService@29aeef6a", "@note old") + "@Test void a() {}"
     (m,), _ = parse("class T {\n" + body + "\n}\n")
-    expect("still recognised as AI", (m.meta.ai, m.meta.mode, m.meta.characterizes_sha, m.meta.notes),
+    expect("still recognized as AI", (m.meta.ai, m.meta.mode, m.meta.characterizes_sha, m.meta.notes),
            (True, "legacy", "29aeef6a", ["old"]))
     expect_true("flagged for migration", any("old @-tag format" in d for d in m.meta.defects))
 

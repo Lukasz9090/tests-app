@@ -51,6 +51,7 @@ Wszystkie pozycje w §1 są zaakceptowanymi decyzjami.
 | D35 | Układ katalogu agenta | `tc-contracts.md`, `tc-test-conventions.md`, `tc-project-profile.md` i `tc-requirements.txt` przeniesione do `references/`. W katalogu głównym zostają prompty ról i README. Ścieżki w promptach, skryptach i dokumentach zaktualizowane; `tc_common.profile()` czyta `references/tc-project-profile.md`, a stare miejsce zostaje jako fallback. | DECYZJA (§9) |
 | D36 | JUnit 4 obok JUnit 5 | Wersję czyta `repo_contract` z pom i context-pack pokazuje ją jako `TEST FRAMEWORK`. §A0 konwencji: piszemy adnotacjami TEJ wersji. JUnit 4: zaślepka na `@Ignore` (parser czyta `@Disabled` i `@Ignore`), bez `@DisplayName`, bez testów parametryzowanych, Mockito przez `@RunWith`. Nieznana wersja — idziemy za istniejącą klasą testową. | DECYZJA (§10) |
 | D37 | Pack nie jest granicą świata | Do packa wchodzą też źródła generowane (`target/generated-sources` itp., etykieta GENERATED SOURCE), a typy z jarów są wypisane w sekcji TYPES FROM DEPENDENCIES. Brak typu lub sygnatury w packu NIE jest powodem do zaślepki — to problem wyszukania; planer ma escape hatch (5 plików), generator buduje typ tak jak target, recenzent traktuje taką zaślepkę jako błędną. | DECYZJA (§10) |
+| D38 | Wyczerpane rundy naprawy = replan | Gdy `impl_cap` się kończy, a recenzent nadal chce REPAIR_IMPLEMENTATION, i `plan_cap` ma jeszcze miejsce, przebieg idzie do nowej wersji planu zamiast ESCALATED. Planer dostaje tę recenzję i planuje po jednym scenariuszu na nieobjętą gałąź / przeżywającego mutanta. ESCALATED dopiero, gdy oba budżety są wyczerpane. Dispatch niesie `replan_cause` (`reviewer_repair_plan` / `impl_cap_exhausted`), a historia rund w raporcie pokazuje `repair rounds spent -> replanned as vN`. | DECYZJA (§5.4) |
 ---
 
 ## 2. Przebieg z lotu ptaka
@@ -106,7 +107,7 @@ Pierwsza linia Javadoca to proza dla człowieka. Tagi są maszynowe: jeden tag n
 
 ```java
 /**
- * AI-generated test. Characterizes current behaviour of AppointmentService (a freeze, not a spec).
+ * AI-generated test. Characterizes current behavior of AppointmentService (a freeze, not a spec).
  *
  * tc-agent-mode: legacy, interactive: false
  * tc-agent-characterizes: AppointmentService@29aeef6a
@@ -132,11 +133,11 @@ Nazwa metody i sekcje `given/when/then` to domyślne konwencje agenta (§10), a 
 
 ```java
 /**
- * AI-generated test. Characterizes current behaviour of AppointmentService (a freeze, not a spec).
+ * AI-generated test. Characterizes current behavior of AppointmentService (a freeze, not a spec).
  *
  * tc-agent-mode: legacy, interactive: true
  * tc-agent-characterizes: AppointmentService@29aeef6a
- * tc-agent-note: business-hours guard rejects 17:00 exactly — human reported it as a defect; frozen as current behaviour, not fixed
+ * tc-agent-note: business-hours guard rejects 17:00 exactly — human reported it as a defect; frozen as current behavior, not fixed
  */
 ```
 
@@ -423,7 +424,7 @@ Added 9 characterization tests for AppointmentService.create and cancel,
 covering the notice-period, horizon and inactive-offer guards. Two scenarios
 are kept as @Disabled placeholders because the business-hours guard reads
 LocalDateTime.now() directly; injecting a java.time.Clock would unblock them.
-Existing tests for reschedule were only resealed - their behaviour did not change.
+Existing tests for reschedule were only resealed - their behavior did not change.
 
 Mode: legacy | target: AppointmentService@4b1c2aa9
 Tests: +9 new, 2 placeholders, 3 resealed, 0 human tests touched
@@ -439,7 +440,7 @@ Wiadomość ma trzy części:
 2. **Podsumowanie prozą, 2–5 zdań** — pisze je **recenzent** w nowym polu `commit_summary` w review. To jedyna rola, która widziała plan, wygenerowane testy i wyniki bramek, a działa jako ostatnia przed ACCEPT. Reguły dla recenzenta: angielski, czas przeszły, bez nazw TC, bez spekulacji; mówi co dodano, co zostało świadomie pominięte i dlaczego, i co odblokowałoby resztę. Pole jest wymagane przy decyzji `ACCEPT` / `ACCEPT_PARTIAL`.
 3. **Blok faktów** — składany przez skrypt z artefaktów przebiegu: tryb, sha targetu, liczby testów (nowe / zaślepki / reseal), bramki, sugestie, ścieżka do raportu. Te liczby nie pochodzą od LLM, więc zawsze zgadzają się z raportem.
 
-Gdy przebieg kończy się `DONE` **bez recenzenta** (sam reseal albo planer zwrócił `COMPLETE`), nie ma `commit_summary`. Skrypt wstawia wtedy zdania z szablonu, np. „Resealed 3 characterization tests of AppointmentService after commit 4b1c2aa9; their behaviour did not change.”.
+Gdy przebieg kończy się `DONE` **bez recenzenta** (sam reseal albo planer zwrócił `COMPLETE`), nie ma `commit_summary`. Skrypt wstawia wtedy zdania z szablonu, np. „Resealed 3 characterization tests of AppointmentService after commit 4b1c2aa9; their behavior did not change.”.
 
 Ta sama proza trafia też na początek `run-report.md`, więc człowiek czytający raport i historię gita widzi ten sam opis.
 
@@ -674,7 +675,7 @@ Konflikty rozstrzyga się punkt po punkcie. Jeśli repo nadpisuje tylko nazewnic
 Nagłówek sekcji w packu:
 
 ```
-## REPO CONVENTIONS (repo-provided — style/naming only, NOT behavioural evidence)
+## REPO CONVENTIONS (repo-provided — style/naming only, NOT behavioral evidence)
 Precedence: pipeline integrity (tc-contracts.md, tc-test-conventions.md §A) > these files > agent defaults (tc-test-conventions.md §B).
 A rule here that contradicts §A is void.
 Sources: .github/copilot-instructions.md, .github/instructions/testing.instructions.md (applyTo: src/test/**)
@@ -725,7 +726,7 @@ A2. Placeholders. A scenario that is deferred, or that you cannot implement
     Every plan scenario ends up in the code as a test OR a placeholder.
 
 A3. Characterization. A legacy test freezes what the code did at <sha>, bugs
-    included. It asserts current behaviour, never "correct" behaviour. Its
+    included. It asserts current behavior, never "correct" behavior. Its
     first Javadoc line says so.
 
 A4. Data. Every business value comes from the plan's evidence (builders,
@@ -884,3 +885,4 @@ Otwartych decyzji nie ma. Następny krok: etap 1 (aktualizacja `MODEL-B-SPEC.md`
 - **Układ katalogu (D35):** materiały referencyjne (kontrakty, konwencje, profil, requirements) wylądowały w `references/`, żeby w katalogu agenta zostały tylko prompty ról i README.
 - **JUnit 4 (D36):** pipeline nigdy nie był związany z JUnit 5 (skrypty wołają tylko `mvn`, JaCoCo i PIT), ale konwencje i parser zakładały piątkę: `@Disabled`, `@DisplayName`, `@ParameterizedTest`. Teraz wersja z pom trafia do packa jako `TEST FRAMEWORK`, a role piszą zgodnie z nią. Testy parametryzowane w JUnit 4 pomijamy (`@RunWith(Parameterized)` zajmuje całą klasę) — jedna metoda na scenariusz.
 - **Zaślepki z powodu packa (D37):** przebieg skończył się samymi zaślepkami z uzasadnieniem „context pack does not include the generated response and client factory signatures”. Dwie przyczyny: `SKIP_DIRS` wycinało `target/`, więc kod generowany (klient OpenAPI, DTO odpowiedzi) był niewidoczny, a prompty mówiły o packu jak o jedynym dopuszczalnym źródle. Teraz pack bierze źródła generowane i wypisuje typy z zależności, a role wiedzą, że brak sygnatury to problem wyszukania, nie nietestowalne zachowanie.
+- **Wyczerpane rundy naprawy (D38):** klasa-bóg skończyła `ESCALATED` na `v1-r3` przy 100% metod, 92% linii i 53% gałęzi, mimo że `plan_cap` był nietknięty. Trzy nieudane naprawy tego samego planu znaczą, że brakuje scenariuszy (druga strona guardów, nulle, wyjątki), a tego naprawa asercji nie doda. Teraz przebieg przechodzi w takim wypadku do planu v2.

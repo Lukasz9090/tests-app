@@ -32,7 +32,7 @@ Read first, in this order:
 > `deferred` with a question.
 
 This bites on invented business values, not on the logic under test. In
-`legacy` mode the code under test IS the behaviour you are freezing, so its own
+`legacy` mode the code under test IS the behavior you are freezing, so its own
 lines are legitimate evidence (`type: implementation`): a scenario that asserts
 what the code demonstrably does needs no second source to stay out of
 `deferred`. What still defers is a concrete value — an amount, an IBAN, a status
@@ -76,6 +76,17 @@ When `review_path` is set, this is a REPAIR_PLAN: the review's `feedback.plan`
 and its findings with `attributed_to: plan` name the gaps your previous plan
 left. Plan those; keep everything else the previous plan already delivered.
 
+`dispatch.replan_cause` says why you are replanning. `reviewer_repair_plan` is
+the case above. `impl_cap_exhausted` means the repair rounds ran out while a
+gate was still failing: the review blames the implementation, but the repairs
+could not close the gap, so read it as a PLAN gap instead. Take
+`checks.coverage.uncovered` and `checks.mutation` from that review and plan ONE
+scenario per uncovered branch or surviving mutant that no existing scenario
+reaches: the other side of a guard, a null, an empty collection, a thrown
+exception. Do not re-plan what the code already
+tests; the tests written in the earlier rounds are in the file and listed in
+derive-state.
+
 ## Steps — in this order
 
 ### Phase 0 — check the repository contract
@@ -104,7 +115,7 @@ test written from your plan quotes it in `tc-agent-characterizes`.
 code that is dirty or younger than the profile's `freshness_days` — unless the
 run is `interactive`. In that case, when `git.age_days` is below the limit, ask
 the human ONE question before planning: "the target was last committed N days
-ago — freeze its current behaviour as-is?" A "no" is status `BLOCKED` with that
+ago — freeze its current behavior as-is?" A "no" is status `BLOCKED` with that
 as `reason`. When the host cannot ask live, record `CONFIRM: <file> — freeze
 code committed N days ago?` in `context.notes` and continue.
 
@@ -149,7 +160,7 @@ invent a ref.
 **Two entries that point at the same lines are ONE piece of evidence.** A
 scenario backed by a single non-implementation source is weak evidence — a fact
 to report, not a score to inflate. In legacy mode, the method's own lines
-(`type: implementation`) are enough on their own to freeze current behaviour.
+(`type: implementation`) are enough on their own to freeze current behavior.
 
 A failing or `@Disabled` test cannot be `existing_test` evidence; use `usage`
 plus a note. Never run the full suite.
@@ -177,11 +188,11 @@ and `test_file` (and optionally `test_class`):
   `<Target>Test` in the target's package under the test root.
 
 **Stale entries (`recharacterize`).** For each one:
-- a stale test that FAILS: the frozen behaviour changed. In legacy, plan a
-  scenario that freezes the NEW current behaviour with `replaces:
+- a stale test that FAILS: the frozen behavior changed. In legacy, plan a
+  scenario that freezes the NEW current behavior with `replaces:
   <Class>#<method>` (keep the method name unless it now lies). Say in the
   description what changed. When the change looks like a regression, add a
-  `notes` entry ("behaviour changed at <sha>: was X, now Y") — with
+  `notes` entry ("behavior changed at <sha>: was X, now Y") — with
   `interactive`, ask whether it is intended.
 - a stale placeholder: re-evaluate it. If it can now be implemented (a seam
   appeared, new evidence), plan a scenario with `replaces: <placeholder>`.
@@ -192,12 +203,12 @@ and `test_file` (and optionally `test_class`):
 raise them again unless you found NEW evidence; then plan a scenario with
 `replaces`.
 
-**Obsolete tests** (the behaviour they test is gone from the code): list them in
+**Obsolete tests** (the behavior they test is gone from the code): list them in
 `obsolete` with the reason. Never plan their deletion as work — a human decides.
 
 What each base mode changes:
 - **`legacy`** — set top-level `characterization: true`. You freeze the CURRENT
-  behaviour, bugs included, so never describe it as correct business behaviour.
+  behavior, bugs included, so never describe it as correct business behavior.
 - **`spec-driven`** — read the spec named in `run.json`. When the spec and the
   code disagree, do NOT pick a side: status `NEEDS_CLARIFICATION` with a
   `conflict` block that quotes both.
@@ -207,12 +218,12 @@ record the questions you raise so they survive a host that cannot ask live.
 - **When evidence is short**: ask ONE precise closed question and record the
   answer as `human_decision` evidence.
 - **In legacy, also confirm what you freeze**: pick the FEW most consequential
-  or non-obvious behaviours (an odd branch, a magic value, a suspect guard) and
-  ask "the code does X here — freeze it as current behaviour, or is X a defect
+  or non-obvious behaviors (an odd branch, a magic value, a suspect guard) and
+  ask "the code does X here — freeze it as current behavior, or is X a defect
   to flag?" At most 3–5 questions, NEVER one per scenario.
 - Record each answer on the scenario it concerns, in `notes` — it becomes an
   `tc-agent-note` on the test: `human-confirmed: <what>` or `reported as defect: <what>`
-  (legacy still freezes the current behaviour). "I don't know / skip" moves the
+  (legacy still freezes the current behavior). "I don't know / skip" moves the
   scenario to `deferred` with the question in `reason`.
 - ALWAYS also list each question in `context.notes` as `CONFIRM: <ref> — <q>`,
   so a one-shot run leaves them for review; `finish` puts them in the report.
@@ -317,11 +328,11 @@ target is `{ "class": "OrderService" }`: OMIT `method` entirely, never `null`.
     },
     {
       "id": "TC02",
-      "description": "reschedule keeps the original duration (behaviour changed at 4b1c2aa9)",
+      "description": "reschedule keeps the original duration (behavior changed at 4b1c2aa9)",
       "priority": "high",
       "evidence_strength": "medium",
       "replaces": "AppointmentServiceTest#shouldKeepDurationWhenRescheduling",
-      "notes": ["behaviour changed at 4b1c2aa9: duration used to be recomputed from the offer"],
+      "notes": ["behavior changed at 4b1c2aa9: duration used to be recomputed from the offer"],
       "implementation_hints": {
         "test_method": "shouldKeepDurationWhenRescheduling",
         "test_file": "src/test/java/com/testsapp/service/AppointmentServiceTest.java"

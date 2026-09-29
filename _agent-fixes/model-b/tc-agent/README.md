@@ -31,7 +31,7 @@ The orchestrator turns this into `tc_orchestrate.py start` with these options:
 | option | meaning |
 |---|---|
 | target | `ClassName` or `ClassName.methodName`. One or a list. |
-| `--mode legacy` (default) | Freeze the CURRENT behaviour, bugs included. Tests describe what the code does now. |
+| `--mode legacy` (default) | Freeze the CURRENT behavior, bugs included. Tests describe what the code does now. |
 | `--mode spec-driven` | Tests follow a specification. A failing test may mean the code is wrong → NEEDS_TRIAGE, not a fix. |
 | `--spec <path>` | The specification file for spec-driven mode. |
 | `--interactive` | The planner may ask you questions. Also turns off the freshness guard. |
@@ -46,12 +46,13 @@ The orchestrator turns this into `tc_orchestrate.py start` with these options:
    - `PLAN` — something is missing (no tests, coverage/mutation gap, untested or changed methods, stale tests);
    - `RED` — existing tests fail → a human must look;
    - `BLOCKED` — target has uncommitted changes, is not committed, or is too fresh (legacy only).
-2. **PLAN → GENERATE → REVIEW**, repeated until the reviewer accepts or a cap is hit.
-   The reviewer's decision picks the next step: repair the code, repair the plan, or accept.
-3. **RESEAL** — tests that are still green after a code change get the new commit sha.
+2. **PLAN → GENERATE → REVIEW**, repeated until the reviewer accepts or both caps are spent.
+   The reviewer's decision picks the next step: repair the code, repair the plan, or accept. When
+   `--impl-cap` runs out and a gate still fails, the run replans instead of stopping, if `--plan-cap` allows.
+3. **RESEAL** — still-green tests get the new commit sha after a code change.
 4. **FINISH** — writes `run-report.md`, prints it, and commits if `--commit` was given.
 
-Outcomes: `DONE`, `DONE_PARTIAL` (some scenarios are placeholders), `BLOCKED`, `RED`, `ESCALATED` (a cap was hit or a human decision is needed). Commit your production code first — a dirty target is always BLOCKED.
+Outcomes: `DONE`, `DONE_PARTIAL` (placeholders left), `BLOCKED`, `RED`, `ESCALATED` (caps spent or a human decision is needed). Commit your production code first — a dirty target is always BLOCKED.
 
 ## Configuration
 
@@ -65,8 +66,7 @@ Outcomes: `DONE`, `DONE_PARTIAL` (some scenarios are placeholders), `BLOCKED`, `
   Repo rules override the default style in `tc-test-conventions.md` §B, never the rules in §A.
 - **`AGENTS.md`** — `tc-agent-protected-branches: master, main, release/*` (default: `master`).
 
-Default style: names `shouldXxxWhenYyy`, `// given / // when / // then`, AssertJ,
-Mockito for repositories, class under test as a field, class `<Target>Test`.
+Default style: `shouldXxxWhenYyy`, `// given / // when / // then`, AssertJ, Mockito for repositories, class under test as a field, class `<Target>Test`.
 
 ## Commit (`--commit`)
 

@@ -96,7 +96,7 @@ def test_mutation_gap_plans():
 
 
 def test_stale_green_is_resealed_not_planned():
-    """Case 1a: the code moved, the frozen behaviour did not."""
+    """Case 1a: the code moved, the frozen behavior did not."""
     with FixtureRepo() as repo:
         old = repo.sha()
         repo.write_test("OrderServiceTest", ai_test("shouldA", old))
@@ -113,12 +113,12 @@ def test_stale_green_is_resealed_not_planned():
 
 
 def test_stale_red_is_recharacterized():
-    """Case 1b: the frozen behaviour changed. Not RED: the planner re-freezes it."""
+    """Case 1b: the frozen behavior changed. Not RED: the planner re-freezes it."""
     with FixtureRepo() as repo:
         repo.write_test("OrderServiceTest", ai_test("shouldA", repo.sha()), human_test("humanB"))
         repo.commit("tests", days_ago=20)
         repo.change_target("return amount * 2;")
-        repo.commit("behaviour change", days_ago=10)
+        repo.commit("behavior change", days_ago=10)
         runner = FakeRunner(tests=failing("com.acme.OrderServiceTest#shouldA"))
         state = derive(repo, runner)
         expect("PLAN / STALE", (state["next_action"], state["reasons"]), ("PLAN", ["STALE"]))

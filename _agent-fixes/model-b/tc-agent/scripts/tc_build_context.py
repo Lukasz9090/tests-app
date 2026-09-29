@@ -302,7 +302,7 @@ def main():
 
     # Repo-provided conventions (style only, NOT behavioral evidence)
     instructions = repo_instructions(repo, relevant)
-    header = ["\n## REPO CONVENTIONS (repo-provided — style/naming only, NOT behavioural evidence)\n",
+    header = ["\n## REPO CONVENTIONS (repo-provided — style/naming only, NOT behavioral evidence)\n",
               PRECEDENCE, ""]
     if instructions:
         header.append("Sources: " + "; ".join(f"{p.relative_to(repo).as_posix()} ({why})"

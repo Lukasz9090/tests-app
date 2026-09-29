@@ -7,7 +7,7 @@ never from an artifact an earlier run left behind:
 
     PLAN      no tests yet, a coverage/mutation gap, a method no test executes,
               lines changed since the last freeze that no test covers, or
-              characterization tests whose frozen behaviour changed (stale AND red)
+              characterization tests whose frozen behavior changed (stale AND red)
     DONE      gates met on the CURRENT code and nothing stale is red
     RED       a test that is not a stale characterization fails: stop, a human acts
     BLOCKED   legacy mode would freeze code that is dirty or too fresh
@@ -215,7 +215,7 @@ def derive(repo: Path, target_slug: str, run: dict, runner=None,
                 out["next_action"] = "BLOCKED"
                 out["reasons"] = ["TARGET_DIRTY"] + reasons
                 out["detail"] = (f"{target.rel_file} has uncommitted changes. Legacy mode freezes "
-                                 f"committed behaviour and records its sha; commit the change first, "
+                                 f"committed behavior and records its sha; commit the change first, "
                                  f"or run in spec-driven mode.")
             elif age is None:
                 out["next_action"] = "BLOCKED"
@@ -225,7 +225,7 @@ def derive(repo: Path, target_slug: str, run: dict, runner=None,
                 out["next_action"] = "BLOCKED"
                 out["reasons"] = ["TARGET_TOO_FRESH"] + reasons
                 out["detail"] = (f"{target.rel_file} was last committed {age:.1f} days ago "
-                                 f"(limit {fresh_limit:g}). Legacy mode would freeze behaviour nobody "
+                                 f"(limit {fresh_limit:g}). Legacy mode would freeze behavior nobody "
                                  f"has validated yet. Re-run with --interactive, or in spec-driven mode.")
         return out
 

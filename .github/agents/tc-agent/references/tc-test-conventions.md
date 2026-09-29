@@ -16,7 +16,7 @@ it tries, follow §A and mention the conflict in your artifact's `notes`.
 **A0. The test framework is the repo's, not a default.** The run's
 `derive-state.md` carries `repo.junit` (`"5"`, `"4"` or null) and the context
 pack repeats it as TEST FRAMEWORK. Write every test with the annotations and
-assertions of THAT version, and never add a dependency to make your favourite
+assertions of THAT version, and never add a dependency to make your favorite
 one available. Where a rule below differs, it says "JUnit 5" and "JUnit 4"
 explicitly. Both present (JUnit 4 plus the vintage engine) counts as JUnit 5.
 When the pack says the framework is unknown, follow the existing test class;
@@ -28,7 +28,7 @@ METHODS only — never on the test class, not even when the whole class is yours
 
 ```java
 /**
- * AI-generated test. Characterizes current behaviour of OrderService (a freeze, not a spec).
+ * AI-generated test. Characterizes current behavior of OrderService (a freeze, not a spec).
  *
  * tc-agent-mode: legacy, interactive: false
  * tc-agent-characterizes: OrderService@29aeef6a
@@ -43,7 +43,7 @@ METHODS only — never on the test class, not even when the whole class is yours
 | `tc-agent-note: <text>` | optional, repeatable, about THIS test (a frozen known bug, a human's answer) |
 
 First prose line:
-- legacy: `AI-generated test. Characterizes current behaviour of <Class> (a freeze, not a spec).`
+- legacy: `AI-generated test. Characterizes current behavior of <Class> (a freeze, not a spec).`
 - spec-driven: `AI-generated test. Based on a specification provided at generation time (not stored in the repo).`
 - placeholder: `AI-generated placeholder. Scenario deliberately NOT tested — see tc-agent-deferred.`
 
@@ -86,9 +86,9 @@ void shouldRejectAppointmentWhenOutsideBusinessHours() {
   it the next run sees an unexplained gap and plans it again.
 
 **A3. Characterization.** A legacy test freezes what the code did at `<sha>`,
-bugs included. It asserts current behaviour, never what you think is correct.
-When a human (interactive) said the behaviour is a defect, still assert the
-current behaviour and add `tc-agent-note: reported as defect: <what>`.
+bugs included. It asserts current behavior, never what you think is correct.
+When a human (interactive) said the behavior is a defect, still assert the
+current behavior and add `tc-agent-note: reported as defect: <what>`.
 
 **A4. Data.** Every business value comes from the plan's evidence: builders,
 fixtures, seeders, existing tests, or — in legacy — the code under test itself.

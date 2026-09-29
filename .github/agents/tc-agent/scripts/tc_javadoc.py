@@ -4,7 +4,7 @@ The committed test suite IS the pipeline's database. Every test the
 agent writes carries a Javadoc with metadata lines (tc-test-conventions.md §A1):
 
     /**
-     * AI-generated test. Characterizes current behaviour of OrderService (a freeze, not a spec).
+     * AI-generated test. Characterizes current behavior of OrderService (a freeze, not a spec).
      *
      * tc-agent-mode: legacy, interactive: false
      * tc-agent-characterizes: OrderService@29aeef6a

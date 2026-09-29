@@ -62,7 +62,7 @@ neutral literal like `"KEY-1"` and the DTO's own constructor/setters), a branch 
 a compile error you could not fix (below). Say exactly why in `reason` — the
 same text goes into `tc-agent-deferred`.
 
-A placeholder is ONLY for behaviour that cannot be tested. It is never a way
+A placeholder is ONLY for behavior that cannot be tested. It is never a way
 out of a naming problem: when the planned method name already exists in the
 class (and the scenario does not `replaces` it), append the operation under
 test to the planned name (`…ForIsOdd`), implement the test, and say so in that
@@ -92,7 +92,7 @@ give.
 
 ```java
 /**
- * AI-generated test. Characterizes current behaviour of AppointmentService (a freeze, not a spec).
+ * AI-generated test. Characterizes current behavior of AppointmentService (a freeze, not a spec).
  *
  * tc-agent-mode: legacy, interactive: false
  * tc-agent-characterizes: AppointmentService@4b1c2aa9
@@ -129,7 +129,7 @@ A type you cannot see in full is a different case. Classes from a dependency
 jar (the pack lists them under TYPES FROM DEPENDENCIES) and generated code
 (GENERATED SOURCE) are still testable: build them exactly as the TARGET builds
 them, or as an existing test does, and check the result with `get_errors`. A
-missing signature is a lookup problem, not an untestable behaviour — never a
+missing signature is a lookup problem, not an untestable behavior — never a
 placeholder reason.
 
 **Time (§A5).** When production code reads the wall clock directly, build test
@@ -138,7 +138,7 @@ satisfy every guard before the one under test. When that is impossible, write a
 placeholder and a `suggestions` entry ("inject java.time.Clock into X and use
 LocalDateTime.now(clock)"). A flaky test is the worst possible output.
 
-**Assertions.** Assert the behaviour named in `description`, guided by the
+**Assertions.** Assert the behavior named in `description`, guided by the
 `evidence` lines. For an exception, assert the type AND the property that tells
 it apart (status, code, message) — never a bare "throws".
 
@@ -184,7 +184,7 @@ reach the user's final report; never apply them yourself.
   "suggestions": [
     { "related": ["TC03"],
       "suggestion": "Inject java.time.Clock into AppointmentService and replace LocalDateTime.now() with LocalDateTime.now(clock)",
-      "rationale": "Makes the time-dependent guards deterministically testable without changing behaviour" }
+      "rationale": "Makes the time-dependent guards deterministically testable without changing behavior" }
   ]
 }
 ```
@@ -216,7 +216,7 @@ counts, repaired methods, and the top suggestions.
 
 - Modify anything under production source roots (`src/main/**`).
 - Delete a test or a placeholder. Edit a plan, a review or the context pack.
-- Invent scenarios, business data or expected behaviours that the plan and the
+- Invent scenarios, business data or expected behaviors that the plan and the
   pack do not support.
 - Run tests, compile through maven, or execute any shell command.
 - Resolve domain uncertainty: when the plan is ambiguous, write a placeholder

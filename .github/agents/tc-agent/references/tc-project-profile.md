@@ -13,7 +13,7 @@ Raise them deliberately; the Reviewer may never lower one to reach ACCEPT.
 
 **Freshness** (`freshness_days`): legacy mode without `--interactive` refuses to
 freeze a target whose last commit is younger than this many days — nobody has
-validated that behaviour yet, so a green characterization test would certify a
+validated that behavior yet, so a green characterization test would certify a
 possible bug. derive-state reports such a run as BLOCKED. Default 7.
 
 **Repo instructions** (`instruction_paths`, optional): extra instruction files the

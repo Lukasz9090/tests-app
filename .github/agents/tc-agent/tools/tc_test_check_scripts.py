@@ -119,7 +119,7 @@ def test_mutation_gap_plans():
 def test_stale_and_failing_goes_to_planner_then_reseal_path():
     with fixture() as repo:
         repo.change_target("return amount * 2;")
-        repo.commit("behaviour change", days_ago=10)
+        repo.commit("behavior change", days_ago=10)
         out = start(repo, {"FAKE_MVN_FAIL": "OrderServiceTest#shouldA"})
         state = out["state"]
         expect("PLAN / STALE (placeholder too)", (state["next_action"], state["reasons"]), ("PLAN", ["STALE"]))

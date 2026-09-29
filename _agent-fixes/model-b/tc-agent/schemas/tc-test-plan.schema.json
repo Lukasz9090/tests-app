@@ -182,7 +182,7 @@
           }
         }
       },
-      "description": "Existing tests whose behaviour is gone. A recommendation to a human, never deleted by the pipeline."
+      "description": "Existing tests whose behavior is gone. A recommendation to a human, never deleted by the pipeline."
     }
   },
   "allOf": [
