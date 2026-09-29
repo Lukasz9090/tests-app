@@ -28,17 +28,21 @@ Read `.github/agents/tc-agent/references/tc-contracts.md` first. `$C` =
   not implemented and stop.
 - `interactive` — boolean, default false.
 - `spec` — optional path to a specification (spec-driven).
+- `test_data` — optional path(s) to a file of example business values, when the
+  user names one ("examples are in docs/test-data.md"). Works in every mode:
+  with `interactive` it spares the planner the questions, without it the file is
+  simply the only data source the user offered. Repeat the flag per path.
 - `impl_cap` (default 3), `plan_cap` (default 2).
 - `commit` — boolean, default false: commit the run's test files at the end.
 
 ## Per target
 
-**1. Start the run.** This is the ONLY place `mode`, `interactive`, `spec`, the
-caps and `commit` are given — they are stored in the run's `run.json` and every
+**1. Start the run.** This is the ONLY place `mode`, `interactive`, `spec`,
+`test_data`, the caps and `commit` are given — they are stored in the run's `run.json` and every
 role reads them from there.
 
 ```
-python $C/tc_orchestrate.py start <slug> --repo . --mode <mode> [--interactive] [--spec <path>] --impl-cap <n> --plan-cap <n> [--commit]
+python $C/tc_orchestrate.py start <slug> --repo . --mode <mode> [--interactive] [--spec <path>] [--test-data <path>] --impl-cap <n> --plan-cap <n> [--commit]
 ```
 
 Remember the printed `run_id`. `start` runs derive-state, which may build the
@@ -76,8 +80,8 @@ Each role runs in a **fresh context** and reads only files, so give it ONLY:
 - the `dispatch` object from `state`, as printed (it names the run directory
   and the exact files to read and write).
 
-Never paste this conversation, never pass `mode`/`interactive`/`spec` (they are
-in `run.json`), never paraphrase a review. Invoke one role at a time, wait for
+Never paste this conversation, never pass `mode`/`interactive`/`spec`/
+`test_data` (they are in `run.json`, and the pack carries the data file), never paraphrase a review. Invoke one role at a time, wait for
 it to finish, then run `state` again. Each role's own profile selects its model.
 
 ## Never

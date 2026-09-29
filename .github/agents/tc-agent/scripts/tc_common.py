@@ -491,6 +491,11 @@ def instruction_paths(repo: Path) -> list:
     return [str(p) for p in profile(repo).get("instruction_paths", []) or []]
 
 
+def test_data_paths(repo: Path) -> list:
+    """Files with example business values, named in the profile (§test_data_paths)."""
+    return [str(p) for p in profile(repo).get("test_data_paths", []) or []]
+
+
 PROTECTED_LINE = re.compile(r"^\s*[-*]?\s*`?tc-agent-protected-branches:\s*(.*?)`?\s*$", re.M)
 DEFAULT_PROTECTED = ["master"]
 

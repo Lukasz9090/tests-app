@@ -142,6 +142,50 @@
           "pattern": "^[0-9a-f]{7,40}$",
           "description": "Abbreviated sha (%h) of the last commit that touched the target - copy git.current_sha from derive-state.md. Every legacy test written from this plan quotes it in tc-agent-characterizes."
         },
+        "test_data": {
+          "type": "array",
+          "description": "The SHAPE of a business value, as a human described it in this run (interactive only) or as the existing tests show it: what a real id, code or dictionary key looks like. It is a pattern to generate FROM, not one fixed literal - sibling fields (ownerCustomerId, coownerCustomerId) and distinct entities in one test each get their own value of that shape. The orchestrator hands every entry to the next planner of the run as known_test_data, so nobody is asked twice; across runs the tests themselves carry the shape (existing_test evidence).",
+          "items": {
+            "type": "object",
+            "required": [
+              "concept",
+              "examples"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "concept": {
+                "type": "string",
+                "description": "The KIND of value, not one field: customer id, product code, dictionary key of PskAmlConfirmation."
+              },
+              "rule": {
+                "type": "string",
+                "description": "The shape every value of this kind has: '9 digits', 'three uppercase letters'. Any value the roles derive must match it."
+              },
+              "examples": {
+                "type": "array",
+                "minItems": 1,
+                "description": "Real values of that shape. More than one when the test needs distinct entities; further ones may be derived from the rule.",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "applies_to": {
+                "type": "array",
+                "description": "Fields or parameters that carry this kind of value (customerId, ownerCustomerId, coownerCustomerId). Each gets its OWN value of the shape.",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "used_by": {
+                "type": "array",
+                "description": "Scenario ids that use this value.",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
         "notes": {
           "type": "array",
           "items": {

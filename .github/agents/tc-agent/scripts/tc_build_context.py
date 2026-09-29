@@ -200,6 +200,29 @@ def repo_instructions(repo: Path, relevant_paths: list) -> list:
     return found
 
 
+def test_data_files(repo: Path, run: dict) -> list:
+    """(path, source) for every file of example business values.
+
+    Only files somebody named: the profile's `test_data_paths` and this run's
+    `--test-data`. Nothing is guessed from file names - a file the agent found by
+    itself would be data nobody vouched for.
+    """
+    seen, out = set(), []
+
+    def take(path: Path, source: str) -> None:
+        key = str(path.resolve())
+        if key in seen or not path.is_file():
+            return
+        seen.add(key)
+        out.append((path, source))
+
+    for rel in c.test_data_paths(repo):
+        take(repo / rel, "tc-project-profile.md test_data_paths")
+    for rel in run.get("test_data_paths") or []:
+        take(repo / rel, "--test-data on this run")
+    return out
+
+
 def test_summary(f: Path) -> str:
     try:
         methods, _ = tj.parse_file(f)
@@ -299,6 +322,29 @@ def main():
             return
         out.append(block)
         budget -= len(block)
+
+    # Example business values the repo keeps for exactly this purpose. They go in
+    # before the sources: a planner that finds the shape here asks nobody.
+    try:
+        run_json = c.load_run(run_dir)
+    except Exception:                                  # a pack can be built before run.json exists
+        run_json = {}
+    data_files = test_data_files(repo, run_json)
+    if data_files:
+        head = ("\n## TEST DATA (repo-provided example business values)\n\n"
+                "The shapes real values have in this system. Use them for the values a scenario "
+                "needs: take the SHAPE, give each field and each distinct entity its own value of "
+                "that shape, and never invent a shape that is not here. Cite the file as evidence "
+                "(`fixture`). Ask a human only about a kind that is missing here.\n")
+        out.append(head)
+        budget -= len(head)
+        for f, source in data_files:
+            body = f"\n### {f.relative_to(repo).as_posix()} ({source})\n\n{read(f)}\n"
+            if len(body) <= budget:
+                out.append(body)
+                budget -= len(body)
+            else:
+                notes.append(f"BUDGET: omitted test data {f.relative_to(repo)}")
 
     # Repo-provided conventions (style only, NOT behavioral evidence)
     instructions = repo_instructions(repo, relevant)

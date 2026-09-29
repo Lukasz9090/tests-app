@@ -55,6 +55,14 @@
         "minLength": 1
       },
       "description": "Extra repository instruction files the context pack includes in REPO CONVENTIONS, relative to the repo root; may live outside .github. An `applyTo` front-matter is honoured."
+    },
+    "test_data_paths": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Files that list example business values for this system (a customer id is 9 digits, an account number looks like X, the transfer types that are plain strings). The context pack includes them verbatim as TEST DATA, and the planner reads them before asking a human anything - that is how you stop repeating the same answers run after run. Any readable text or markdown file, relative to the repo root."
     }
   }
 }

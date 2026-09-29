@@ -62,6 +62,20 @@ def test_none_found():
         expect_true("precedence header always present", "pipeline integrity" in section(pack))
 
 
+def test_test_data_files_are_included():
+    with FixtureRepo() as repo:
+        repo.write("docs/test-data.md",
+                   "customer id: 9 digits, e.g. 123456789\ntransfer type: ELIXIR | SORBNET\n")
+        repo.write(".github/agents/tc-agent/references/tc-project-profile.md",
+                   '# p\n\n```json\n{"schema_version": 1, "test_data_paths": ["docs/test-data.md"]}\n```\n')
+        c._PROFILE_CACHE.clear()
+        pack = build(repo)
+        expect_true("section is there", "## TEST DATA (repo-provided example business values)" in pack)
+        expect_true("file content is included", "9 digits, e.g. 123456789" in pack)
+        expect_true("says how to use it", "take the SHAPE" in pack)
+        c._PROFILE_CACHE.clear()
+
+
 def test_generated_sources_and_external_types():
     """An OpenAPI-style client generated into target/ is API the target calls."""
     with FixtureRepo() as repo:

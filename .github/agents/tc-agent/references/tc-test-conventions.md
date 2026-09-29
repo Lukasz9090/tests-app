@@ -107,6 +107,14 @@ Two things are NOT business data and never make a scenario a placeholder:
 Only a value whose MEANING matters (a real status the code switches on, a
 threshold, an IBAN format) needs a source beyond that.
 
+When the plan carries such a value — from an existing test, a builder or a
+human's answer in an interactive run — it comes with a SHAPE (`customer id: 9
+digits, e.g. 123456789`). Use the shape, not one literal: every field of that
+kind (`ownerCustomerId`, `coownerCustomerId`) and every distinct entity in a
+test gets its OWN value matching it, never one id for two parties and never a
+value the rule does not allow. An id that looks real tells the next reader what
+the system expects, and the test becomes the record of that shape.
+
 **A5. Determinism.** No test may depend on the wall-clock time, the date, random
 values, execution order or sleeps.
 - When production code reads the clock directly (no injected `Clock`), build

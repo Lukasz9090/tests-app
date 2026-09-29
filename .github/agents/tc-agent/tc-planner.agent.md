@@ -52,8 +52,10 @@ or, for characterization, the method's own lines (`OrderService.java:31-38`).
 
 ## Input
 
-From the orchestrator: the slug and `dispatch` with `run_dir`, `plan_path` and
-`review_path` (null on the first plan of the run).
+From the orchestrator: the slug and `dispatch` with `run_dir`, `plan_path`,
+`review_path` (null on the first plan of the run), `replan_cause` (when there is
+a review) and `known_test_data` — the business values a human already supplied
+earlier in this run.
 
 From the run directory:
 - `run.json` — `mode` (`legacy` | `spec-driven`), `interactive`, `spec`;
@@ -169,7 +171,12 @@ plus a note. Never run the full suite.
 
 Cover the happy paths AND the failure and edge branches in your scope. Prefer
 data expressed through builders and fixtures you discovered (`source:
-existing_builder`, `variant: ...`). Do not duplicate what existing tests —
+existing_builder`, `variant: ...`). When the existing tests already use values
+of a kind you need (a customer id, a product code, a dictionary key), take the
+SHAPE from them and cite the test: keep the format identical across the suite
+and pick a value that fits it — the same one when it means the same entity, a
+new one of that shape when it does not. The tests stay the repo's record of what
+real data looks like, without two tests pretending unrelated entities are one. Do not duplicate what existing tests —
 human or AI — already cover; list them under `context.existing_tests`.
 
 Every scenario gets a `priority` and `implementation_hints` with `test_method`
@@ -227,6 +234,48 @@ record the questions you raise so they survive a host that cannot ask live.
   scenario to `deferred` with the question in `reason`.
 - ALWAYS also list each question in `context.notes` as `CONFIRM: <ref> — <q>`,
   so a one-shot run leaves them for review; `finish` puts them in the report.
+- **Ask for the SHAPE of business values — ONE gate question first.** Collect
+  every KIND of value this plan needs that nothing in the repo backs (an id, an
+  account number, a code, a dictionary key a reader would recognize), then ask
+  one question that lists them:
+
+      "I need example values for: customer id, account number, transfer type.
+       Do you have a file with such examples, or shall we go through a few
+       questions? (no = I use neutral placeholders)"
+
+  On **no**: stop asking about data for this run, use neutral values (§A4), send
+  a kind whose meaning decides a branch to `deferred`, and write one
+  `context.notes` line: "test data declined by the human".
+  On **yes**: the first question is always the file — "do you keep example
+  values in a file? give me the path, or say no and we go through a few
+  questions" — because one path answers every kind at once. Given a path, read
+  that file (it counts against the 5-file escape hatch), use it, and record it in
+  `context.notes`: "test data file: <path> (add it to test_data_paths to use it
+  in every run)". Then, only for the kinds it does not cover — or for all of
+  them when there is no file — ask per KIND, never per field (at most 3
+  questions, inside the budget above): "customer ids in this system: what does a
+  real one look like?"
+  One answer covers `ownerCustomerId` and `coownerCustomerId`. Record each as
+  `{concept, rule, examples, applies_to, used_by}` in `context.test_data`, use it
+  for the scenario's `data`, and cite it as `human_decision` evidence.
+  When the run had no TEST DATA file, add a `context.notes` line with what you
+  were told — "test data worth keeping: customer id = 9 digits; transfer type =
+  ELIXIR | SORBNET (put it in a file and list it under test_data_paths)" — so
+  the human answers this once and never again.
+
+**Never ask for what you can already find.** Before the gate question, take
+every kind off the list that is answered by, in this order:
+1. The pack's **TEST DATA** section — the files somebody named for this run
+   (profile `test_data_paths`, or `--test-data`). Cite the file as `fixture`
+   evidence. A run that was given such a file should need no questions.
+2. `dispatch.known_test_data` — what a human gave EARLIER IN THIS RUN (the
+   orchestrator merges the `context.test_data` of every plan version). Copy the
+   entry into your own `context.test_data` when you use it again.
+3. The existing tests in the pack: a value a test already uses shows the shape,
+   and citing that test is `existing_test` evidence. This is how the knowledge
+   survives BETWEEN runs.
+4. Builders, fixtures and enums in the pack.
+Ask a human only about what is left, and only in `interactive`.
 
 ### Phase 5 — classify evidence strength with the script, not by judgement
 
@@ -303,6 +352,11 @@ target is `{ "class": "OrderService" }`: OMIT `method` entirely, never `null`.
     "existing_tests": ["AppointmentServiceTest#shouldRejectPastStartTimeWhenCreating"],
     "builders": [],
     "target_sha": "4b1c2aa9",
+    "test_data": [
+      { "concept": "customer id", "rule": "9 digits",
+        "examples": ["123456789", "987654321"],
+        "applies_to": ["ownerCustomerId", "coownerCustomerId"], "used_by": ["TC01"] }
+    ],
     "notes": [
       "context_pack: .test-agent/runs/AppointmentService.create/20260921-101500/context-pack.md",
       "scope: COVERAGE_GAP lines 88, 112"

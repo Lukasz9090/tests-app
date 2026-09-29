@@ -202,6 +202,31 @@ def test_caps():
         expect_true("says why", "plan_cap 1" in s["reason"])
 
 
+def test_known_test_data_travels_between_plan_versions():
+    """A human answers once per run; the next planner is handed the answer."""
+    with FixtureRepo() as repo:
+        run = Run(repo, impl_cap=1, plan_cap=3)
+        run.derive_raw("PLAN")
+        expect("nothing known yet", run.state()["dispatch"]["known_test_data"], [])
+        run.plan(1, context={"test_data": [
+            {"concept": "customerId", "rule": "9 digits", "examples": ["123456789"]},
+            {"concept": "productCode", "examples": ["AGD"]}]})
+        run.report(1)
+        run.review(1, 1, "REPAIR_PLAN")
+        dispatch = run.state()["dispatch"]
+        expect("both values reach plan v2",
+               [e["concept"] for e in dispatch["known_test_data"]], ["customerId", "productCode"])
+        run.plan(2, context={"test_data": [
+            {"concept": "customerId", "examples": ["999999999"]},   # same concept again
+            {"concept": "dictKey", "examples": ["AML-1"]}]})
+        run.report(2)
+        run.review(2, 1, "REPAIR_PLAN")
+        dispatch = run.state()["dispatch"]
+        expect("merged, first answer wins, no duplicates",
+               [(e["concept"], e["examples"][0]) for e in dispatch["known_test_data"]],
+               [("customerId", "123456789"), ("productCode", "AGD"), ("dictKey", "AML-1")])
+
+
 def test_spent_impl_cap_replans_while_plan_budget_lasts():
     """Three failed repairs of one plan are a plan problem, not an assertion problem."""
     with FixtureRepo() as repo:
@@ -486,7 +511,8 @@ def test_start_cli_writes_run_json():
     with FixtureRepo() as repo:
         script = TC / "scripts" / "tc_orchestrate.py"
         proc = subprocess.run([sys.executable, str(script), "start", SLUG, "--repo", str(repo.root),
-                               "--mode", "spec-driven", "--interactive", "--commit", "--impl-cap", "4"],
+                               "--mode", "spec-driven", "--interactive", "--commit", "--impl-cap", "4",
+                               "--test-data", "docs/test-data.md"],
                               capture_output=True, text=True)
         expect("start exits 0", proc.returncode, 0)
         out = json.loads(proc.stdout)
@@ -495,6 +521,7 @@ def test_start_cli_writes_run_json():
                (run["mode"], run["interactive"], run["commit"], run["caps"]["impl_cap"]),
                ("spec-driven", True, True, 4))
         expect("derive-state ran (no tests -> PLAN)", out["derive_state"]["next_action"], "PLAN")
+        expect("--test-data is stored for the pack", run["test_data_paths"], ["docs/test-data.md"])
         bad = subprocess.run([sys.executable, str(script), "start", SLUG, "--repo", str(repo.root),
                               "--mode", "tdd"], capture_output=True, text=True)
         expect("tdd is refused", bad.returncode, 2)

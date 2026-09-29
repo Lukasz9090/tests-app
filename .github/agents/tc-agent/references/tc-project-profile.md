@@ -23,6 +23,16 @@ outside `.github` (e.g. `docs/code-conventions.instruction.md`). Files under
 `AGENTS.md` are picked up without being listed. Repo instructions tune style
 only; they never override `tc-test-conventions.md` §A.
 
+**Test data** (`test_data_paths`, optional): files that list the example business
+values of this system - a customer id is 9 digits, an account number looks like
+this, these transfer types are plain strings rather than an enum. The context
+pack includes them verbatim and the planner reads them before it asks anybody,
+so the same answers are not repeated run after run. One markdown file is enough; a single run
+can point at one with `--test-data <path>` instead, in any mode. Nothing is
+guessed from file names - a file is used because somebody named it here or on
+the command line. In an `interactive` run with no such file, the planner offers
+to take one or to walk through a few questions.
+
 **Tooling** is deliberately absent. `tool_version()` resolves a version as
 CLI flag → this file → the version declared in the pom → the agent default, so a
 value here OVERRIDES the pom. This repo's pom pins jacoco 0.8.15 and pitest

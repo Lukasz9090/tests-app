@@ -182,6 +182,28 @@ def review_history(d: Path) -> list:
     return out
 
 
+def known_test_data(d: Path) -> list:
+    """Business values a human already supplied in THIS run.
+
+    Every plan version of the run contributes its `context.test_data`; the
+    orchestrator hands the merged list to the next planner so a human is never
+    asked twice for the same value inside one run. Across runs this knowledge
+    lives where it belongs - in the tests, which are `existing_test` evidence.
+    """
+    out, seen = [], set()
+    for n in plan_versions(d):
+        pv = _safe(plan_path(d, n))
+        if "__error__" in pv:
+            continue
+        for entry in (pv.get("context") or {}).get("test_data") or []:
+            key = str(entry.get("concept", "")).strip().lower()
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            out.append(entry)
+    return out
+
+
 def run_digest(d: Path) -> dict:
     """What the WHOLE run has produced so far — the reviewer writes the commit
     summary from this, so it never describes only its own round."""
@@ -227,6 +249,7 @@ def cmd_start(args) -> int:
         "mode": args.mode,
         "interactive": bool(args.interactive),
         "spec": args.spec,
+        "test_data_paths": list(args.test_data or []),
         "caps": {"impl_cap": args.impl_cap, "plan_cap": args.plan_cap},
         "commit": bool(args.commit),
         "started": _now(),
@@ -300,7 +323,8 @@ def compute_state(repo: Path, directory: Path) -> dict:
         out["reason"] = f"derive-state: {', '.join(derive.get('reasons', []))}"
         out["dispatch"] = {"agent": "tc-planner", "run_dir": out["run_dir"],
                            "plan_path": rel(plan_path(directory, 1), repo),
-                           "review_path": None}
+                           "review_path": None,
+                           "known_test_data": known_test_data(directory)}
         return out
 
     n = versions[-1]
@@ -370,7 +394,8 @@ def compute_state(repo: Path, directory: Path) -> dict:
                                    "review_path": rel(r_path, repo),
                                    # The planner is given ONLY this object, so the
                                    # reason it is replanning has to travel in it.
-                                   "replan_cause": "impl_cap_exhausted"}
+                                   "replan_cause": "impl_cap_exhausted",
+                                   "known_test_data": known_test_data(directory)}
                 return out
             return finish("ESCALATED", f"REPAIR_IMPLEMENTATION but impl_cap {impl_cap} reached "
                                        f"at v{n} (rounds={gen_m}) and plan_cap {plan_cap} is spent")
@@ -389,7 +414,8 @@ def compute_state(repo: Path, directory: Path) -> dict:
         out["dispatch"] = {"agent": "tc-planner", "run_dir": out["run_dir"],
                            "plan_path": rel(plan_path(directory, n + 1), repo),
                            "review_path": rel(r_path, repo),
-                           "replan_cause": "reviewer_repair_plan"}
+                           "replan_cause": "reviewer_repair_plan",
+                           "known_test_data": known_test_data(directory)}
         return out
     return finish("ESCALATED", f"unrecognized review decision {decision!r}")
 
@@ -815,6 +841,9 @@ def main() -> int:
     s.add_argument("--mode", default="legacy")
     s.add_argument("--interactive", action="store_true")
     s.add_argument("--spec", default=None)
+    s.add_argument("--test-data", action="append", default=None, dest="test_data",
+                   help="file of example business values (repeatable); adds to the profile's "
+                        "test_data_paths for this run")
     s.add_argument("--impl-cap", type=int, default=3)
     s.add_argument("--plan-cap", type=int, default=2)
     s.add_argument("--commit", action="store_true",
