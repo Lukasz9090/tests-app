@@ -240,6 +240,30 @@ def test_progress_reaches_the_terminal():
         expect_true("and it says it is alive", "still running" in noise)
 
 
+def test_the_maven_log_survives_a_timeout():
+    """The log is the only evidence of a build that was stopped - it must exist."""
+    import os, stat
+    import tc_common as tc
+    with FixtureRepo() as repo:
+        fake = repo.root / "mvn"
+        fake.write_text("#!/bin/sh\necho STARTING BUILD\nsleep 30\n", encoding="utf-8")
+        os.chmod(fake, os.stat(fake).st_mode | stat.S_IEXEC)
+        log = repo.root / "checks" / "maven-tests-entry.log"
+        old, tc.HEARTBEAT_SECONDS = tc.HEARTBEAT_SECONDS, 5
+        try:
+            tc.run([str(fake)], repo.root, timeout=1, log_path=log)
+        except tc.CheckError as exc:
+            expect_true("the error names the limit", "did not finish within" in str(exc))
+        else:
+            expect("a timeout was raised", True, False)
+        finally:
+            tc.HEARTBEAT_SECONDS = old
+        expect_true("the log is on disk", log.is_file())
+        text = log.read_text(encoding="utf-8")
+        expect_true("with the command", text.startswith("$ "))
+        expect_true("and what maven printed before it was stopped", "STARTING BUILD" in text)
+
+
 def test_missing_dependencies_are_recognised():
     import tc_common as tc
     expect("maven's wording is matched", tc.needs_also_make(

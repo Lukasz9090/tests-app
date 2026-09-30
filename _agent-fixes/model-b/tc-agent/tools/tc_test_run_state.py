@@ -23,6 +23,7 @@ Exit codes: 0 all passed, 1 a case failed, 2 the harness could not run.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -32,6 +33,7 @@ try:
     from tc_testkit import (TC, FakeRunner, FixtureRepo, ai_test, expect, expect_true,  # noqa: E402
                             human_test, run_all)
     import tc_common as c  # noqa: E402
+    from tc_md_payload import load_payload as load_container  # noqa: E402
     import tc_derive_state as ds  # noqa: E402
     import tc_orchestrate as o  # noqa: E402
 except ImportError as exc:  # pragma: no cover
@@ -331,6 +333,23 @@ def test_start_that_could_not_derive_says_why():
                     or "TARGET_NOT_FOUND" in str(state.get("reason", "")))
 
 
+def test_a_start_that_is_still_running_says_WAIT():
+    """Two terminals: start still works in one, `state` must not call it dead."""
+    with FixtureRepo() as repo:
+        run = Run(repo)
+        run.derive_raw("ESCALATE", reasons=["START_INTERRUPTED"],
+                       pid=os.getpid(), started="now",
+                       detail="start has not finished deriving the state.")
+        state = run.state()
+        expect("waits instead of finishing", state["next_action"], "WAIT")
+        expect_true("and says why", "still deriving" in state["reason"])
+        run.derive_raw("ESCALATE", reasons=["START_INTERRUPTED"], pid=999999999,
+                       started="then", detail="start has not finished deriving the state.")
+        state = run.state()
+        expect("a dead start finishes", step(state), ("FINISH", "ESCALATED"))
+        expect_true("named as gone", "process is gone" in state["reason"])
+
+
 def test_interrupted_start_leaves_a_readable_state():
     """A killed start (Ctrl+C, a closed terminal) must still explain itself.
 
@@ -353,9 +372,9 @@ def test_interrupted_start_leaves_a_readable_state():
         root = c.runs_root(repo.root, SLUG)
         runs = sorted(p for p in root.iterdir())
         expect_true("a derive-state.md is there", (runs[-1] / "derive-state.md").is_file())
-        state = o.compute_state(repo.root, runs[-1])
-        expect("it finishes", step(state), ("FINISH", "ESCALATED"))
-        expect_true("and says it was interrupted", "interrupted" in state["reason"])
+        written, _ = load_container(runs[-1] / "derive-state.md")
+        expect("marked as an unfinished start", written["reasons"], ["START_INTERRUPTED"])
+        expect("with the pid that can be checked later", written["pid"], os.getpid())
 
 
 def test_run_without_derive_state_is_not_a_mystery():

@@ -315,6 +315,26 @@ def write_log(directory: Path, name: str, command: list, output: str) -> Path:
     return path
 
 
+def pid_alive(pid) -> bool:
+    """Is that process still running? Used to tell a slow start from a dead one."""
+    try:
+        pid = int(pid)
+    except (TypeError, ValueError):
+        return False
+    if pid <= 0:
+        return False
+    if os.name == "nt":
+        code, out = run(["tasklist", "/FI", f"PID eq {pid}", "/NH"], Path("."))
+        return code == 0 and str(pid) in out
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
 def mvn_executable() -> str:
     return "mvn.cmd" if os.name == "nt" else "mvn"
 
@@ -414,7 +434,7 @@ def _wait_with_heartbeat(proc: subprocess.Popen, timeout: float | None, loud: bo
             print(f"[tc-agent] still running ({elapsed})", file=sys.stderr, flush=True)
 
 
-def run(cmd: list, cwd: Path, timeout: float | None = None) -> tuple:
+def run(cmd: list, cwd: Path, timeout: float | None = None, log_path: Path | None = None) -> tuple:
     """Run a command, returning (returncode, combined output).
 
     Output goes to a FILE, not to a pipe. Maven leaves grandchildren behind (a
@@ -430,7 +450,17 @@ def run(cmd: list, cwd: Path, timeout: float | None = None) -> tuple:
     if loud:
         cmd = [_resolve(cmd[0]), *cmd[1:]]
         print(f"$ {' '.join(cmd)}", file=sys.stderr, flush=True)
-    handle = tempfile.TemporaryFile(mode="w+", encoding="utf-8", errors="replace")
+    # With log_path the output is written straight into the run's log, so it
+    # survives a timeout or a killed process - which is exactly when someone
+    # needs to read it. Without it a temporary file is enough.
+    if log_path is not None:
+        Path(log_path).parent.mkdir(parents=True, exist_ok=True)
+        handle = open(log_path, "w+", encoding="utf-8", errors="replace", newline="")
+        handle.write("$ " + " ".join(cmd) + "\n\n")
+        handle.flush()
+    else:
+        handle = tempfile.TemporaryFile(mode="w+", encoding="utf-8", errors="replace")
+    header = handle.tell()
     try:
         try:
             proc = subprocess.Popen(cmd, cwd=str(cwd), stdout=handle,
@@ -450,7 +480,7 @@ def run(cmd: list, cwd: Path, timeout: float | None = None) -> tuple:
             code = _wait_with_heartbeat(proc, timeout, loud=loud)
         except subprocess.TimeoutExpired:
             _kill_tree(proc)
-            handle.seek(0)
+            handle.seek(header)
             partial = handle.read()
             raise CheckError(
                 f"{Path(cmd[0]).name} did not finish within {timeout:g}s and was stopped. "
@@ -458,7 +488,7 @@ def run(cmd: list, cwd: Path, timeout: float | None = None) -> tuple:
                 f"maven_timeout_seconds in tc-project-profile.md, add maven_args such as "
                 f'["-T", "1C"] or ["-o"], or narrow the run to one module\'s class. '
                 f"Last output: {partial.strip()[-600:]}") from None
-        handle.seek(0)
+        handle.seek(header)
         return code, handle.read()
     finally:
         handle.close()

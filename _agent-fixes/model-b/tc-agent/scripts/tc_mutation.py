@@ -86,8 +86,9 @@ def main() -> int:
         )
 
         started = time.time() - 2
-        code, output = c.run(command, repo, timeout=c.maven_timeout(repo))
-        log = c.write_log(directory, f"mutation-{args.label}", command, output)
+        code, output = c.run(command, repo, timeout=c.maven_timeout(repo),
+                                 log_path=c.checks_dir(directory) / f"maven-mutation-{args.label}.log")
+        log = c.checks_dir(directory) / f"maven-mutation-{args.label}.log"   # written live by c.run
         found = c.recent_files(c.module_dir(repo, module), "**/mutations.xml", started)
         xml_path = found[-1] if found else c.module_dir(repo, module) / "target" / "pit-reports" / "mutations.xml"
 

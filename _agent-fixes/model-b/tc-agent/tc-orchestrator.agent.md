@@ -48,6 +48,12 @@ python $C/tc_orchestrate.py start <slug> --repo . --mode <mode> [--interactive] 
 Remember the printed `run_id`. `start` runs derive-state, which may build the
 project and run tests, coverage and mutations — it can take minutes.
 
+**Run `start` to completion.** It prints its json only when derive-state is done,
+which in a big repo takes minutes. If your terminal tool gives up on it, the
+command itself keeps running: do NOT re-issue it and do NOT open a second
+terminal for the same target. Run `state` instead — it answers `WAIT` for as
+long as that `start` is alive.
+
 **When `start` exits 2** it prints `START_FAILED: <reason>` and the run is
 already over (the reason is stored in the run). Run `finish` for that run_id so
 the human gets the report, show it verbatim, and STOP this target. Do not start
@@ -69,6 +75,7 @@ Do exactly its `next_action` and nothing else:
 | `GENERATE` | invoke the `tc-generator` custom agent with `run_subagent` |
 | `REVIEW` | invoke the `tc-reviewer` custom agent with `run_subagent` |
 | `RESEAL` | `python $C/tc_orchestrate.py reseal <slug> --repo . --run <run_id>` |
+| `WAIT` | `start` is still deriving the state in another terminal. Wait (a minute is a reasonable step), run `state` again, and repeat. NEVER start a second run for this target and never `finish` it while it says WAIT — the checks are building the project right now. |
 | `FINISH` | `python $C/tc_orchestrate.py finish <slug> --repo . --run <run_id>`, then stop this target |
 
 Then run `state` again.

@@ -134,7 +134,8 @@ def main() -> int:
         for _ in range(max(1, args.repeat)):
             started = time.time() - 2  # filesystem mtime granularity slack
             exec_file.unlink(missing_ok=True)
-            code, output = c.run(command, repo, timeout=c.maven_timeout(repo))
+            code, output = c.run(command, repo, timeout=c.maven_timeout(repo),
+                                 log_path=c.checks_dir(directory) / f"maven-tests-{args.label}.log")
             # "auto": the fast build first; only a repo that has not installed its
             # modules pays for -am, and it is told how to stop paying.
             if (code != 0 and also_make == "auto" and not retried_with_am
@@ -145,10 +146,11 @@ def main() -> int:
                       "with -am. Run `mvn -DskipTests install` once to skip this.",
                       file=sys.stderr, flush=True)
                 exec_file.unlink(missing_ok=True)
-                code, output = c.run(command, repo, timeout=c.maven_timeout(repo))
+                code, output = c.run(command, repo, timeout=c.maven_timeout(repo),
+                                 log_path=c.checks_dir(directory) / f"maven-tests-{args.label}.log")
             report_files = c.recent_files(search_root, "target/surefire-reports/TEST-*.xml", started)
             runs.append(parse_surefire(report_files))
-        log = c.write_log(directory, f"tests-{args.label}", command, output)
+        log = c.checks_dir(directory) / f"maven-tests-{args.label}.log"   # written live by c.run
 
         compiler_errors = [
             f"{Path(m.group(1)).name}:{m.group(2)} {m.group(4).strip()}"

@@ -102,8 +102,9 @@ def main() -> int:
             ]
         )
         started = time.time() - 2
-        code, output = c.run(command, repo, timeout=c.maven_timeout(repo))
-        log = c.write_log(directory, f"coverage-{args.label}", command, output)
+        code, output = c.run(command, repo, timeout=c.maven_timeout(repo),
+                                 log_path=c.checks_dir(directory) / f"maven-coverage-{args.label}.log")
+        log = c.checks_dir(directory) / f"maven-coverage-{args.label}.log"   # written live by c.run
         notes = []
 
         # The agent version may come from the pom (it runs during the build), but the
@@ -122,8 +123,9 @@ def main() -> int:
                 for part in command
             ]
             started = time.time() - 2
-            code, output = c.run(command, repo, timeout=c.maven_timeout(repo))
-            log = c.write_log(directory, f"coverage-{args.label}", command, output)
+            code, output = c.run(command, repo, timeout=c.maven_timeout(repo),
+                                 log_path=c.checks_dir(directory) / f"maven-coverage-{args.label}.log")
+            log = c.checks_dir(directory) / f"maven-coverage-{args.label}.log"   # written live by c.run
             jacoco = newest
 
         produced = c.recent_files(c.module_dir(repo, module), "**/jacoco.xml", started)

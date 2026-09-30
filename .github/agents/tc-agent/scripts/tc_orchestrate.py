@@ -42,6 +42,7 @@ import argparse
 import datetime as _dt
 import fnmatch
 import json
+import os
 import re
 import sys
 import textwrap
@@ -257,8 +258,9 @@ def cmd_start(args) -> int:
     }
     c.save_run(directory, run)
 
-    def failed_state(detail: str, reason: str) -> dict:
+    def failed_state(detail: str, reason: str, pid: int | None = None) -> dict:
         return {"schema_version": 1, "slug": args.slug, "mode": args.mode,
+                "pid": pid, "started": _now(),
                 "interactive": bool(args.interactive), "target": None, "git": None,
                 "tests": None, "reseal": [], "recharacterize": [], "red": [],
                 "compile_errors": [], "coverage": None, "mutation": None,
@@ -270,8 +272,9 @@ def cmd_start(args) -> int:
     # never reaches an exception handler, and without this the run directory holds
     # a run.json and nothing else, which reads as "no derive-state.md" later.
     ds.write(directory, failed_state(
-        "start was interrupted while deriving the state (the checks can take minutes). "
-        "Nothing was planned or generated; start a new run.", "START_INTERRUPTED"))
+        "start has not finished deriving the state. Either it is STILL RUNNING in another "
+        "terminal (the checks can take minutes) or it was interrupted. Nothing has been "
+        "planned or generated yet.", "START_INTERRUPTED", pid=os.getpid()))
     try:
         state = ds.derive(repo, args.slug, run)
     except Exception as exc:                      # noqa: BLE001 - the reason must survive
@@ -329,6 +332,21 @@ def compute_state(repo: Path, directory: Path) -> dict:
                       "this run has no derive-state.md: `start` did not get that far "
                       "(see its error). Nothing was planned or generated - start a new run")
     derive = _safe(directory / "derive-state.md")
+    if "START_INTERRUPTED" in (derive.get("reasons") or []):
+        # The placeholder start writes before the checks. If that process is alive,
+        # start is simply still working - waiting is the only correct answer, and
+        # a second run would build the same modules all over again.
+        if c.pid_alive(derive.get("pid")):
+            out["next_action"] = "WAIT"
+            out["reason"] = (f"start (pid {derive.get('pid')}) is still deriving the state; "
+                             f"it began at {derive.get('started')}. Wait for it to finish, "
+                             f"then run `state` again - do NOT start another run")
+            out["dispatch"] = {"command": f"tc_orchestrate.py state {run['slug']} --repo . "
+                                          f"--run {run['run_id']}"}
+            return out
+        return finish("ESCALATED",
+                      "start never finished deriving the state (its process is gone): "
+                      + str(derive.get("detail") or "interrupted") + " Start a new run")
     if "__error__" in derive:
         return finish("ESCALATED", f"derive-state.md is unreadable: {derive['__error__']}")
     d_action = derive.get("next_action")
