@@ -24,6 +24,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import tc_common as c  # noqa: E402
 from tc_md_payload import load_payload  # noqa: E402
 
 # Build output holds generated and copied sources; a ref that resolves there
@@ -42,9 +43,7 @@ class Repo:
     def __init__(self, root: Path):
         self.root = root
         self.by_stem = {}
-        for path in root.rglob("*.java"):
-            if SKIP_DIRS.intersection(path.relative_to(root).parts):
-                continue
+        for path in c.java_files([root]):
             self.by_stem.setdefault(path.stem, []).append(path)
         self._text = {}
 

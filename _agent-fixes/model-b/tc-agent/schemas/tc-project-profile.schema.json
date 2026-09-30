@@ -59,7 +59,14 @@
     "maven_timeout_seconds": {
       "type": "number",
       "minimum": 1,
-      "description": "How long ONE maven call may take before the check gives up with a clear error. Default 900 (15 min). Raise it for a large multi-module repo where -pl <module> -am rebuilds half the tree."
+      "description": "How long ONE maven call may take before the check gives up with a clear error. Default 600 (10 min), deliberately short: the answer to a slow check is a faster build (maven_also_make false after an install, maven_args such as -T 1C, a narrower target), not a longer wait. Raise it only when you accept runs that take that long."
+    },
+    "maven_also_make": {
+      "description": "When a test run adds Maven's -am (also build the target module's dependencies). Omit it for \"auto\": build only the target's module, and add -am only if maven says the dependencies are missing - fast in a big reactor, still correct in a small repo or a fresh clone. true always adds it (modules that change constantly); false never does (you run mvn -DskipTests install yourself and own that decision).",
+      "oneOf": [
+        {"type": "boolean"},
+        {"const": "auto"}
+      ]
     },
     "maven_args": {
       "type": "array",

@@ -168,6 +168,66 @@ def test_maven_timeout_is_a_clear_error():
             expect("timeout raised CheckError", True, False)
 
 
+def test_output_survives_a_lingering_grandchild():
+    """Maven leaves children behind; the read must end with the PROCESS, not the pipe."""
+    import tc_common as tc
+    with FixtureRepo() as repo:
+        script = ("import subprocess, sys, time;"
+                  "print('BUILD SUCCESS', flush=True);"
+                  "subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)']);"
+                  "sys.exit(0)")
+        code, output = tc.run([sys.executable, "-c", script], repo.root, timeout=10)
+        expect("the parent's exit code is returned", code, 0)
+        expect_true("its output is complete", "BUILD SUCCESS" in output)
+
+
+def test_also_make_is_auto_by_default():
+    import tc_common as tc
+    with FixtureRepo() as repo:
+        expect("auto by default", tc.maven_also_make(repo.root), "auto")
+        expect("auto means: try without -am first",
+               tc.module_args("mod", also_make=(tc.maven_also_make(repo.root) is True)),
+               ["-pl", "mod"])
+        for value, wanted in ((True, True), (False, False)):
+            repo.write(".github/agents/tc-agent/references/tc-project-profile.md",
+                       '# p\n\n```json\n{"schema_version": 1, "maven_also_make": %s}\n```\n'
+                       % str(value).lower())
+            tc._PROFILE_CACHE.clear()
+            expect(f"profile {value}", tc.maven_also_make(repo.root), wanted)
+        tc._PROFILE_CACHE.clear()
+
+
+def test_class_lookup_uses_git_and_sees_uncommitted_files():
+    import tc_common as tc
+    with FixtureRepo() as repo:
+        tc._GIT_INDEX_CACHE.clear()
+        expect_true("git answers", tc.git_index(repo.root) is not None)
+        # a test the generator just wrote: untracked, and it must still be found
+        rel = repo.write_test("OrderServiceTest", human_test("shouldA"))
+        tc._GIT_INDEX_CACHE.clear()
+        found = [f.name for f in tc.java_files(tc.find_roots(repo.root)[1])]
+        expect_true("untracked test is visible", "OrderServiceTest.java" in found)
+        # and something git ignores stays out of the index
+        repo.write("target/generated-sources/api/com/acme/Gen.java", "class Gen {}\n")
+        repo.write(".gitignore", "target/\n")
+        tc._GIT_INDEX_CACHE.clear()
+        src = [f.name for f in tc.java_files(tc.find_roots(repo.root)[0])]
+        expect_true("build output is not in the index", "Gen.java" not in src)
+        walked = [f.name for f in tc.java_files([repo.root / "target/generated-sources"],
+                                                use_git=False)]
+        expect_true("but a walk still finds it", "Gen.java" in walked)
+        tc._GIT_INDEX_CACHE.clear()
+
+
+def test_missing_dependencies_are_recognised():
+    import tc_common as tc
+    expect("maven's wording is matched", tc.needs_also_make(
+        "[ERROR] Failed to execute goal on project ces-pl-rest: Could not resolve dependencies "
+        "for project com.acme:ces-pl-rest:jar:2.101.0-SNAPSHOT"), True)
+    expect("a normal failure is not", tc.needs_also_make(
+        "[ERROR] Tests run: 3, Failures: 1"), False)
+
+
 def test_maven_args_from_the_profile_reach_the_command():
     import tc_common as tc
     with FixtureRepo() as repo:
