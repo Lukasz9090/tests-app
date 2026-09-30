@@ -314,6 +314,32 @@ def test_reseal_and_finish_done():
         expect_true("finish is idempotent", "(already finished)" in prose2)
 
 
+def test_start_that_could_not_derive_says_why():
+    """A maven failure during start must not become "derive-state.md not found"."""
+    with FixtureRepo() as repo:
+        script = TC / "scripts" / "tc_orchestrate.py"
+        proc = subprocess.run([sys.executable, str(script), "start", "NoSuchClassHere",
+                               "--repo", str(repo.root)], capture_output=True, text=True)
+        expect("start fails loudly", proc.returncode in (0, 2), True)
+        directory = c.runs_root(repo.root, "NoSuchClassHere")
+        runs = sorted(p for p in directory.iterdir()) if directory.is_dir() else []
+        expect_true("the run kept a derive-state.md", bool(runs) and (runs[-1] / "derive-state.md").is_file())
+        state = o.compute_state(repo.root, runs[-1])
+        expect("it routes to FINISH", state["next_action"], "FINISH")
+        expect_true("and names a real cause, not a missing file",
+                    "not found" in str(state.get("reason", "")).lower()
+                    or "TARGET_NOT_FOUND" in str(state.get("reason", "")))
+
+
+def test_run_without_derive_state_is_not_a_mystery():
+    with FixtureRepo() as repo:
+        run = Run(repo)                      # run.json only, no derive-state.md
+        state = run.state()
+        expect("routes to FINISH", step(state), ("FINISH", "ESCALATED"))
+        expect_true("explains that start did not get that far",
+                    "start` did not get that far" in state["reason"])
+
+
 def test_finish_refuses_unfinished_run():
     with FixtureRepo() as repo:
         run = Run(repo)

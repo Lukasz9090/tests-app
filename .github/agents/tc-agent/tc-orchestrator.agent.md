@@ -48,6 +48,13 @@ python $C/tc_orchestrate.py start <slug> --repo . --mode <mode> [--interactive] 
 Remember the printed `run_id`. `start` runs derive-state, which may build the
 project and run tests, coverage and mutations — it can take minutes.
 
+**When `start` exits 2** it prints `START_FAILED: <reason>` and the run is
+already over (the reason is stored in the run). Run `finish` for that run_id so
+the human gets the report, show it verbatim, and STOP this target. Do not start
+a second run to get around it: a maven failure, an unresolvable module or an
+ambiguous class needs a human, and in a multi-module repo the reason usually
+names the module.
+
 **2. Loop until FINISH.**
 
 ```

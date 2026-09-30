@@ -256,7 +256,28 @@ def cmd_start(args) -> int:
         "resealed": False,
     }
     c.save_run(directory, run)
-    state = ds.derive(repo, args.slug, run)
+    try:
+        state = ds.derive(repo, args.slug, run)
+    except Exception as exc:                      # noqa: BLE001 - the reason must survive
+        # derive-state is the run's first artifact; without it every later
+        # command can only say "file not found" and the real cause (a maven
+        # failure, a module that will not build) is lost. Write the failure
+        # INTO the run so `state`, `finish` and the report can name it.
+        state = {"schema_version": 1, "slug": args.slug, "mode": args.mode,
+                 "interactive": bool(args.interactive), "target": None, "git": None,
+                 "tests": None, "reseal": [], "recharacterize": [], "red": [],
+                 "compile_errors": [], "coverage": None, "mutation": None,
+                 "tiers_run": [], "next_action": "ESCALATE",
+                 "reasons": [type(exc).__name__],
+                 "detail": f"derive-state failed: {exc}"}
+        ds.write(directory, state)
+        print(json.dumps({"run_id": run_id, "run_dir": rel(directory, repo),
+                          "derive_state": {"next_action": "ESCALATE",
+                                           "reasons": state["reasons"],
+                                           "detail": state["detail"]}},
+                         indent=2, ensure_ascii=False))
+        print(f"START_FAILED: {exc}", file=sys.stderr)
+        return 2
     ds.write(directory, state)
     print(json.dumps({
         "run_id": run_id,
@@ -293,6 +314,10 @@ def compute_state(repo: Path, directory: Path) -> dict:
                                       f"--run {run['run_id']}"}
         return out
 
+    if not (directory / "derive-state.md").is_file():
+        return finish("ESCALATED",
+                      "this run has no derive-state.md: `start` did not get that far "
+                      "(see its error). Nothing was planned or generated - start a new run")
     derive = _safe(directory / "derive-state.md")
     if "__error__" in derive:
         return finish("ESCALATED", f"derive-state.md is unreadable: {derive['__error__']}")
