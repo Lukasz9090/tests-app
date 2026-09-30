@@ -56,6 +56,19 @@
       },
       "description": "Extra repository instruction files the context pack includes in REPO CONVENTIONS, relative to the repo root; may live outside .github. An `applyTo` front-matter is honoured."
     },
+    "maven_timeout_seconds": {
+      "type": "number",
+      "minimum": 1,
+      "description": "How long ONE maven call may take before the check gives up with a clear error. Default 900 (15 min). Raise it for a large multi-module repo where -pl <module> -am rebuilds half the tree."
+    },
+    "maven_args": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Extra flags added to every maven call, e.g. [\"-o\"] for offline, [\"-T\", \"1C\"] for a parallel build, [\"-DskipITs\"]. Use them to make a slow multi-module build finish in time."
+    },
     "test_data_paths": {
       "type": "array",
       "items": {

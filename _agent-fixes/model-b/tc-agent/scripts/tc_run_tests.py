@@ -111,7 +111,7 @@ def main() -> int:
         agent_goal = [] if bound_pom else [f"org.jacoco:jacoco-maven-plugin:{jacoco}:prepare-agent"]
         agent_source = f"pom-bound ({bound_pom})" if bound_pom else f"cli goal ({jacoco})"
         command = (
-            [c.mvn_executable(), "-B"]
+            [c.mvn_executable(), "-B", *c.maven_args(repo)]
             + c.module_args(module, also_make=True)
             + [
                 "-DfailIfNoTests=false",
@@ -129,7 +129,7 @@ def main() -> int:
         for _ in range(max(1, args.repeat)):
             started = time.time() - 2  # filesystem mtime granularity slack
             exec_file.unlink(missing_ok=True)
-            code, output = c.run(command, repo)
+            code, output = c.run(command, repo, timeout=c.maven_timeout(repo))
             report_files = c.recent_files(search_root, "target/surefire-reports/TEST-*.xml", started)
             runs.append(parse_surefire(report_files))
         log = c.write_log(directory, f"tests-{args.label}", command, output)

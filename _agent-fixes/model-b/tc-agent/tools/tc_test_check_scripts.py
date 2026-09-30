@@ -155,6 +155,31 @@ def test_reviewer_label():
                ["coverage-v1-r1.md", "mutation-v1-r1.md", "tests-v1-r1.md"])
 
 
+def test_maven_timeout_is_a_clear_error():
+    """A build that never returns must not look like a hung script."""
+    import tc_common as tc
+    with FixtureRepo() as repo:
+        try:
+            tc.run([sys.executable, "-c", "import time; time.sleep(5)"], repo.root, timeout=0.5)
+        except tc.CheckError as exc:
+            expect_true("names the limit", "did not finish within" in str(exc))
+            expect_true("suggests what to do", "maven_timeout_seconds" in str(exc))
+        else:
+            expect("timeout raised CheckError", True, False)
+
+
+def test_maven_args_from_the_profile_reach_the_command():
+    import tc_common as tc
+    with FixtureRepo() as repo:
+        repo.write(".github/agents/tc-agent/references/tc-project-profile.md",
+                   '# p\n\n```json\n{"schema_version": 1, "maven_args": ["-o", "-T", "1C"], '
+                   '"maven_timeout_seconds": 60}\n```\n')
+        tc._PROFILE_CACHE.clear()
+        expect("args", tc.maven_args(repo.root), ["-o", "-T", "1C"])
+        expect("timeout", tc.maven_timeout(repo.root), 60)
+        tc._PROFILE_CACHE.clear()
+
+
 def test_missing_run_is_exit_2():
     with fixture() as repo:
         proc = subprocess.run([sys.executable, str(TC / "scripts" / "tc_coverage.py"), "OrderService",

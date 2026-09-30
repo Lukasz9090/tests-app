@@ -94,7 +94,7 @@ def main() -> int:
         # ${project.reporting.outputDirectory}/jacoco and cannot be set from the CLI),
         # so the exec file is pinned and the report is discovered afterwards.
         command = (
-            [c.mvn_executable(), "-B"]
+            [c.mvn_executable(), "-B", *c.maven_args(repo)]
             + c.module_args(module)
             + [
                 f"org.jacoco:jacoco-maven-plugin:{jacoco}:report",
@@ -102,7 +102,7 @@ def main() -> int:
             ]
         )
         started = time.time() - 2
-        code, output = c.run(command, repo)
+        code, output = c.run(command, repo, timeout=c.maven_timeout(repo))
         log = c.write_log(directory, f"coverage-{args.label}", command, output)
         notes = []
 
@@ -122,7 +122,7 @@ def main() -> int:
                 for part in command
             ]
             started = time.time() - 2
-            code, output = c.run(command, repo)
+            code, output = c.run(command, repo, timeout=c.maven_timeout(repo))
             log = c.write_log(directory, f"coverage-{args.label}", command, output)
             jacoco = newest
 

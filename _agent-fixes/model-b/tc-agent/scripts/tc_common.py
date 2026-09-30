@@ -255,8 +255,32 @@ def mvn_executable() -> str:
     return "mvn.cmd" if os.name == "nt" else "mvn"
 
 
-def run(cmd: list, cwd: Path) -> tuple:
-    """Run a command, returning (returncode, combined output)."""
+DEFAULT_MAVEN_TIMEOUT = 900        # 15 minutes; a multi-module build can be slow
+
+
+def maven_timeout(repo: Path) -> float:
+    """Seconds a single maven call may take (profile `maven_timeout_seconds`)."""
+    try:
+        value = float(profile(repo).get("maven_timeout_seconds", DEFAULT_MAVEN_TIMEOUT))
+    except (TypeError, ValueError):
+        return DEFAULT_MAVEN_TIMEOUT
+    return value if value > 0 else DEFAULT_MAVEN_TIMEOUT
+
+
+def maven_args(repo: Path) -> list:
+    """Extra flags for every maven call (profile `maven_args`), e.g. -o, -T1C."""
+    return [str(a) for a in profile(repo).get("maven_args", []) or []]
+
+
+def run(cmd: list, cwd: Path, timeout: float | None = None) -> tuple:
+    """Run a command, returning (returncode, combined output).
+
+    A build that never returns is worse than one that fails: the caller sits in a
+    terminal with no output and no idea whether anything is happening. `timeout`
+    turns that into a CheckError naming the seconds and the command.
+    """
+    if cmd and str(cmd[0]).startswith("mvn"):
+        print(f"$ {' '.join(str(part) for part in cmd)}", file=sys.stderr, flush=True)
     try:
         if os.name == "nt":
             proc = subprocess.run(
@@ -266,6 +290,7 @@ def run(cmd: list, cwd: Path) -> tuple:
                 capture_output=True,
                 text=True,
                 errors="replace",
+                timeout=timeout,
             )
         else:
             proc = subprocess.run(
@@ -274,9 +299,19 @@ def run(cmd: list, cwd: Path) -> tuple:
                 capture_output=True,
                 text=True,
                 errors="replace",
+                timeout=timeout,
             )
     except FileNotFoundError as exc:
         raise CheckError(f"cannot execute {cmd[0]}: {exc}") from exc
+    except subprocess.TimeoutExpired as exc:
+        partial = (exc.stdout or "") + (exc.stderr or "")
+        if isinstance(partial, bytes):
+            partial = partial.decode("utf-8", "replace")
+        raise CheckError(
+            f"{cmd[0]} did not finish within {timeout:.0f}s. In a big multi-module repo the "
+            f"build alone can take longer: raise maven_timeout_seconds in "
+            f"tc-project-profile.md, or narrow the run to one module's class. "
+            f"Last output: {partial.strip()[-600:]}") from exc
     return proc.returncode, (proc.stdout or "") + (proc.stderr or "")
 
 

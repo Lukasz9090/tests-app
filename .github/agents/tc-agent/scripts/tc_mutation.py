@@ -68,7 +68,7 @@ def main() -> int:
             raise c.CheckError(f"no test class exercises {target.cls} - nothing to mutate against")
 
         command = (
-            [c.mvn_executable(), "-B"]
+            [c.mvn_executable(), "-B", *c.maven_args(repo)]
             + c.module_args(module)
             + [
                 f"org.pitest:pitest-maven:{pit}:mutationCoverage",
@@ -86,7 +86,7 @@ def main() -> int:
         )
 
         started = time.time() - 2
-        code, output = c.run(command, repo)
+        code, output = c.run(command, repo, timeout=c.maven_timeout(repo))
         log = c.write_log(directory, f"mutation-{args.label}", command, output)
         found = c.recent_files(c.module_dir(repo, module), "**/mutations.xml", started)
         xml_path = found[-1] if found else c.module_dir(repo, module) / "target" / "pit-reports" / "mutations.xml"

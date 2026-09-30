@@ -55,6 +55,11 @@ LABEL = "entry"
 # ----------------------------------------------------------------- runner ---
 
 
+def _say(message: str) -> None:
+    """Progress on stderr: a silent multi-minute build looks like a hung script."""
+    print(f"[tc-agent] {message}", file=sys.stderr, flush=True)
+
+
 class ScriptRunner:
     """Runs the check scripts and returns (exit code, report payload).
 
@@ -236,6 +241,9 @@ def derive(repo: Path, target_slug: str, run: dict, runner=None,
 
     # tier 2 ------------------------------------------------------------
     out["tiers_run"].append(2)
+    _say(f"tier 2: running the tests of {target.cls}"
+         + (f" in module {target.module}" if target.module else "")
+         + " through maven - this can take minutes")
     code, tests = runner.tests()
     if code == 2 or tests.get("status") == "UNAVAILABLE":
         return conclude("ESCALATE", ["CHECK_UNAVAILABLE"], f"tests: {tests.get('reason')}")
@@ -266,6 +274,7 @@ def derive(repo: Path, target_slug: str, run: dict, runner=None,
     if out["red"]:
         return conclude("RED", ["TESTS_FAILING"])
 
+    _say("tier 2: measuring coverage")
     code, cov = runner.coverage()
     out["coverage"] = _gate_summary(cov, "branch_ratio")
     if cov and cov.get("uncovered"):
@@ -305,6 +314,7 @@ def derive(repo: Path, target_slug: str, run: dict, runner=None,
 
     # tier 3 ------------------------------------------------------------
     out["tiers_run"].append(3)
+    _say("tier 3: running mutation testing (PIT) - the slowest step")
     code, mut = runner.mutation()
     out["mutation"] = _gate_summary(mut, "score")
     if mut and mut.get("survivors"):

@@ -63,9 +63,9 @@ Outcomes: `DONE`, `DONE_PARTIAL` (placeholders left), `BLOCKED`, `RED`, `ESCALAT
   - `freshness_days` (7) — legacy refuses code committed less than N days ago (use `--interactive` to override);
   - `instruction_paths` — extra style files for the agents;
   - `test_data_paths` — files with example business values (a customer id is 9 digits, …), used in every run;
-  - `tooling` — only if the pom has no JaCoCo/PIT versions.
-- **Style rules** — the agents read `.github/copilot-instructions.md`, `.github/instructions/*.instructions.md` (by `applyTo`) and `AGENTS.md`.
-  Repo rules override the default style in `tc-test-conventions.md` §B, never the rules in §A.
+  - `tooling` — only if the pom has no JaCoCo/PIT versions;
+  - `maven_timeout_seconds` (900) and `maven_args` (e.g. `["-T", "1C"]`) — for slow multi-module builds.
+- **Style rules** — the agents read `.github/copilot-instructions.md`, `.github/instructions/*.instructions.md` (by `applyTo`) and `AGENTS.md`. Repo rules override the default style in `tc-test-conventions.md` §B, never §A.
 - **`AGENTS.md`** — `tc-agent-protected-branches: master, main, release/*` (default: `master`).
 
 Default style: `shouldXxxWhenYyy`, `// given / // when / // then`, AssertJ, Mockito for repositories, class under test as a field, class `<Target>Test`.
