@@ -76,6 +76,25 @@ def test_test_data_files_are_included():
         c._PROFILE_CACHE.clear()
 
 
+def test_only_files_that_use_the_target_are_packed():
+    """git grep shortlists them; an unrelated test must not enter the pack."""
+    with FixtureRepo() as repo:
+        repo.write("src/test/java/com/acme/OrderServiceTest.java",
+                   "package com.acme;\nimport org.junit.jupiter.api.Test;\n"
+                   "class OrderServiceTest { @Test void a() { new OrderService(); } }\n")
+        repo.write("src/test/java/com/acme/OrderBuilder.java",
+                   "package com.acme;\nclass OrderBuilder { OrderService s; }\n")
+        repo.write("src/test/java/com/acme/NoiseTest.java",
+                   "package com.acme;\nimport org.junit.jupiter.api.Test;\n"
+                   "class NoiseTest { @Test void a() {} }\n")
+        c._GIT_INDEX_CACHE.clear()
+        pack = build(repo)
+        expect_true("the target's test is there", "OrderServiceTest.java" in pack)
+        expect_true("its builder is there", "OrderBuilder.java" in pack)
+        expect_true("an unrelated test is not", "NoiseTest.java" not in pack)
+        c._GIT_INDEX_CACHE.clear()
+
+
 def test_generated_sources_and_external_types():
     """An OpenAPI-style client generated into target/ is API the target calls."""
     with FixtureRepo() as repo:

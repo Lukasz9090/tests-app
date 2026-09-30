@@ -114,6 +114,7 @@ def normalize_test_id(test: str) -> str:
 
 def tier1(repo: Path, target: c.Target) -> dict:
     classes = c.discover_test_classes(repo, target)
+    mocked_only = list(getattr(c.discover_test_classes, "mocked_only", []))
     methods, defects = [], []
     for fqcn, path in classes:
         found, file_defects = j.parse_file(path, g.rel(repo, path))
@@ -137,6 +138,7 @@ def tier1(repo: Path, target: c.Target) -> dict:
                 stale.append(m)
     return {
         "classes": classes,
+        "mocked_only": mocked_only,
         "methods": methods,
         "ai": ai,
         "human": human,
@@ -210,6 +212,7 @@ def derive(repo: Path, target_slug: str, run: dict, runner=None,
         return out
     out["tests"] = {
         "classes": [fq for fq, _ in t1["classes"]],
+        "mocked_only": t1.get("mocked_only", []),
         "ai": [m.as_dict() for m in t1["ai"] if not m.is_placeholder],
         "placeholders": [m.as_dict() for m in t1["placeholders"]],
         "human_count": len(t1["human"]),
@@ -241,6 +244,14 @@ def derive(repo: Path, target_slug: str, run: dict, runner=None,
         return out
 
     if not t1["classes"]:
+        mocked = t1.get("mocked_only") or []
+        if mocked:
+            return conclude("PLAN", ["NO_TESTS"],
+                            "no test executes this class: it is only mocked in "
+                            + ", ".join(mocked[:5])
+                            + (" ..." if len(mocked) > 5 else "")
+                            + ". Mocking a class never runs its code, so there is nothing "
+                              "to measure and nothing was run.")
         return conclude("PLAN", ["NO_TESTS"])
 
     runner = runner or ScriptRunner(repo, target_slug, run["run_id"])

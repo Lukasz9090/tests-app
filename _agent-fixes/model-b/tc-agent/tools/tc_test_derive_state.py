@@ -26,6 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 try:
     from tc_testkit import (FakeRunner, FixtureRepo, ai_test, expect, expect_true,  # noqa: E402
                             failing, human_test, run_all)
+    import tc_common as c  # noqa: E402
     import tc_derive_state as ds  # noqa: E402
     from tc_md_payload import load_payload  # noqa: E402
 except ImportError as exc:  # pragma: no cover
@@ -40,6 +41,23 @@ def run(mode="legacy", interactive=False) -> dict:
 def derive(repo, runner=None, slug="OrderService", **kw):
     fresh = kw.pop("freshness_days", 7)
     return ds.derive(repo.root, slug, run(**kw), runner=runner or FakeRunner(), freshness_days=fresh)
+
+
+def test_a_class_that_is_only_mocked_is_not_a_test():
+    """@Mock TemplateUtil never runs TemplateUtil: no tests, and no maven at all."""
+    with FixtureRepo() as repo:
+        repo.write("src/test/java/com/acme/AServiceTest.java",
+                   "package com.acme;\nimport org.junit.jupiter.api.Test;\n"
+                   "import org.mockito.Mock;\nclass AServiceTest {\n  @Mock\n"
+                   "  private OrderService orderService;\n  @Test void a() {}\n}\n")
+        c._GIT_INDEX_CACHE.clear()
+        state = derive(repo, runner=FakeRunner())
+        expect("plans from scratch", (state["next_action"], state["reasons"]), ("PLAN", ["NO_TESTS"]))
+        expect("no check was run", state["tiers_run"], [0, 1])
+        expect("and it names the mocking test", state["tests"]["mocked_only"],
+               ["com.acme.AServiceTest"])
+        expect_true("the detail explains it", "only mocked in" in (state.get("detail") or ""))
+        c._GIT_INDEX_CACHE.clear()
 
 
 def test_unknown_target_escalates():

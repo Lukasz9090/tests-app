@@ -231,6 +231,10 @@ def test_summary(f: Path) -> str:
     return f"{len(methods)} test methods: {ai} AI-generated, {ph} placeholders, {len(methods) - ai - ph} human"
 
 
+def _say(message: str) -> None:
+    print(f"[tc-agent] {message}", file=sys.stderr, flush=True)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("target")
@@ -272,13 +276,30 @@ def main():
                              [x for x in f.parent.glob("*.java") if x != f])
     l2 -= l1 | {cname}
 
+    _say(f"building the context pack for {cname} (scanning tests, builders and enums)")
     # --- tests, builders/fixtures, enums ---
-    tests = [f for f in java_files(test_roots)
-             if cname in f.stem or mentions(read(f), cname)]
+    # git grep shortlists the files that use these names; reading every test and
+    # every builder in a big repo just to ask that question was most of the time
+    # this script spent. Without git (no repo, no git) the read is the fallback.
+    def uses(names: tuple, pool: list) -> list:
+        hits = None
+        for name in names:
+            found = c.grep_files(repo, name)
+            if found is None:
+                hits = None
+                break
+            hits = set() if hits is None else hits
+            hits |= {str(f.resolve()) for f in found}
+        if hits is None:
+            return [f for f in pool if mentions(read(f), *names)]
+        return [f for f in pool if str(f.resolve()) in hits]
+
+    test_pool = java_files(test_roots)
+    tests = sorted({f for f in test_pool if cname in f.stem} | set(uses((cname,), test_pool)))
     builder_pat = re.compile(r"(Builder|Factory|Fixtures?|TestData|Mother)$")
     wanted = tuple({cname} | l1)                  # one alternation, not one pass per name
-    builders = [f for f in java_files(test_roots + src_roots)
-                if builder_pat.search(f.stem) and mentions(read(f), *wanted)]
+    builder_pool = [f for f in java_files(test_roots + src_roots) if builder_pat.search(f.stem)]
+    builders = uses(wanted, builder_pool)
     enums = [all_by_name[d] for d in (l1 | l2)
              if d in all_by_name
              and re.search(rf"\benum\s+{re.escape(d)}\b", read(all_by_name[d]))]
@@ -406,6 +427,8 @@ def main():
         out.append("\n## NOTES\n")
         out.extend(f"- {n}" for n in notes)
 
+    _say(f"context pack: {len(tests)} test file(s), {len(builders)} builder(s), "
+         f"{len(l1)} dependency file(s)")
     dest = run_dir / "context-pack.md"
     dest.write_text("\n".join(out), encoding="utf-8")
     print(f"WRITTEN: {dest.relative_to(repo).as_posix()}")

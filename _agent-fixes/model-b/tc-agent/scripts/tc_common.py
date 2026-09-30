@@ -251,6 +251,60 @@ def mentions(text: str, name: str) -> bool:
     return re.search(rf"\b{re.escape(name)}\b", text) is not None
 
 
+def grep_files(repo: Path, word: str, pathspec: str = "*.java") -> list | None:
+    """Files that use `word` as a whole word, found by git. None when git cannot.
+
+    Reading every test source in a big repo to ask "does it mention this class?"
+    is what made the context pack slow. `git grep` scans the same content in one
+    optimised process; `--untracked` keeps files the generator just wrote.
+    """
+    repo = Path(repo).resolve()
+    code, out = run(["git", "-C", str(repo), "grep", "-l", "-I", "--untracked",
+                     "--word-regexp", "-e", word, "--", pathspec], repo)
+    if code not in (0, 1):                        # 1 = no match, anything else = no answer
+        return None
+    return [repo / line.strip() for line in out.splitlines() if line.strip()]
+
+
+MOCK_ANNOTATION = re.compile(r"@(Mock|MockBean|MockitoBean)\b")
+
+
+def exercises(text: str, cls: str) -> bool:
+    """Does this test source actually RUN `cls`, or does it only mock it?
+
+    A class that appears solely as `@Mock TemplateUtil util` is never executed:
+    the test exercises the collaborator's caller, not the collaborator. Running
+    such a class costs the full build and adds exactly zero coverage, and
+    treating it as "a test of the target" hides that the target is untested.
+
+    A spy is real code, an @InjectMocks field is the class under test, and any
+    other mention (a constructor call, a static call, a type in an assertion)
+    counts as use.
+    """
+    word = re.compile(rf"\b{re.escape(cls)}\b")
+    mock_call = re.compile(rf"\bmock\s*\(\s*{re.escape(cls)}\s*\.class")
+    lines = text.splitlines()
+    previous = ""
+    for line in lines:
+        stripped = line.strip()
+        if not word.search(line):
+            if stripped:
+                previous = stripped
+            continue
+        if stripped.startswith("import ") or stripped.startswith("//") or stripped.startswith("*"):
+            previous = stripped
+            continue
+        mocked = (MOCK_ANNOTATION.search(line)
+                  or mock_call.search(line)
+                  or MOCK_ANNOTATION.fullmatch(previous or "")
+                  or bool(previous and MOCK_ANNOTATION.search(previous)
+                          and not word.search(previous)))
+        if not mocked:
+            return True
+        previous = stripped
+    return False
+
+
 def discover_test_classes(repo: Path, target: Target) -> list:
     """Test classes that exercise the target: human and AI tests alike.
 
@@ -259,14 +313,26 @@ def discover_test_classes(repo: Path, target: Target) -> list:
     one test method (so builders and fixtures that merely mention the class are
     not handed to surefire). Returns [(fqcn, path), ...] sorted by path.
     """
-    _, test_roots = find_roots(Path(repo).resolve())
-    found = []
-    for f in java_files(test_roots):
+    repo = Path(repo).resolve()
+    _, test_roots = find_roots(repo)
+    candidates = java_files(test_roots)
+    hits = grep_files(repo, target.cls)
+    if hits is not None:
+        wanted = {str(h.resolve()) for h in hits}
+        candidates = [f for f in candidates
+                      if target.cls in f.stem or str(f.resolve()) in wanted]
+    found, mocked_only = [], []
+    for f in candidates:
         text = f.read_text(encoding="utf-8", errors="replace")
         if not TEST_ANNOTATION.search(text):
             continue
-        if target.cls in f.stem or mentions(text, target.cls):
+        if not (target.cls in f.stem or mentions(text, target.cls)):
+            continue
+        if target.cls in f.stem or exercises(text, target.cls):
             found.append((fqcn_of_file(f), f))
+        else:
+            mocked_only.append(fqcn_of_file(f))
+    discover_test_classes.mocked_only = sorted(mocked_only)
     return sorted(found, key=lambda pair: str(pair[1]))
 
 
