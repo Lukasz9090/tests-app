@@ -110,18 +110,23 @@ def main() -> int:
         bound_pom = c.pom_binds_jacoco_agent(repo, module)
         agent_goal = [] if bound_pom else [f"org.jacoco:jacoco-maven-plugin:{jacoco}:prepare-agent"]
         agent_source = f"pom-bound ({bound_pom})" if bound_pom else f"cli goal ({jacoco})"
-        command = (
-            [c.mvn_executable(), "-B", *c.maven_args(repo)]
-            + c.module_args(module, also_make=True)
-            + [
-                "-DfailIfNoTests=false",
-                "-Dsurefire.failIfNoSpecifiedTests=false",
-                f"-Dtest={','.join(selectors)}",
-                f"-Djacoco.destFile={exec_file}",
-            ]
-            + agent_goal
-            + ["test"]
-        )
+        also_make = c.maven_also_make(repo)
+
+        COMMAND_TAIL = [
+            "-DfailIfNoTests=false",
+            "-Dsurefire.failIfNoSpecifiedTests=false",
+            f"-Dtest={','.join(selectors)}",
+            f"-Djacoco.destFile={exec_file}",
+            *agent_goal,
+            "test",
+        ]
+
+        def build_command(with_am: bool) -> list:
+            return ([c.mvn_executable(), "-B", *c.maven_args(repo)]
+                    + c.module_args(module, also_make=with_am) + COMMAND_TAIL)
+
+        command = build_command(with_am=(also_make is True))
+        retried_with_am = False
 
         runs = []
         output = ""
@@ -130,6 +135,17 @@ def main() -> int:
             started = time.time() - 2  # filesystem mtime granularity slack
             exec_file.unlink(missing_ok=True)
             code, output = c.run(command, repo, timeout=c.maven_timeout(repo))
+            # "auto": the fast build first; only a repo that has not installed its
+            # modules pays for -am, and it is told how to stop paying.
+            if (code != 0 and also_make == "auto" and not retried_with_am
+                    and c.needs_also_make(output)):
+                retried_with_am = True
+                command = build_command(with_am=True)
+                print("[tc-agent] the module's dependencies are not installed; rebuilding them "
+                      "with -am. Run `mvn -DskipTests install` once to skip this.",
+                      file=sys.stderr, flush=True)
+                exec_file.unlink(missing_ok=True)
+                code, output = c.run(command, repo, timeout=c.maven_timeout(repo))
             report_files = c.recent_files(search_root, "target/surefire-reports/TEST-*.xml", started)
             runs.append(parse_surefire(report_files))
         log = c.write_log(directory, f"tests-{args.label}", command, output)

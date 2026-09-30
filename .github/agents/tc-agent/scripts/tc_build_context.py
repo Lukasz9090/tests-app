@@ -49,11 +49,9 @@ STDLIB_PREFIXES = ("java.", "javax.", "jakarta.", "org.junit", "org.mockito",
                    "org.assertj", "org.hamcrest", "lombok.")
 
 
-def java_files(roots):
-    for r in roots:
-        for f in r.rglob("*.java"):
-            if not SKIP_DIRS.intersection(f.relative_to(r).parts):
-                yield f
+def java_files(roots, use_git: bool = True):
+    """Shared with the other scripts: git's index when it can answer, else a walk."""
+    return c.java_files(roots, use_git=use_git)
 
 
 _CACHE = {}
@@ -257,7 +255,7 @@ def main():
 
     all_src = list(java_files(src_roots))
     gen_roots = generated_roots(repo)
-    generated = list(java_files(gen_roots))
+    generated = list(java_files(gen_roots, use_git=False))   # git ignores build output
     all_by_name = {f.stem: f for f in all_src}
     for f in generated:                        # generated code never shadows source
         all_by_name.setdefault(f.stem, f)

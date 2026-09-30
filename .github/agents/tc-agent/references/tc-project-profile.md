@@ -33,13 +33,32 @@ guessed from file names - a file is used because somebody named it here or on
 the command line. In an `interactive` run with no such file, the planner offers
 to take one or to walk through a few questions.
 
-**Maven** (`maven_timeout_seconds`, `maven_args`, both optional): one maven call
-may take 900 seconds by default; past that the check stops with a clear error
-instead of hanging. In a large multi-module repo raise the limit, and use
-`maven_args` for the flags that make such a build bearable - `["-T", "1C"]` to
-build in parallel, `["-o"]` offline, `["-DskipITs"]` to leave integration tests
-out. Every maven command the scripts run is echoed to stderr, so a long build
-shows what it is doing.
+**Maven** (`maven_timeout_seconds`, `maven_also_make`, `maven_args`, all
+optional): one maven call may take 600 seconds by default; past that the check
+stops with a clear error instead of hanging, and every command is echoed to
+stderr so a long build shows what it is doing. The low limit is deliberate - a
+check that needs more than ten minutes makes the whole pipeline unusable, and
+the answer is a faster build, not a longer wait.
+
+In a large reactor the cost is `-am`: it rebuilds every module the target
+depends on, which turns a two-minute job into sixteen. So the default is
+`"auto"` - the test run builds only the target's module, and adds `-am` only
+when maven reports that the dependencies are missing. A small repo therefore
+still works with no setup (the first run pays for one full build), and a big one
+does not rebuild the world every time.
+
+Two ways to take over that decision:
+
+    "maven_also_make": true        # always rebuild the dependencies
+    "maven_also_make": false       # never; you keep them installed yourself
+
+For `false`, and to make `"auto"` fast from the first run, install them once:
+
+    mvn -DskipTests install -pl <module> -am     # again after a dependency changes
+
+`maven_args` carries the rest of what makes such a build bearable: `["-T",
+"1C"]` to build in parallel, `["-o"]` offline, `["-DskipITs"]` to leave
+integration tests out.
 
 **Tooling** is deliberately absent. `tool_version()` resolves a version as
 CLI flag → this file → the version declared in the pom → the agent default, so a

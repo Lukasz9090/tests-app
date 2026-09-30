@@ -17,8 +17,10 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -134,10 +136,61 @@ class TargetError(CheckError):
         self.code = code
 
 
+_GIT_INDEX_CACHE: dict = {}
+
+
+def git_index(start: Path) -> list | None:
+    """Every file git knows about under `start`'s repository, as absolute paths.
+
+    Reading git's index beats walking the tree: one process instead of a stat per
+    file, which on Windows is most of the cost of finding a class in a big repo.
+    `-c` adds untracked files (a test the generator just wrote is not committed
+    yet) and `--exclude-standard` keeps .gitignore honoured - so anything git
+    ignores, such as generated sources under target/, is NOT here and still needs
+    a walk. Returns None when git cannot answer; every caller then walks.
+    """
+    start = Path(start).resolve()
+    for known, files in _GIT_INDEX_CACHE.items():
+        try:
+            start.relative_to(known)
+        except ValueError:
+            continue
+        return files
+    code, out = run(["git", "-C", str(start), "rev-parse", "--show-toplevel"], start)
+    if code != 0 or not out.strip():
+        return None
+    top = Path(out.strip().splitlines()[0]).resolve()
+    code, listing = run(["git", "-C", str(top), "ls-files", "-co", "--exclude-standard"], top)
+    if code != 0:
+        return None
+    files = [top / line for line in listing.splitlines() if line.strip()]
+    _GIT_INDEX_CACHE[top] = files
+    return files
+
+
+def _under(root: Path, files: list, suffix: str) -> list:
+    root = Path(root).resolve()
+    out = []
+    for f in files:
+        if f.suffix != suffix:
+            continue
+        try:
+            rel = f.relative_to(root)
+        except ValueError:
+            continue
+        if not SKIP_DIRS.intersection(rel.parts):
+            out.append(f)
+    return out
+
+
 def find_roots(repo: Path) -> tuple[list, list]:
     """Maven source and test roots of every module (Maven only)."""
     src, test = [], []
-    poms = (p for p in repo.rglob("pom.xml") if not SKIP_DIRS.intersection(p.relative_to(repo).parts))
+    index = git_index(repo)
+    if index is not None:
+        poms = (p for p in _under(repo, index, ".xml") if p.name == "pom.xml")
+    else:
+        poms = (p for p in repo.rglob("pom.xml") if not SKIP_DIRS.intersection(p.relative_to(repo).parts))
     for pom_dir in sorted({p.parent for p in poms}):
         m, t = pom_dir / "src/main/java", pom_dir / "src/test/java"
         if m.is_dir():
@@ -147,9 +200,19 @@ def find_roots(repo: Path) -> tuple[list, list]:
     return src, test
 
 
-def java_files(roots) -> list:
+def java_files(roots, use_git: bool = True) -> list:
+    """Every .java file under these roots, from git's index when it can answer.
+
+    `use_git=False` for a root git ignores (generated sources under target/):
+    there the walk is the only way to see anything.
+    """
     out = []
     for root in roots:
+        root = Path(root)
+        index = git_index(root) if use_git else None
+        if index is not None:
+            out.extend(_under(root, index, ".java"))
+            continue
         for f in root.rglob("*.java"):
             if not SKIP_DIRS.intersection(f.relative_to(root).parts):
                 out.append(f)
@@ -255,7 +318,7 @@ def mvn_executable() -> str:
     return "mvn.cmd" if os.name == "nt" else "mvn"
 
 
-DEFAULT_MAVEN_TIMEOUT = 900        # 15 minutes; a multi-module build can be slow
+DEFAULT_MAVEN_TIMEOUT = 600        # 10 minutes: past that, fix the build, do not wait it out
 
 
 def maven_timeout(repo: Path) -> float:
@@ -267,52 +330,109 @@ def maven_timeout(repo: Path) -> float:
     return value if value > 0 else DEFAULT_MAVEN_TIMEOUT
 
 
+# Maven says this when a module\'s dependencies are not in the local repository.
+UNRESOLVED_DEPENDENCY = (
+    "could not resolve dependencies",
+    "the following artifacts could not be resolved",
+    "non-resolvable parent pom",
+    "non-resolvable import pom",
+)
+
+
+def needs_also_make(output: str) -> bool:
+    """Did maven fail because the module\'s own dependencies are not installed?"""
+    low = (output or "").lower()
+    return any(marker in low for marker in UNRESOLVED_DEPENDENCY)
+
+
+def maven_also_make(repo: Path) -> str | bool:
+    """When `-am` (also build the module\'s dependencies) is used. Default "auto".
+
+    `-am` is what makes a test run in a big reactor take 16 minutes instead of
+    two: it rebuilds every upstream module, every time. But in a small repo, or
+    on a fresh clone, nothing is installed and without it maven cannot resolve
+    anything. So the default is "auto": build only the target\'s module, and if
+    maven says the dependencies are missing, do it again with `-am`.
+
+    `true` always adds it (a repo whose modules change constantly), `false` never
+    does (you install the dependencies yourself and own that decision).
+    """
+    value = profile(repo).get("maven_also_make", "auto")
+    if isinstance(value, bool):
+        return value
+    return "auto"
+
+
 def maven_args(repo: Path) -> list:
     """Extra flags for every maven call (profile `maven_args`), e.g. -o, -T1C."""
     return [str(a) for a in profile(repo).get("maven_args", []) or []]
 
 
+def _resolve(program: str) -> str:
+    """Absolute path of an executable, so Windows needs no shell to find mvn.cmd."""
+    found = shutil.which(program)
+    return found or program
+
+
+def _kill_tree(proc: subprocess.Popen) -> None:
+    if os.name == "nt":
+        subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)],
+                       capture_output=True, check=False)
+    else:
+        proc.kill()
+    try:
+        proc.wait(timeout=30)
+    except subprocess.TimeoutExpired:            # pragma: no cover - the OS is stuck
+        pass
+
+
 def run(cmd: list, cwd: Path, timeout: float | None = None) -> tuple:
     """Run a command, returning (returncode, combined output).
 
-    A build that never returns is worse than one that fails: the caller sits in a
-    terminal with no output and no idea whether anything is happening. `timeout`
-    turns that into a CheckError naming the seconds and the command.
+    Output goes to a FILE, not to a pipe. Maven leaves grandchildren behind (a
+    surefire fork, a JVM that has not exited yet) and on Windows they inherit the
+    pipe: the build prints BUILD SUCCESS, maven exits, and the read still blocks
+    on a pipe nobody will close - which looked exactly like a build that never
+    ends. Waiting on the PROCESS, with the output on disk, ends when maven ends.
+
+    `timeout` is a real limit on that wait; it kills the whole process tree.
     """
-    if cmd and str(cmd[0]).startswith("mvn"):
-        print(f"$ {' '.join(str(part) for part in cmd)}", file=sys.stderr, flush=True)
+    cmd = [str(part) for part in cmd]
+    if cmd and Path(cmd[0]).stem == "mvn":
+        cmd = [_resolve(cmd[0]), *cmd[1:]]
+        print(f"$ {' '.join(cmd)}", file=sys.stderr, flush=True)
+    handle = tempfile.TemporaryFile(mode="w+", encoding="utf-8", errors="replace")
     try:
-        if os.name == "nt":
-            proc = subprocess.run(
-                subprocess.list2cmdline(cmd),
-                cwd=str(cwd),
-                shell=True,
-                capture_output=True,
-                text=True,
-                errors="replace",
-                timeout=timeout,
-            )
-        else:
-            proc = subprocess.run(
-                cmd,
-                cwd=str(cwd),
-                capture_output=True,
-                text=True,
-                errors="replace",
-                timeout=timeout,
-            )
-    except FileNotFoundError as exc:
-        raise CheckError(f"cannot execute {cmd[0]}: {exc}") from exc
-    except subprocess.TimeoutExpired as exc:
-        partial = (exc.stdout or "") + (exc.stderr or "")
-        if isinstance(partial, bytes):
-            partial = partial.decode("utf-8", "replace")
-        raise CheckError(
-            f"{cmd[0]} did not finish within {timeout:.0f}s. In a big multi-module repo the "
-            f"build alone can take longer: raise maven_timeout_seconds in "
-            f"tc-project-profile.md, or narrow the run to one module's class. "
-            f"Last output: {partial.strip()[-600:]}") from exc
-    return proc.returncode, (proc.stdout or "") + (proc.stderr or "")
+        try:
+            proc = subprocess.Popen(cmd, cwd=str(cwd), stdout=handle,
+                                    stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
+        except FileNotFoundError as exc:
+            raise CheckError(f"cannot execute {cmd[0]}: {exc}") from exc
+        except OSError as exc:
+            if os.name != "nt":
+                raise CheckError(f"cannot execute {cmd[0]}: {exc}") from exc
+            try:                                  # a wrapper Windows will only run through cmd
+                proc = subprocess.Popen(subprocess.list2cmdline(cmd), cwd=str(cwd), shell=True,
+                                        stdout=handle, stderr=subprocess.STDOUT,
+                                        stdin=subprocess.DEVNULL)
+            except OSError as inner:
+                raise CheckError(f"cannot execute {cmd[0]}: {inner}") from inner
+        try:
+            code = proc.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            _kill_tree(proc)
+            handle.seek(0)
+            partial = handle.read()
+            raise CheckError(
+                f"{Path(cmd[0]).name} did not finish within {timeout:g}s and was stopped. "
+                f"In a big multi-module repo the build alone can take longer: raise "
+                f"maven_timeout_seconds in tc-project-profile.md, add maven_args such as "
+                f'["-T", "1C"] or ["-o"], or narrow the run to one module\'s class. '
+                f"Last output: {partial.strip()[-600:]}") from None
+        handle.seek(0)
+        return code, handle.read()
+    finally:
+        handle.close()
 
 
 JDK_HINTS = (
