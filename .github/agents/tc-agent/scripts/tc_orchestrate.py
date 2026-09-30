@@ -256,6 +256,22 @@ def cmd_start(args) -> int:
         "resealed": False,
     }
     c.save_run(directory, run)
+
+    def failed_state(detail: str, reason: str) -> dict:
+        return {"schema_version": 1, "slug": args.slug, "mode": args.mode,
+                "interactive": bool(args.interactive), "target": None, "git": None,
+                "tests": None, "reseal": [], "recharacterize": [], "red": [],
+                "compile_errors": [], "coverage": None, "mutation": None,
+                "tiers_run": [], "next_action": "ESCALATE", "reasons": [reason],
+                "detail": detail}
+
+    # Written BEFORE the checks run and overwritten when they finish. A start that
+    # is killed - Ctrl+C, a closed terminal, a chat that gives up on a long build -
+    # never reaches an exception handler, and without this the run directory holds
+    # a run.json and nothing else, which reads as "no derive-state.md" later.
+    ds.write(directory, failed_state(
+        "start was interrupted while deriving the state (the checks can take minutes). "
+        "Nothing was planned or generated; start a new run.", "START_INTERRUPTED"))
     try:
         state = ds.derive(repo, args.slug, run)
     except Exception as exc:                      # noqa: BLE001 - the reason must survive
@@ -263,13 +279,7 @@ def cmd_start(args) -> int:
         # command can only say "file not found" and the real cause (a maven
         # failure, a module that will not build) is lost. Write the failure
         # INTO the run so `state`, `finish` and the report can name it.
-        state = {"schema_version": 1, "slug": args.slug, "mode": args.mode,
-                 "interactive": bool(args.interactive), "target": None, "git": None,
-                 "tests": None, "reseal": [], "recharacterize": [], "red": [],
-                 "compile_errors": [], "coverage": None, "mutation": None,
-                 "tiers_run": [], "next_action": "ESCALATE",
-                 "reasons": [type(exc).__name__],
-                 "detail": f"derive-state failed: {exc}"}
+        state = failed_state(f"derive-state failed: {exc}", type(exc).__name__)
         ds.write(directory, state)
         print(json.dumps({"run_id": run_id, "run_dir": rel(directory, repo),
                           "derive_state": {"next_action": "ESCALATE",

@@ -331,6 +331,33 @@ def test_start_that_could_not_derive_says_why():
                     or "TARGET_NOT_FOUND" in str(state.get("reason", "")))
 
 
+def test_interrupted_start_leaves_a_readable_state():
+    """A killed start (Ctrl+C, a closed terminal) must still explain itself.
+
+    KeyboardInterrupt is not an Exception, so no handler runs: the placeholder
+    derive-state written before the checks is what survives.
+    """
+    import argparse
+    with FixtureRepo() as repo:
+        args = argparse.Namespace(slug=SLUG, repo=str(repo.root), mode="legacy",
+                                  interactive=False, spec=None, test_data=None,
+                                  impl_cap=3, plan_cap=2, commit=False)
+        original = ds.derive
+        ds.derive = lambda *a, **k: (_ for _ in ()).throw(KeyboardInterrupt())
+        try:
+            o.cmd_start(args)
+        except KeyboardInterrupt:
+            pass
+        finally:
+            ds.derive = original
+        root = c.runs_root(repo.root, SLUG)
+        runs = sorted(p for p in root.iterdir())
+        expect_true("a derive-state.md is there", (runs[-1] / "derive-state.md").is_file())
+        state = o.compute_state(repo.root, runs[-1])
+        expect("it finishes", step(state), ("FINISH", "ESCALATED"))
+        expect_true("and says it was interrupted", "interrupted" in state["reason"])
+
+
 def test_run_without_derive_state_is_not_a_mystery():
     with FixtureRepo() as repo:
         run = Run(repo)                      # run.json only, no derive-state.md

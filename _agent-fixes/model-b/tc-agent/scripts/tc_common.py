@@ -21,6 +21,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -386,6 +387,33 @@ def _kill_tree(proc: subprocess.Popen) -> None:
         pass
 
 
+HEARTBEAT_SECONDS = 60
+
+
+def _wait_with_heartbeat(proc: subprocess.Popen, timeout: float | None, loud: bool) -> int:
+    """Wait for the process, saying it is still alive once a minute.
+
+    Maven's own output goes to a file, so a ten-minute build would otherwise
+    print nothing at all between "this can take minutes" and the result.
+    """
+    if not loud:
+        return proc.wait(timeout=timeout)
+    started = time.monotonic()
+    while True:
+        waited = time.monotonic() - started
+        left = None if timeout is None else max(0.0, timeout - waited)
+        slice_ = HEARTBEAT_SECONDS if left is None else min(HEARTBEAT_SECONDS, left)
+        try:
+            return proc.wait(timeout=slice_)
+        except subprocess.TimeoutExpired:
+            waited = time.monotonic() - started
+            if timeout is not None and waited >= timeout:
+                raise
+            minutes, seconds = divmod(int(waited), 60)
+            elapsed = f"{minutes} min" if minutes else f"{seconds} s"
+            print(f"[tc-agent] still running ({elapsed})", file=sys.stderr, flush=True)
+
+
 def run(cmd: list, cwd: Path, timeout: float | None = None) -> tuple:
     """Run a command, returning (returncode, combined output).
 
@@ -398,7 +426,8 @@ def run(cmd: list, cwd: Path, timeout: float | None = None) -> tuple:
     `timeout` is a real limit on that wait; it kills the whole process tree.
     """
     cmd = [str(part) for part in cmd]
-    if cmd and Path(cmd[0]).stem == "mvn":
+    loud = bool(cmd) and Path(cmd[0]).stem == "mvn"
+    if loud:
         cmd = [_resolve(cmd[0]), *cmd[1:]]
         print(f"$ {' '.join(cmd)}", file=sys.stderr, flush=True)
     handle = tempfile.TemporaryFile(mode="w+", encoding="utf-8", errors="replace")
@@ -418,7 +447,7 @@ def run(cmd: list, cwd: Path, timeout: float | None = None) -> tuple:
             except OSError as inner:
                 raise CheckError(f"cannot execute {cmd[0]}: {inner}") from inner
         try:
-            code = proc.wait(timeout=timeout)
+            code = _wait_with_heartbeat(proc, timeout, loud=loud)
         except subprocess.TimeoutExpired:
             _kill_tree(proc)
             handle.seek(0)

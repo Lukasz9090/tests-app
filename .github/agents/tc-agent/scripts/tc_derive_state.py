@@ -73,14 +73,20 @@ class ScriptRunner:
     def _run(self, script: str, report: str, extra: list) -> tuple[int, dict]:
         command = [sys.executable, str(SCRIPTS / script), self.slug, "--repo", str(self.repo),
                    "--run", self.run_id, "--label", LABEL, *extra]
-        proc = subprocess.run(command, cwd=str(self.repo), capture_output=True, text=True,
-                              errors="replace")
+        # stderr is NOT captured: that is where the check script echoes the maven
+        # command it is about to run and why it retries. Swallowing it left the
+        # user with one "this can take minutes" line and silence for the next
+        # quarter of an hour. stdout is captured - it only holds the check's own
+        # json summary, which is read from the report file anyway.
+        proc = subprocess.run(command, cwd=str(self.repo), stdout=subprocess.PIPE, stderr=None,
+                              text=True, errors="replace")
         path = c.run_dir(self.repo, self.slug, self.run_id) / "checks" / report
         try:
             data, _ = load_payload(path)
         except ValueError:
-            tail = (proc.stdout + proc.stderr).strip()[-600:]
-            data = {"status": "UNAVAILABLE", "reason": f"{script} wrote no readable report: {tail}"}
+            tail = (proc.stdout or "").strip()[-600:]
+            data = {"status": "UNAVAILABLE",
+                    "reason": f"{script} wrote no readable report (its errors are above): {tail}"}
             return 2, data
         return proc.returncode, data
 

@@ -219,6 +219,27 @@ def test_class_lookup_uses_git_and_sees_uncommitted_files():
         tc._GIT_INDEX_CACHE.clear()
 
 
+def test_progress_reaches_the_terminal():
+    """A long maven call must print a heartbeat, not silence."""
+    import io, contextlib, os, stat
+    import tc_common as tc
+    with FixtureRepo() as repo:
+        fake = repo.root / "mvn"
+        fake.write_text("#!/bin/sh\nsleep 2\necho BUILD SUCCESS\n", encoding="utf-8")
+        os.chmod(fake, os.stat(fake).st_mode | stat.S_IEXEC)
+        old, tc.HEARTBEAT_SECONDS = tc.HEARTBEAT_SECONDS, 1
+        buffer = io.StringIO()
+        try:
+            with contextlib.redirect_stderr(buffer):
+                code, output = tc.run([str(fake)], repo.root, timeout=30)
+        finally:
+            tc.HEARTBEAT_SECONDS = old
+        noise = buffer.getvalue()
+        expect("the call still returns its output", (code, "BUILD SUCCESS" in output), (0, True))
+        expect_true("the command is echoed", "$ " in noise)
+        expect_true("and it says it is alive", "still running" in noise)
+
+
 def test_missing_dependencies_are_recognised():
     import tc_common as tc
     expect("maven's wording is matched", tc.needs_also_make(
