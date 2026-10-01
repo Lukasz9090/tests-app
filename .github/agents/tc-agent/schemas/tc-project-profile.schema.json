@@ -68,6 +68,13 @@
         {"const": "auto"}
       ]
     },
+    "maven_skip_main_compile": {
+      "description": "When a check may run against the classes already in <module>/target/classes instead of compiling src/main first (-Dmaven.main.skip=true). Omit it for \"auto\": compile when a source under src/main is newer than those classes (the build really is out of date, and the check says it may take minutes), skip when it is not - the production code does not change during a run, and in a module with annotation processors or generated sources that compile is a full rebuild every time. true always skips when classes exist and only warns about staleness; false always compiles.",
+      "oneOf": [
+        {"type": "boolean"},
+        {"const": "auto"}
+      ]
+    },
     "maven_args": {
       "type": "array",
       "items": {

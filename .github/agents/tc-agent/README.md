@@ -64,7 +64,7 @@ Outcomes: `DONE`, `DONE_PARTIAL` (placeholders left), `BLOCKED`, `RED`, `ESCALAT
   - `instruction_paths` — extra style files for the agents;
   - `test_data_paths` — files with example business values (a customer id is 9 digits, …), used in every run;
   - `tooling` — only if the pom has no JaCoCo/PIT versions;
-  - `maven_timeout_seconds` (600), `maven_also_make` (`"auto"`: build only the target's module, add `-am` only if its dependencies are missing) and `maven_args` (e.g. `["-T", "1C"]`).
+  - `maven_timeout_seconds` (600), `maven_also_make` (`"auto"`), `maven_skip_main_compile` (`"auto"`: reuse `target/classes` unless a source is newer) and `maven_args`.
 - **Style rules** — the agents read `.github/copilot-instructions.md`, `.github/instructions/*.instructions.md` (by `applyTo`) and `AGENTS.md`. Repo rules override the default style in `tc-test-conventions.md` §B, never §A.
 - **`AGENTS.md`** — `tc-agent-protected-branches: master, main, release/*` (default: `master`).
 

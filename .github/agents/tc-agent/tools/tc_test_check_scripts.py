@@ -273,6 +273,34 @@ def test_missing_dependencies_are_recognised():
         "[ERROR] Tests run: 3, Failures: 1"), False)
 
 
+def test_skipping_main_compile_needs_built_classes():
+    import tc_common as tc
+    with FixtureRepo() as repo:
+        expect("auto by default", tc.maven_skip_main_compile(repo.root), "auto")
+        repo.write(".github/agents/tc-agent/references/tc-project-profile.md",
+                   '# p\n\n```json\n{"schema_version": 1, "maven_skip_main_compile": true}\n```\n')
+        tc._PROFILE_CACHE.clear()
+        expect("forced from the profile", tc.maven_skip_main_compile(repo.root), True)
+        expect("nothing built yet -> no skipping", tc.built_classes(repo.root, None), None)
+        classes = repo.root / "target" / "classes" / "com" / "acme"
+        classes.mkdir(parents=True)
+        (classes / "OrderService.class").write_bytes(b"\xca\xfe\xba\xbe")
+        found = tc.built_classes(repo.root, None)
+        expect_true("built classes are found", found is not None)
+        expect("nothing is newer than them", tc.stale_classes(repo.root, None, found), None)
+        new_source = repo.root / "src/main/java/com/acme/Added.java"
+        new_source.write_text("class Added {}\n", encoding="utf-8")
+        expect("a source with no class at all is stale",
+               tc.stale_classes(repo.root, None, found), "src/main/java/com/acme/Added.java")
+        new_source.unlink()
+        import time as _t
+        _t.sleep(0.05)
+        (repo.root / repo.target_path).write_text("class OrderService { int x; }\n", encoding="utf-8")
+        expect_true("a newer source is reported",
+                    (tc.stale_classes(repo.root, None, found) or "").endswith("OrderService.java"))
+        tc._PROFILE_CACHE.clear()
+
+
 def test_maven_args_from_the_profile_reach_the_command():
     import tc_common as tc
     with FixtureRepo() as repo:

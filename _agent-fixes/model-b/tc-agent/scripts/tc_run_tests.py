@@ -112,6 +112,31 @@ def main() -> int:
         agent_source = f"pom-bound ({bound_pom})" if bound_pom else f"cli goal ({jacoco})"
         also_make = c.maven_also_make(repo)
 
+        skip_main = []
+        mode = c.maven_skip_main_compile(repo)
+        if mode is not False:
+            classes = c.built_classes(repo, module)
+            stale = c.stale_classes(repo, module, classes) if classes else None
+            if classes is None:
+                print("[tc-agent] nothing is compiled under "
+                      f"{c.module_dir(repo, module)}/target/classes yet - building src/main this "
+                      "once; in a big module this can take minutes.",
+                      file=sys.stderr, flush=True)
+            elif stale and mode == "auto":
+                print(f"[tc-agent] {stale} is newer than the compiled classes - rebuilding "
+                      "src/main so the measurement matches the code; in a big module this can "
+                      "take minutes.", file=sys.stderr, flush=True)
+            else:
+                if stale:
+                    print(f"[tc-agent] WARNING: {stale} is newer than the compiled classes this "
+                          "run measures (maven_skip_main_compile: true). Run "
+                          "`mvn -DskipTests install` if the results look wrong.",
+                          file=sys.stderr, flush=True)
+                else:
+                    print("[tc-agent] src/main is already compiled and unchanged - running "
+                          "against target/classes", file=sys.stderr, flush=True)
+                skip_main = ["-Dmaven.main.skip=true"]
+
         COMMAND_TAIL = [
             "-DfailIfNoTests=false",
             "-Dsurefire.failIfNoSpecifiedTests=false",
@@ -122,7 +147,7 @@ def main() -> int:
         ]
 
         def build_command(with_am: bool) -> list:
-            return ([c.mvn_executable(), "-B", *c.maven_args(repo)]
+            return ([c.mvn_executable(), "-B", *c.maven_args(repo), *skip_main]
                     + c.module_args(module, also_make=with_am) + COMMAND_TAIL)
 
         command = build_command(with_am=(also_make is True))

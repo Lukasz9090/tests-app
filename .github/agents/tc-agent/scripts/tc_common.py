@@ -450,6 +450,57 @@ def maven_also_make(repo: Path) -> str | bool:
     return "auto"
 
 
+def maven_skip_main_compile(repo: Path) -> str | bool:
+    """When a check may skip compiling src/main. Default "auto".
+
+    During a run the production code never changes - legacy mode requires it
+    committed, and the agent only ever writes test files - so recompiling it
+    before every check is pure cost, and in a module with annotation processors
+    or generated sources it is a FULL rebuild every time (6500 files, minutes).
+
+    "auto" decides from the clock: a source newer than the compiled classes
+    means the build really is out of date, so compile (and say it may take a
+    while); otherwise run against target/classes with `-Dmaven.main.skip=true`.
+    `true` always skips when classes exist, `false` never skips.
+    """
+    value = profile(repo).get("maven_skip_main_compile", "auto")
+    if isinstance(value, bool):
+        return value
+    return "auto"
+
+
+def built_classes(repo: Path, module: str | None) -> Path | None:
+    """`<module>/target/classes` when it holds compiled classes, else None."""
+    classes = module_dir(repo, module) / "target" / "classes"
+    if not classes.is_dir():
+        return None
+    return classes if any(classes.rglob("*.class")) else None
+
+
+def stale_classes(repo: Path, module: str | None, classes: Path) -> str | None:
+    """The first source that is newer than ITS OWN compiled class, if any.
+
+    Each source is compared with the class it produces (com/x/A.java ->
+    com/x/A.class), not with the newest class in the module: that is two stats
+    per file instead of walking every .class first, and it stops at the first
+    file that is out of date. A source with no class at all also counts - it was
+    added after the last build.
+    """
+    sources = module_dir(repo, module) / "src" / "main" / "java"
+    if not sources.is_dir():
+        return None
+    for f in sources.rglob("*.java"):
+        if f.name == "package-info.java":
+            continue
+        produced = classes / f.relative_to(sources).with_suffix(".class")
+        try:
+            if f.stat().st_mtime > produced.stat().st_mtime:
+                return f.relative_to(repo).as_posix()
+        except FileNotFoundError:
+            return f.relative_to(repo).as_posix()
+    return None
+
+
 def maven_args(repo: Path) -> list:
     """Extra flags for every maven call (profile `maven_args`), e.g. -o, -T1C."""
     return [str(a) for a in profile(repo).get("maven_args", []) or []]

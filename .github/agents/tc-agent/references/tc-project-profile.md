@@ -60,6 +60,22 @@ For `false`, and to make `"auto"` fast from the first run, install them once:
 "1C"]` to build in parallel, `["-o"]` offline, `["-DskipITs"]` to leave
 integration tests out.
 
+The other half of the cost is compiling `src/main` before every check. During a
+run the production code never changes - legacy mode requires it committed, and
+the agent only writes test files - so in a module with annotation processors or
+generated sources you would pay for a full rebuild each time for nothing.
+
+`maven_skip_main_compile` decides this, and its default `"auto"` needs no
+configuration: the check compares the compiled classes with the sources under
+`src/main`. A source that is NEWER means the build is genuinely out of date, so
+it compiles and says this can take minutes. Nothing newer means the classes
+already match the code, so it runs against `<module>/target/classes` and the
+whole compile disappears. Building in your IDE counts - IntelliJ writes to the
+same directory.
+
+    "maven_skip_main_compile": true    # always reuse; only warn when stale
+    "maven_skip_main_compile": false   # always compile, as maven would
+
 **Tooling** is deliberately absent. `tool_version()` resolves a version as
 CLI flag → this file → the version declared in the pom → the agent default, so a
 value here OVERRIDES the pom. This repo's pom pins jacoco 0.8.15 and pitest
