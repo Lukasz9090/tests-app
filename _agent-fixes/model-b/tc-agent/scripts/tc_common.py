@@ -513,6 +513,32 @@ def stale_classes(repo: Path, module: str | None, classes: Path) -> str | None:
     return None
 
 
+def maven_goals_only(repo: Path) -> bool:
+    """Run the plugin goals directly instead of the `test` lifecycle phase.
+
+    `-Dmaven.main.skip=true` stops the COMPILER, not the lifecycle: generators,
+    resource filtering and every other plugin bound before `test` still run, and
+    in a module with an OpenAPI or MapStruct generator that is most of the time.
+    With this on the check runs `compiler:testCompile surefire:test` - the test
+    sources the agent just wrote, then the tests, nothing else - which is what an
+    IDE does. It needs target/classes and the test resources to be in place, so
+    it falls back to the full phase when the goals fail.
+    """
+    return bool(profile(repo).get("maven_goals_only", False))
+
+
+LEAN_GOALS = ["compiler:testCompile", "surefire:test"]
+
+
+def maven_lifecycle(repo: Path, skip_main: bool) -> list:
+    """What the test check asks maven to do: the lean goals or the `test` phase.
+
+    The goals cannot build the module, so they are only safe when src/main is
+    already compiled (`skip_main`); otherwise the phase does the work.
+    """
+    return list(LEAN_GOALS) if (skip_main and maven_goals_only(repo)) else ["test"]
+
+
 def maven_args(repo: Path) -> list:
     """Extra flags for every maven call (profile `maven_args`), e.g. -o, -T1C."""
     return [str(a) for a in profile(repo).get("maven_args", []) or []]

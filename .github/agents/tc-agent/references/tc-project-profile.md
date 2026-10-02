@@ -60,6 +60,16 @@ For `false`, and to make `"auto"` fast from the first run, install them once:
 "1C"]` to build in parallel, `["-o"]` offline, `["-DskipITs"]` to leave
 integration tests out.
 
+`-Dmaven.main.skip` stops the compiler, not the lifecycle: a generator bound to
+`generate-sources` still runs on every check. When that is the remaining cost:
+
+    "maven_goals_only": true
+
+The check then runs `compiler:testCompile surefire:test` - the test sources the
+agent just wrote, then the tests, and nothing else. It needs a complete
+`target/` (so `mvn -DskipTests install` first) and falls back to the full `test`
+phase for that run if the goals fail.
+
 The other half of the cost is compiling `src/main` before every check. During a
 run the production code never changes - legacy mode requires it committed, and
 the agent only writes test files - so in a module with annotation processors or

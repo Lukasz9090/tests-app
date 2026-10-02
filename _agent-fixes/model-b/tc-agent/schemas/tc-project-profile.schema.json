@@ -75,6 +75,10 @@
         {"const": "auto"}
       ]
     },
+    "maven_goals_only": {
+      "type": "boolean",
+      "description": "Run the plugin goals directly (compiler:testCompile surefire:test) instead of Maven's test phase, so no generator, resource or other plugin bound before test runs - what an IDE effectively does. Default false. It applies only when src/main is already built (see maven_skip_main_compile), needs target/ to be complete, and falls back to the full phase for that run when the goals fail."
+    },
     "maven_args": {
       "type": "array",
       "items": {

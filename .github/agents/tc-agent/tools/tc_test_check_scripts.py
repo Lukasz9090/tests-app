@@ -301,6 +301,23 @@ def test_skipping_main_compile_needs_built_classes():
         tc._PROFILE_CACHE.clear()
 
 
+def test_goals_only_needs_a_built_src_main():
+    import tc_common as tc
+    with FixtureRepo() as repo:
+        expect("off by default", tc.maven_goals_only(repo.root), False)
+        expect("default run asks for the phase",
+               tc.maven_lifecycle(repo.root, skip_main=True), ["test"])
+        repo.write(".github/agents/tc-agent/references/tc-project-profile.md",
+                   '# p\n\n```json\n{"schema_version": 1, "maven_goals_only": true}\n```\n')
+        tc._PROFILE_CACHE.clear()
+        expect("read from the profile", tc.maven_goals_only(repo.root), True)
+        expect("the lean goals replace the phase", tc.maven_lifecycle(repo.root, skip_main=True),
+               ["compiler:testCompile", "surefire:test"])
+        expect("but never when src/main still has to be compiled",
+               tc.maven_lifecycle(repo.root, skip_main=False), ["test"])
+        tc._PROFILE_CACHE.clear()
+
+
 def test_maven_args_from_the_profile_reach_the_command():
     import tc_common as tc
     with FixtureRepo() as repo:

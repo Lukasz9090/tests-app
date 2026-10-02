@@ -137,13 +137,21 @@ def main() -> int:
                           "against target/classes", file=sys.stderr, flush=True)
                 skip_main = ["-Dmaven.main.skip=true"]
 
+        # Goals, not the phase: skip every generator and resource plugin bound
+        # before `test`. Only possible when src/main is already built.
+        lifecycle = c.maven_lifecycle(repo, bool(skip_main))
+        goals_only = lifecycle != ["test"]
+        if goals_only:
+            print("[tc-agent] running the goals directly (compiler:testCompile surefire:test) - "
+                  "no generators, no resource filtering", file=sys.stderr, flush=True)
+
         COMMAND_TAIL = [
             "-DfailIfNoTests=false",
             "-Dsurefire.failIfNoSpecifiedTests=false",
             f"-Dtest={','.join(selectors)}",
             f"-Djacoco.destFile={exec_file}",
             *agent_goal,
-            "test",
+            *lifecycle,
         ]
 
         def build_command(with_am: bool) -> list:
@@ -173,6 +181,17 @@ def main() -> int:
                 exec_file.unlink(missing_ok=True)
                 code, output = c.run(command, repo, timeout=c.maven_timeout(repo),
                                  log_path=c.checks_dir(directory) / f"maven-tests-{args.label}.log")
+            if code != 0 and goals_only:
+                # The lean path needs a complete target/; when it is not there,
+                # pay for the real phase once rather than reporting a failure.
+                print("[tc-agent] the direct goals failed - falling back to the full `test` "
+                      "phase for this run", file=sys.stderr, flush=True)
+                goals_only = False
+                COMMAND_TAIL[-len(lifecycle):] = ["test"]
+                command = build_command(with_am=retried_with_am)
+                exec_file.unlink(missing_ok=True)
+                code, output = c.run(command, repo, timeout=c.maven_timeout(repo),
+                                     log_path=c.checks_dir(directory) / f"maven-tests-{args.label}.log")
             report_files = c.recent_files(search_root, "target/surefire-reports/TEST-*.xml", started)
             runs.append(parse_surefire(report_files))
         log = c.checks_dir(directory) / f"maven-tests-{args.label}.log"   # written live by c.run
