@@ -20,6 +20,7 @@ Output:
 import argparse
 import re
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -57,11 +58,17 @@ def java_files(roots, use_git: bool = True):
 _CACHE = {}
 
 
-def generated_roots(repo: Path) -> list:
-    """Build-output directories that hold generated SOURCE, if any exist."""
+def generated_roots(repo: Path, modules) -> list:
+    """Build-output directories that hold generated SOURCE, if any exist.
+
+    Checked per module, never globbed: `repo.glob("**/target/generated-sources")`
+    walks every target/ in the reactor - thousands of class files per module -
+    and in a big repo that alone took minutes.
+    """
     out = []
-    for rel in GENERATED_DIRS:
-        for d in repo.glob(f"**/{rel}"):
+    for module in modules:
+        for rel in GENERATED_DIRS:
+            d = module / rel
             if d.is_dir():
                 out.append(d)
     return out
@@ -231,8 +238,13 @@ def test_summary(f: Path) -> str:
     return f"{len(methods)} test methods: {ai} AI-generated, {ph} placeholders, {len(methods) - ai - ph} human"
 
 
+_STARTED = time.monotonic()
+
+
 def _say(message: str) -> None:
-    print(f"[tc-agent] {message}", file=sys.stderr, flush=True)
+    """Progress with elapsed seconds: a pack that takes minutes must show where."""
+    print(f"[tc-agent] +{time.monotonic() - _STARTED:5.1f}s {message}",
+          file=sys.stderr, flush=True)
 
 
 def main():
@@ -257,8 +269,15 @@ def main():
     target_file, cname, method, slug = target.file, target.cls, target.method, target.slug
     target_text = read(target_file)
 
+    # Module directories: the parent of src/main/java, plus the repo root.
+    modules = {repo}
+    for root in src_roots + test_roots:
+        parts = root.parts
+        if "src" in parts:
+            modules.add(Path(*parts[:parts.index("src")]))
+    _say(f"{len(src_roots)} source root(s), {len(test_roots)} test root(s)")
     all_src = list(java_files(src_roots))
-    gen_roots = generated_roots(repo)
+    gen_roots = generated_roots(repo, sorted(modules))
     generated = list(java_files(gen_roots, use_git=False))   # git ignores build output
     all_by_name = {f.stem: f for f in all_src}
     for f in generated:                        # generated code never shadows source
@@ -276,29 +295,27 @@ def main():
                              [x for x in f.parent.glob("*.java") if x != f])
     l2 -= l1 | {cname}
 
-    _say(f"building the context pack for {cname} (scanning tests, builders and enums)")
+    _say(f"{len(all_src)} source file(s) indexed; {len(l1)} direct dependency file(s)")
     # --- tests, builders/fixtures, enums ---
     # git grep shortlists the files that use these names; reading every test and
     # every builder in a big repo just to ask that question was most of the time
     # this script spent. Without git (no repo, no git) the read is the fallback.
-    def uses(names: tuple, pool: list) -> list:
-        hits = None
-        for name in names:
-            found = c.grep_files(repo, name)
-            if found is None:
-                hits = None
-                break
-            hits = set() if hits is None else hits
-            hits |= {str(f.resolve()) for f in found}
-        if hits is None:
+    def uses(names, pool: list) -> list:
+        """Files of `pool` that use any of these names - one git grep for all."""
+        found = c.grep_files(repo, list(names))
+        if found is None:                          # no git: read the pool instead
             return [f for f in pool if mentions(read(f), *names)]
-        return [f for f in pool if str(f.resolve()) in hits]
+        hits = {str(f) for f in found}
+        return [f for f in pool if str(f) in hits]
 
     test_pool = java_files(test_roots)
-    tests = sorted({f for f in test_pool if cname in f.stem} | set(uses((cname,), test_pool)))
+    _say(f"{len(test_pool)} test file(s) in scope; asking git which ones use {cname}")
+    tests = sorted({f for f in test_pool if cname in f.stem} | set(uses([cname], test_pool)))
     builder_pat = re.compile(r"(Builder|Factory|Fixtures?|TestData|Mother)$")
-    wanted = tuple({cname} | l1)                  # one alternation, not one pass per name
-    builder_pool = [f for f in java_files(test_roots + src_roots) if builder_pat.search(f.stem)]
+    # One name per dependency would be one git grep per dependency; the target
+    # plus its level-1 deps is a single alternation, and 25 names is plenty.
+    wanted = [cname] + sorted(l1)[:24]
+    builder_pool = [f for f in test_pool + all_src if builder_pat.search(f.stem)]
     builders = uses(wanted, builder_pool)
     enums = [all_by_name[d] for d in (l1 | l2)
              if d in all_by_name

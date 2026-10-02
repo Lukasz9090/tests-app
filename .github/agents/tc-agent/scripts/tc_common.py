@@ -170,17 +170,22 @@ def git_index(start: Path) -> list | None:
 
 
 def _under(root: Path, files: list, suffix: str) -> list:
-    root = Path(root).resolve()
+    """Files of that suffix under `root`, by string prefix.
+
+    `Path.relative_to` on every entry of a 50k-file index, once per module, was
+    minutes of pure path arithmetic in a big repo. Comparing strings is the same
+    answer for a fraction of the cost.
+    """
+    prefix = str(Path(root).resolve()) + os.sep
+    cut = len(prefix)
     out = []
     for f in files:
-        if f.suffix != suffix:
+        text = str(f)
+        if not text.endswith(suffix) or not text.startswith(prefix):
             continue
-        try:
-            rel = f.relative_to(root)
-        except ValueError:
+        if SKIP_DIRS.intersection(text[cut:].split(os.sep)):
             continue
-        if not SKIP_DIRS.intersection(rel.parts):
-            out.append(f)
+        out.append(f)
     return out
 
 
@@ -251,16 +256,23 @@ def mentions(text: str, name: str) -> bool:
     return re.search(rf"\b{re.escape(name)}\b", text) is not None
 
 
-def grep_files(repo: Path, word: str, pathspec: str = "*.java") -> list | None:
-    """Files that use `word` as a whole word, found by git. None when git cannot.
+def grep_files(repo: Path, word, pathspec: str = "*.java") -> list | None:
+    """Files that use any of these words, found by git. None when git cannot.
 
     Reading every test source in a big repo to ask "does it mention this class?"
     is what made the context pack slow. `git grep` scans the same content in one
-    optimised process; `--untracked` keeps files the generator just wrote.
+    optimised process; `--untracked` keeps files the generator just wrote. Pass a
+    list to ask about many names AT ONCE - one process, not one per name.
     """
     repo = Path(repo).resolve()
+    words = [word] if isinstance(word, str) else [w for w in word if w]
+    if not words:
+        return []
+    patterns = []
+    for w in words:
+        patterns += ["-e", w]
     code, out = run(["git", "-C", str(repo), "grep", "-l", "-I", "--untracked",
-                     "--word-regexp", "-e", word, "--", pathspec], repo)
+                     "--word-regexp", *patterns, "--", pathspec], repo)
     if code not in (0, 1):                        # 1 = no match, anything else = no answer
         return None
     return [repo / line.strip() for line in out.splitlines() if line.strip()]
