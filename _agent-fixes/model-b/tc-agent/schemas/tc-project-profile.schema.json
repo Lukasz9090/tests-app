@@ -64,19 +64,33 @@
     "maven_also_make": {
       "description": "When a test run adds Maven's -am (also build the target module's dependencies). Omit it for \"auto\": build only the target's module, and add -am only if maven says the dependencies are missing - fast in a big reactor, still correct in a small repo or a fresh clone. true always adds it (modules that change constantly); false never does (you run mvn -DskipTests install yourself and own that decision).",
       "oneOf": [
-        {"type": "boolean"},
-        {"const": "auto"}
+        {
+          "type": "boolean"
+        },
+        {
+          "const": "auto"
+        }
       ]
     },
     "maven_skip_main_compile": {
-      "description": "When a check may run against the classes already in <module>/target/classes instead of compiling src/main first (-Dmaven.main.skip=true). Omit it for \"auto\": compile when a source under src/main is newer than those classes (the build really is out of date, and the check says it may take minutes), skip when it is not - the production code does not change during a run, and in a module with annotation processors or generated sources that compile is a full rebuild every time. true always skips when classes exist and only warns about staleness; false always compiles.",
+      "description": "When a check may run against the classes already in <module>/target/classes instead of compiling src/main first (-Dmaven.main.skip=true). Omit it for \"auto\": compile when the CLASS UNDER TEST is newer than the class file it produces (that is the bytecode and those are the line numbers the report is read from), skip when it is not - the production code does not change during a run, and in a module with annotation processors or generated sources that compile is a full rebuild every time. A different source in the module being stale is only reported, because in a repo that is pulled daily something always is. \"strict\" rebuilds on any stale source under src/main. true always skips when classes exist and only warns about staleness; false always compiles.",
       "oneOf": [
-        {"type": "boolean"},
-        {"const": "auto"}
+        {
+          "type": "boolean"
+        },
+        {
+          "enum": [
+            "auto",
+            "strict"
+          ]
+        }
       ]
     },
     "junit": {
-      "enum": ["4", "5"],
+      "enum": [
+        "4",
+        "5"
+      ],
       "description": "The JUnit version new tests must use, overriding what the agent reads from the module's existing tests and from the poms. Set it only when that detection is wrong for your repo - a module whose tests are being migrated, or JUnit coming from a parent pom outside the repo."
     },
     "maven_goals_only": {

@@ -116,30 +116,38 @@ def main() -> int:
         mode = c.maven_skip_main_compile(repo)
         if mode is not False:
             classes = c.built_classes(repo, module)
-            stale = c.stale_classes(repo, module, classes) if classes else None
-            why = ""
-            if stale:
-                path, reason = stale
-                why = (f"{path} is newer than the class it compiles to" if reason == "newer"
-                       else f"{path} has no compiled class and is newer than the whole build")
             if classes is None:
                 print("[tc-agent] nothing is compiled under "
                       f"{c.module_dir(repo, module)}/target/classes yet - building src/main this "
                       "once; in a big module this can take minutes.",
                       file=sys.stderr, flush=True)
-            elif stale and mode == "auto":
-                print(f"[tc-agent] {why} - rebuilding src/main so the measurement matches the "
-                      "code; in a big module this can take minutes.",
-                      file=sys.stderr, flush=True)
             else:
-                if stale:
-                    print(f"[tc-agent] WARNING: {why}, and this run measures the classes as they "
-                          "are (maven_skip_main_compile: true). Run `mvn -DskipTests install` if "
-                          "the results look wrong.", file=sys.stderr, flush=True)
+                # "auto" asks about the class under test; "strict" about every
+                # source in the module. The other answer is still printed, so a
+                # decision is never silent about what it ignored.
+                mine = c.stale_target(repo, module, classes, target.file)
+                anyone = c.stale_classes(repo, module, classes)
+                decisive = anyone if mode == "strict" else mine
+                if decisive and mode is not True:
+                    print(f"[tc-agent] {c.describe_stale(decisive)} - rebuilding src/main so the "
+                          "measurement matches the code; in a big module this can take minutes.",
+                          file=sys.stderr, flush=True)
                 else:
-                    print("[tc-agent] src/main is already compiled and unchanged - running "
-                          "against target/classes", file=sys.stderr, flush=True)
-                skip_main = ["-Dmaven.main.skip=true"]
+                    if decisive:
+                        print(f"[tc-agent] WARNING: {c.describe_stale(decisive)}, and this run "
+                              "measures the classes as they are "
+                              "(maven_skip_main_compile: true). Run `mvn -DskipTests install` if "
+                              "the results look wrong.", file=sys.stderr, flush=True)
+                    elif anyone:
+                        print(f"[tc-agent] {target.cls} itself is compiled and unchanged, so "
+                              "src/main is not rebuilt. Another source in the module is stale "
+                              f"({c.describe_stale(anyone)}), which changes nothing here unless "
+                              "the tests depend on it - set maven_skip_main_compile: \"strict\" "
+                              "to rebuild on that too.", file=sys.stderr, flush=True)
+                    else:
+                        print("[tc-agent] src/main is already compiled and unchanged - running "
+                              "against target/classes", file=sys.stderr, flush=True)
+                    skip_main = ["-Dmaven.main.skip=true"]
 
         # Goals, not the phase: skip every generator and resource plugin bound
         # before `test`. Only possible when src/main is already built.

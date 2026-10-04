@@ -309,6 +309,48 @@ def test_skipping_main_compile_needs_built_classes():
         stale = tc.stale_classes(repo.root, None, found)
         expect_true("a newer source is reported", (stale or ("", ""))[0].endswith("OrderService.java"))
         expect("and says why", (stale or ("", ""))[1], "newer")
+
+
+def test_auto_asks_about_the_class_under_test():
+    """A module member nobody in this run touches must not force a rebuild.
+
+    In a repo that is pulled daily something under src/main is always newer
+    than its class, so the module-wide question answered "rebuild" forever -
+    6500 files, minutes, for a file the measurement never reads.
+    """
+    import tc_common as tc
+    with FixtureRepo() as repo:
+        expect("auto by default", tc.maven_skip_main_compile(repo.root), "auto")
+        classes = repo.root / "target" / "classes" / "com" / "acme"
+        classes.mkdir(parents=True)
+        for name in ("OrderService", "Other"):
+            (classes / f"{name}.class").write_bytes(b"\xca\xfe\xba\xbe")
+        built = tc.built_classes(repo.root, None)
+        target = repo.root / repo.target_path
+        other = repo.root / "src/main/java/com/acme/Other.java"
+        other.write_text("class Other {}\n", encoding="utf-8")
+        import time as _t
+        _t.sleep(0.05)
+        other.touch()
+        expect_true("the module-wide question sees the other file",
+                    (tc.stale_classes(repo.root, None, built) or ("",))[0].endswith("Other.java"))
+        expect("the target's own question does not",
+               tc.stale_target(repo.root, None, built, target), None)
+        _t.sleep(0.05)
+        target.touch()
+        expect("and does see the target when it moves",
+               tc.stale_target(repo.root, None, built, target),
+               (repo.target_path, "newer"))
+        expect("a source outside the module is not compared",
+               tc.stale_target(repo.root, None, built, repo.root / "pom.xml"), None)
+        expect("strict is still available",
+               tc.maven_skip_main_compile(repo.root), "auto")
+        repo.write(".github/agents/tc-agent/references/tc-project-profile.md",
+                   '# p\n\n```json\n{"schema_version": 1, '
+                   '"maven_skip_main_compile": "strict"}\n```\n')
+        tc._PROFILE_CACHE.clear()
+        expect("and selectable", tc.maven_skip_main_compile(repo.root), "strict")
+        tc._PROFILE_CACHE.clear()
         tc._PROFILE_CACHE.clear()
 
 

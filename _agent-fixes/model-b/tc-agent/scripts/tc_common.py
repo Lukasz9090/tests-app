@@ -470,15 +470,21 @@ def maven_skip_main_compile(repo: Path) -> str | bool:
     before every check is pure cost, and in a module with annotation processors
     or generated sources it is a FULL rebuild every time (6500 files, minutes).
 
-    "auto" decides from the clock: a source newer than the compiled classes
-    means the build really is out of date, so compile (and say it may take a
-    while); otherwise run against target/classes with `-Dmaven.main.skip=true`.
+    "auto" decides from the clock, and asks about the TARGET's own class: newer
+    source means this measurement would be taken on the wrong bytecode, so
+    compile (and say it may take a while); otherwise run against target/classes
+    with `-Dmaven.main.skip=true`. Another module member being stale is only
+    reported, because in a repo that is pulled daily something always is - and
+    rebuilding 6500 files because a file nobody in this run touches moved is how
+    every check ended up costing minutes.
+
+    "strict" is the old behavior: ANY stale source under src/main rebuilds.
     `true` always skips when classes exist, `false` never skips.
     """
     value = profile(repo).get("maven_skip_main_compile", "auto")
     if isinstance(value, bool):
         return value
-    return "auto"
+    return "strict" if str(value) == "strict" else "auto"
 
 
 def built_classes(repo: Path, module: str | None) -> Path | None:
@@ -917,6 +923,46 @@ def _poms(repo: Path, module: str | None) -> list:
         if pom.exists() and pom not in out:
             out.append(pom)
     return out
+
+
+def stale_target(repo: Path, module: str | None, classes: Path, source) -> tuple | None:
+    """Is the ONE source under test newer than the class it compiles to?
+
+    The decisive question for "auto": coverage and mutation are read from THIS
+    class's bytecode and THIS source's line numbers, so this is the file whose
+    freshness changes the numbers. A stale collaborator can at worst make a test
+    behave like the last build - which shows up as a failing test, not as a
+    silently wrong report.
+    """
+    sources = (module_dir(repo, module) / "src" / "main" / "java").resolve()
+    source = Path(source).resolve()
+    try:
+        rel = source.relative_to(sources)
+    except ValueError:
+        return None                       # generated, or outside this module
+    produced = classes / rel.with_suffix(".class")
+    try:
+        if source.stat().st_mtime > produced.stat().st_mtime:
+            return rel_or_name(repo, source), "newer"
+    except FileNotFoundError:
+        return rel_or_name(repo, source), "missing"
+    return None
+
+
+def rel_or_name(repo: Path, path: Path) -> str:
+    try:
+        return Path(path).resolve().relative_to(Path(repo).resolve()).as_posix()
+    except ValueError:
+        return Path(path).name
+
+
+def describe_stale(stale: tuple | None) -> str:
+    """The sentence a stale `(path, reason)` deserves. Empty for None."""
+    if not stale:
+        return ""
+    path, reason = stale
+    return (f"{path} is newer than the class it compiles to" if reason == "newer"
+            else f"{path} has no compiled class and is newer than the whole build")
 
 
 JUNIT5_MARKERS = ["jupiter"]

@@ -92,12 +92,22 @@ the agent only writes test files - so in a module with annotation processors or
 generated sources you would pay for a full rebuild each time for nothing.
 
 `maven_skip_main_compile` decides this, and its default `"auto"` needs no
-configuration: the check compares the compiled classes with the sources under
-`src/main`. A source that is NEWER means the build is genuinely out of date, so
-it compiles and says this can take minutes. Nothing newer means the classes
-already match the code, so it runs against `<module>/target/classes` and the
-whole compile disappears. Building in your IDE counts - IntelliJ writes to the
-same directory.
+configuration. The question it asks is about the CLASS UNDER TEST: is that
+source newer than the class file it produces? That is the bytecode JaCoCo and
+PIT read and those are the line numbers the report is written against, so that
+is the file whose freshness changes the numbers. Newer means compile (and it
+says this can take minutes); not newer means run against
+`<module>/target/classes` and the whole compile disappears. Building in your IDE
+counts - IntelliJ writes to the same directory.
+
+A DIFFERENT source in the module being stale is only reported, not acted on. In
+a repo that is pulled or branched daily something always is, and rebuilding 6500
+files because of a file this measurement never reads is how every check came to
+cost minutes. The risk taken is small and visible: a stale collaborator can make
+a test behave like the last build, which surfaces as a failing test rather than
+as a quietly wrong report. `"strict"` restores the module-wide question.
+
+    "maven_skip_main_compile": "strict"  # any stale source rebuilds
 
 A source with no class of its own name does not count as newer by itself. Such
 files are normal - a package-private type named differently from its file, a
