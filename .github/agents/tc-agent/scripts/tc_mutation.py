@@ -68,7 +68,7 @@ def main() -> int:
             raise c.CheckError(f"no test class exercises {target.cls} - nothing to mutate against")
 
         command = (
-            [c.mvn_executable(), "-B", *c.maven_args(repo)]
+            c.mvn_base(repo)
             + c.module_args(module)
             + [
                 f"org.pitest:pitest-maven:{pit}:mutationCoverage",

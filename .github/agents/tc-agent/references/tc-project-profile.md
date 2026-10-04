@@ -72,6 +72,30 @@ For `false`, and to make `"auto"` fast from the first run, install them once:
 "1C"]` to build in parallel, `["-o"]` offline, `["-DskipITs"]` to leave
 integration tests out.
 
+SNAPSHOTs are never re-resolved: every call carries `-nsu`. A run measures the
+code in THIS working tree, so a colleague's newer snapshot landing between two
+checks would mean the coverage and the mutation numbers came from different
+dependencies - and maven's daily metadata refresh is a round trip to the
+repository per sibling SNAPSHOT, which is most of the "Downloading from ..."
+you see on the first run of a morning. `maven_snapshot_updates: true` gives
+maven its usual behavior back.
+
+**Plugins that have nothing to do with a unit test** - an OpenAPI or Swagger
+generator writing a frontend client, a node/npm build, a license or
+git-describe stamper - cost minutes per check and produce nothing the test
+needs. `maven_goals_only: true` removes ALL of them at once, and that is the
+first thing to try. When the lean path cannot be used, switch them off one by
+one in `maven_args`; the property is per plugin, so read the pom and use its
+own skip:
+
+    ["-Dcodegen.skip=true"]            # openapi-generator / swagger-codegen
+    ["-Dskip.npm=true", "-Dskip.installnodenpm=true"]   # frontend-maven-plugin
+    ["-Dmaven.gitcommitid.skip=true"]  # git-commit-id-plugin
+    ["-P!generate-client"]             # a generator that lives in a profile
+
+A plugin with no skip property of its own can only be avoided by the lean
+path.
+
 `-Dmaven.main.skip` stops the compiler, not the lifecycle: a generator bound to
 `generate-sources` still runs on every check. When that is the remaining cost:
 

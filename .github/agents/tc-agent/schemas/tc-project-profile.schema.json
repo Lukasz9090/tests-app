@@ -105,6 +105,10 @@
       },
       "description": "Extra flags added to every maven call, e.g. [\"-o\"] for offline, [\"-T\", \"1C\"] for a parallel build, [\"-DskipITs\"]. Use them to make a slow multi-module build finish in time."
     },
+    "maven_snapshot_updates": {
+      "type": "boolean",
+      "description": "Whether a check may re-resolve SNAPSHOT dependencies from the remote repository. Default false, which puts -nsu on every maven call: a run measures the code in this working tree, so a colleague's newer snapshot arriving between two checks would make the coverage and the mutation numbers come from different dependencies - and the daily metadata refresh is a round trip to the repository per sibling SNAPSHOT. Set it to true to restore maven's normal behavior."
+    },
     "test_data_paths": {
       "type": "array",
       "items": {

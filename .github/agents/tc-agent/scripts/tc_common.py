@@ -570,6 +570,34 @@ def maven_args(repo: Path) -> list:
     return [str(a) for a in profile(repo).get("maven_args", []) or []]
 
 
+NO_SNAPSHOT_UPDATES = ("-nsu", "--no-snapshot-updates")
+
+
+def maven_snapshot_updates(repo: Path) -> bool:
+    """May a check re-resolve SNAPSHOT dependencies from the remote repo?
+
+    Default NO, for two reasons. A run measures the code in THIS working tree,
+    so pulling a colleague's newer snapshot halfway through changes what is
+    being measured - and it can land between two checks of the same run, so the
+    coverage and the mutation numbers would come from different dependencies.
+    And it is pure wall-clock: maven re-checks every snapshot's metadata once a
+    day, which in a reactor full of sibling SNAPSHOTs is a round trip to
+    Artifactory per module on the first run of the morning.
+
+    Set `maven_snapshot_updates: true` to restore maven's normal behavior.
+    """
+    return bool(profile(repo).get("maven_snapshot_updates", False))
+
+
+def mvn_base(repo: Path) -> list:
+    """`mvn` plus the flags EVERY check shares, profile args included."""
+    args = maven_args(repo)
+    flags = ["-B"]
+    if not maven_snapshot_updates(repo) and not any(a in NO_SNAPSHOT_UPDATES for a in args):
+        flags.append("-nsu")
+    return [mvn_executable(), *flags, *args]
+
+
 def _resolve(program: str) -> str:
     """Absolute path of an executable, so Windows needs no shell to find mvn.cmd."""
     found = shutil.which(program)

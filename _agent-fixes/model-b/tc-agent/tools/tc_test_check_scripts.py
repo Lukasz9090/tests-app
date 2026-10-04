@@ -480,6 +480,26 @@ def test_maven_args_from_the_profile_reach_the_command():
         tc._PROFILE_CACHE.clear()
         expect("args", tc.maven_args(repo.root), ["-o", "-T", "1C"])
         expect("timeout", tc.maven_timeout(repo.root), 60)
+        expect("and they ride on the shared base", tc.mvn_base(repo.root)[1:],
+               ["-B", "-nsu", "-o", "-T", "1C"])
+        tc._PROFILE_CACHE.clear()
+
+
+def test_a_run_does_not_re_resolve_snapshots():
+    """Two checks of one run must see the same dependencies - and not wait for them."""
+    import tc_common as tc
+    with FixtureRepo() as repo:
+        expect("off by default", tc.maven_snapshot_updates(repo.root), False)
+        expect("so -nsu is on every call", tc.mvn_base(repo.root)[1:], ["-B", "-nsu"])
+        repo.write(".github/agents/tc-agent/references/tc-project-profile.md",
+                   '# p\n\n```json\n{"schema_version": 1, "maven_snapshot_updates": true}\n```\n')
+        tc._PROFILE_CACHE.clear()
+        expect("the profile can give maven its usual behavior back",
+               tc.mvn_base(repo.root)[1:], ["-B"])
+        repo.write(".github/agents/tc-agent/references/tc-project-profile.md",
+                   '# p\n\n```json\n{"schema_version": 1, "maven_args": ["-nsu"]}\n```\n')
+        tc._PROFILE_CACHE.clear()
+        expect("and it is never passed twice", tc.mvn_base(repo.root)[1:], ["-B", "-nsu"])
         tc._PROFILE_CACHE.clear()
 
 

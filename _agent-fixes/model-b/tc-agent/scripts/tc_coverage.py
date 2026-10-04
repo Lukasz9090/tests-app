@@ -110,7 +110,7 @@ def main() -> int:
         # ${project.reporting.outputDirectory}/jacoco and cannot be set from the CLI),
         # so the exec file is pinned and the report is discovered afterwards.
         command = (
-            [c.mvn_executable(), "-B", *c.maven_args(repo)]
+            c.mvn_base(repo)
             + c.module_args(module)
             + [
                 f"org.jacoco:jacoco-maven-plugin:{jacoco}:report",

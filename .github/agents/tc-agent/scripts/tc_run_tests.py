@@ -178,7 +178,7 @@ def main() -> int:
             ]
 
         def build_command(with_am: bool, goals: list) -> list:
-            return ([c.mvn_executable(), "-B", *c.maven_args(repo), *skip_main]
+            return (c.mvn_base(repo) + skip_main
                     + c.module_args(module, also_make=with_am) + command_tail(goals))
 
         command = build_command(with_am=(also_make is True), goals=lifecycle)
