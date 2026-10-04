@@ -154,8 +154,9 @@ def main() -> int:
         lifecycle = c.maven_lifecycle(repo, bool(skip_main))
         goals_only = lifecycle != ["test"]
         if goals_only:
-            print("[tc-agent] running the goals directly (compiler:testCompile surefire:test) - "
-                  "no generators, no resource filtering", file=sys.stderr, flush=True)
+            print("[tc-agent] running the goals directly (%s) - no generators, no node build, "
+                  "nothing else the `test` phase would drag in. maven_goals_only: false to run "
+                  "the phase." % " ".join(lifecycle), file=sys.stderr, flush=True)
 
         # The coverage report in the SAME call: the agent has just flushed the exec
         # file when surefire's JVM exited, so the report goal can read it here and
@@ -291,6 +292,7 @@ def main() -> int:
             "flaky": flaky,
             "jacoco_agent": agent_source,
             "jacoco_xml": str(jacoco_xml) if jacoco_xml else None,
+            "plugins_run": c.maven_goals_run(output),
             "maven_seconds": round(maven_seconds, 1),
             "lifecycle": " ".join(lifecycle) if goals_only else "test",
             "compiled_src_main": not skip_main,
@@ -304,7 +306,9 @@ def main() -> int:
             f"flaky across {len(runs)} runs: {', '.join(flaky) if flaky else 'none'}",
             f"jacoco agent: {agent_source}",
             f"maven took {round(maven_seconds)}s"
-            + (" including compiling src/main" if not skip_main else ""),
+            + (" including compiling src/main" if not skip_main else "")
+            + (" - goals: " + ", ".join(c.maven_goals_run(output)[:12])
+               if c.maven_goals_run(output) else ""),
         ]
         if failures:
             phases = {f.get("failure_phase") for f in failures}

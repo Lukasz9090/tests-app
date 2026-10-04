@@ -374,17 +374,18 @@ def test_auto_asks_about_the_class_under_test():
 def test_goals_only_needs_a_built_src_main():
     import tc_common as tc
     with FixtureRepo() as repo:
-        expect("off by default", tc.maven_goals_only(repo.root), False)
-        expect("default run asks for the phase",
-               tc.maven_lifecycle(repo.root, skip_main=True), ["test"])
-        repo.write(".github/agents/tc-agent/references/tc-project-profile.md",
-                   '# p\n\n```json\n{"schema_version": 1, "maven_goals_only": true}\n```\n')
-        tc._PROFILE_CACHE.clear()
-        expect("read from the profile", tc.maven_goals_only(repo.root), True)
+        expect("on by default", tc.maven_goals_only(repo.root), True)
         expect("the lean goals replace the phase", tc.maven_lifecycle(repo.root, skip_main=True),
-               ["compiler:testCompile", "surefire:test"])
+               ["resources:testResources", "compiler:testCompile", "surefire:test"])
+        expect_true("test resources are copied, or a test reading one would fail",
+                    "resources:testResources" in tc.LEAN_GOALS)
         expect("but never when src/main still has to be compiled",
                tc.maven_lifecycle(repo.root, skip_main=False), ["test"])
+        repo.write(".github/agents/tc-agent/references/tc-project-profile.md",
+                   '# p\n\n```json\n{"schema_version": 1, "maven_goals_only": false}\n```\n')
+        tc._PROFILE_CACHE.clear()
+        expect("a repo that needs the phase can say so", tc.maven_goals_only(repo.root), False)
+        expect("and gets it", tc.maven_lifecycle(repo.root, skip_main=True), ["test"])
         tc._PROFILE_CACHE.clear()
 
 
@@ -454,8 +455,6 @@ def test_silent_goals_fall_back_to_the_real_phase():
     and pays for the full phase once.
     """
     with fixture() as repo:
-        repo.write(".github/agents/tc-agent/references/tc-project-profile.md",
-                   '# p\n\n```json\n{"schema_version": 1, "maven_goals_only": true}\n```\n')
         compiled = repo.root / "target" / "classes" / "com" / "acme"
         compiled.mkdir(parents=True)
         (compiled / "OrderService.class").write_bytes(b"\xca\xfe\xba\xbe")

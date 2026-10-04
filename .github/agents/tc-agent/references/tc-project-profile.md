@@ -83,10 +83,10 @@ maven its usual behavior back.
 **Plugins that have nothing to do with a unit test** - an OpenAPI or Swagger
 generator writing a frontend client, a node/npm build, a license or
 git-describe stamper - cost minutes per check and produce nothing the test
-needs. `maven_goals_only: true` removes ALL of them at once, and that is the
-first thing to try. When the lean path cannot be used, switch them off one by
-one in `maven_args`; the property is per plugin, so read the pom and use its
-own skip:
+needs. The default `maven_goals_only` already removes ALL of them, so there is
+normally nothing to do here. Only a repo that had to set `maven_goals_only:
+false` switches them off one by one in `maven_args`; the property is per plugin,
+so read the pom and use its own skip:
 
     ["-Dcodegen.skip=true"]            # openapi-generator / swagger-codegen
     ["-Dskip.npm=true", "-Dskip.installnodenpm=true"]   # frontend-maven-plugin
@@ -97,18 +97,29 @@ A plugin with no skip property of its own can only be avoided by the lean
 path.
 
 `-Dmaven.main.skip` stops the compiler, not the lifecycle: a generator bound to
-`generate-sources` still runs on every check. When that is the remaining cost:
+`generate-sources` still runs on every check. So the checks do not ask for the
+phase at all. They run the goals:
 
-    "maven_goals_only": true
+    resources:testResources  compiler:testCompile  surefire:test
 
-The check then runs `compiler:testCompile surefire:test` - the test sources the
-agent just wrote, then the tests, and nothing else. It needs a complete
-`target/` (so `mvn -DskipTests install` first) and falls back to the full `test`
-phase for that run if the goals fail - or if they run NOTHING: a surefire
+The test resources are copied, the test sources the agent just wrote are
+compiled, the tests run - and nothing else. No OpenAPI client for the frontend,
+no node build, no stampers, and no plugin downloads for any of them. This is
+what an IDE does when you hit "run test".
+
+It applies only when `src/main` is not being compiled anyway (above), which is
+the same thing as saying `target/` is in step with the code - so the production
+classes and any GENERATED sources are already there and compiled. A module whose
+generator writes Java is therefore fine: those classes sit in `target/classes`
+like any other. They go stale only if the spec they are generated from changes,
+and then the class under test is stale too, which brings the compile back.
+
+The fallback covers the rest: if the goals fail, or run NOTHING - a surefire
 configured inside a pom `<execution>` ignores a CLI invocation of its goal and
-exits 0 without a single report, which would otherwise look like missing tests.
-The fallback says so in the log; if you see it on every run, this repo cannot
-use the option and the cost has to come off somewhere else.
+exits 0 without a single report - the check pays for the full `test` phase once
+and says so in the log. A repo that must always run the phase:
+
+    "maven_goals_only": false
 
 The other half of the cost is compiling `src/main` before every check. During a
 run the production code never changes - legacy mode requires it committed, and

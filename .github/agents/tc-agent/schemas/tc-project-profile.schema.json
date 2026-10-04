@@ -95,7 +95,7 @@
     },
     "maven_goals_only": {
       "type": "boolean",
-      "description": "Run the plugin goals directly (compiler:testCompile surefire:test) instead of Maven's test phase, so no generator, resource or other plugin bound before test runs - what an IDE effectively does. Default false. It applies only when src/main is already built (see maven_skip_main_compile), needs target/ to be complete, and falls back to the full phase for that run when the goals fail."
+      "description": "Whether a check runs the plugin goals directly (resources:testResources compiler:testCompile surefire:test) instead of Maven's test phase. Default TRUE: the phase also runs every plugin bound before it - an OpenAPI or Swagger generator writing a frontend client, a node build, resource filtering, stampers - which a unit test does not need and which cost minutes and plugin downloads. It applies only when src/main is not being compiled anyway (see maven_skip_main_compile), so the production classes and any generated sources are already in target/. When the goals fail or run nothing (a surefire configured inside a pom execution ignores a CLI invocation of its goal), the check pays for the full phase once and says so. Set it to false for a repo that must always run the phase."
     },
     "maven_args": {
       "type": "array",

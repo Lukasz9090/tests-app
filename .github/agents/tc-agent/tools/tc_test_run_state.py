@@ -655,9 +655,36 @@ def test_maven_time_is_recorded_per_check():
                o.check_timings(run.dir)["tests"], 155)
 
 
+def test_maven_goals_are_read_from_the_banners():
+    """Maven prints no per-goal timings, so the list of goals is the diagnosis."""
+    output = "\n".join([
+        "[INFO] Scanning for projects...",
+        "[INFO] --- openapi-generator-maven-plugin:6.6.0:generate (client) @ ces-pl-rest ---",
+        "[INFO] --- maven-resources-plugin:3.3.1:resources (default-resources) @ ces-pl-rest ---",
+        "[INFO] --- maven-compiler-plugin:3.11.0:compile (default-compile) @ ces-pl-rest ---",
+        "[INFO] Compiling 6571 source files with javac",
+        "[INFO] --- maven-compiler-plugin:3.11.0:testCompile (default-testCompile) @ ces-pl-rest ---",
+        "[INFO] --- maven-surefire-plugin:3.2.5:test (default-test) @ ces-pl-rest ---",
+        "[INFO] --- maven-surefire-plugin:3.2.5:test (default-test) @ ces-pl-rest ---",
+        "[INFO] BUILD SUCCESS",
+    ])
+    goals = c.maven_goals_run(output)
+    expect("in order, deduplicated", goals,
+           ["openapi-generator-maven-plugin:generate", "maven-resources-plugin:resources",
+            "maven-compiler-plugin:compile", "maven-compiler-plugin:testCompile",
+            "maven-surefire-plugin:test"])
+    expect("nothing to find in a quiet log", c.maven_goals_run("[INFO] BUILD SUCCESS"), [])
+
+
 def test_a_green_check_keeps_the_tail_of_its_log():
     with FixtureRepo() as repo:
         log = repo.root / "maven.log"
+        body = ["[INFO] --- openapi-generator-maven-plugin:6.6.0:generate (client) @ x ---"]
+        body += [f"line {i}" for i in range(500)]
+        log.write_text("\n".join(body) + "\n", encoding="utf-8")
+        c.trim_log(log, keep=10)
+        kept = log.read_text(encoding="utf-8")
+        expect_true("the goal banner survives the trim", "openapi-generator" in kept)
         log.write_text("\n".join(f"line {i}" for i in range(500)) + "\n", encoding="utf-8")
         c.trim_log(log, keep=10)
         kept = log.read_text(encoding="utf-8").splitlines()

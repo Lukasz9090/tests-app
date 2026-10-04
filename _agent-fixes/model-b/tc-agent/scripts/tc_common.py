@@ -542,18 +542,30 @@ def stale_classes(repo: Path, module: str | None, classes: Path) -> tuple | None
 def maven_goals_only(repo: Path) -> bool:
     """Run the plugin goals directly instead of the `test` lifecycle phase.
 
-    `-Dmaven.main.skip=true` stops the COMPILER, not the lifecycle: generators,
-    resource filtering and every other plugin bound before `test` still run, and
-    in a module with an OpenAPI or MapStruct generator that is most of the time.
-    With this on the check runs `compiler:testCompile surefire:test` - the test
-    sources the agent just wrote, then the tests, nothing else - which is what an
-    IDE does. It needs target/classes and the test resources to be in place, so
-    it falls back to the full phase when the goals fail.
+    DEFAULT: yes. `-Dmaven.main.skip=true` stops the COMPILER, not the
+    lifecycle, so the `test` phase still runs every plugin bound before it - an
+    OpenAPI generator writing a frontend client, a node build, resource
+    filtering, stampers - none of which a unit test needs, all of which cost
+    minutes and pull plugins from the remote repository on the way.
+
+    The goals do what an IDE does: copy the test resources, compile the test
+    sources, run the tests. The production classes and the generated sources
+    they need are already in target/, because this only applies when src/main
+    is not being compiled anyway (`maven_skip_main_compile`), which in turn
+    means the target is in step with the code. If the goals fail or run nothing,
+    the check pays for the full phase once and says so, so a repo that needs the
+    lifecycle still works - it just finds out the slow way, once per round.
+
+    `maven_goals_only: false` for a repo that must always run the phase.
     """
-    return bool(profile(repo).get("maven_goals_only", False))
+    value = profile(repo).get("maven_goals_only", True)
+    return bool(value)
 
 
-LEAN_GOALS = ["compiler:testCompile", "surefire:test"]
+# testResources is in the list because it is what the phase would do for the
+# tests and costs milliseconds: without it, a test reading application.yml from
+# the classpath would fail for a reason that has nothing to do with the test.
+LEAN_GOALS = ["resources:testResources", "compiler:testCompile", "surefire:test"]
 
 
 def maven_lifecycle(repo: Path, skip_main: bool) -> list:
@@ -1169,12 +1181,33 @@ def finish(directory: Path, name: str, title: str, summary: list, data: dict, co
     return code
 
 
-def trim_log(path: Path, keep: int = 60) -> None:
-    """Keep only the tail of a maven log (the reactor summary and `Total time`).
+GOAL_BANNER = re.compile(r"^\[INFO\] ---+\s+(\S+?):(?:[\d.]\S*):(\S+)")
 
-    A green check used to DELETE its log, which is exactly the file you want
-    when the question is "why did this take four minutes". The tail answers that
-    and costs a few kilobytes instead of a few hundred.
+
+def maven_goals_run(output: str) -> list:
+    """Every `plugin:goal` maven executed, in order, from its own banners.
+
+    Maven prints no per-goal timings, so this is as close as a log gets to "what
+    ate the four minutes": the list says whether a generator, a node build or a
+    resource filter ran at all before surefire.
+    """
+    seen = []
+    for line in output.splitlines():
+        match = GOAL_BANNER.match(line)
+        if match:
+            item = f"{match.group(1)}:{match.group(2)}"
+            if item not in seen:
+                seen.append(item)
+    return seen
+
+
+def trim_log(path: Path, keep: int = 60) -> None:
+    """Shrink a green check's maven log to the parts worth reading later.
+
+    Kept: every goal banner (which plugins ran, in order) and the tail with the
+    reactor summary and `Total time`. A green check used to DELETE this file,
+    which is exactly the one you want when the question is "why did this take
+    eight minutes".
     """
     try:
         lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
@@ -1182,9 +1215,13 @@ def trim_log(path: Path, keep: int = 60) -> None:
         return
     if len(lines) <= keep:
         return
-    head = f"[tc-agent] green check - only the last {keep} lines of this log are kept " \
-           f"({len(lines)} in total while it ran)"
-    path.write_text("\n".join([head, ""] + lines[-keep:]) + "\n", encoding="utf-8")
+    cut = len(lines) - keep
+    goals = [line for line in lines[:cut] if GOAL_BANNER.match(line)]
+    head = [f"[tc-agent] green check - this log holds the goals maven ran and its last {keep} "
+            f"lines ({len(lines)} while it ran)", ""]
+    if goals:
+        head += ["[tc-agent] goals before the tail:"] + goals + [""]
+    path.write_text("\n".join(head + lines[-keep:]) + "\n", encoding="utf-8")
 
 
 def fail(message: str) -> int:
