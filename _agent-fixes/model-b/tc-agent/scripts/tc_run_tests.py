@@ -81,7 +81,9 @@ def failed_ids(results: list) -> set:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     c.add_common_args(parser)
-    parser.add_argument("--repeat", type=int, default=1, help="run the suite N times to expose flakiness")
+    parser.add_argument("--repeat", type=int, default=None,
+                        help="force N runs; without it, one run plus a confirmation run when "
+                             "something failed (profile: flaky_repeat)")
     parser.add_argument("--tests", default=None, help="explicit comma-separated test classes (overrides discovery)")
     parser.add_argument("--jacoco-version", default=None)
     args = parser.parse_args()
@@ -219,10 +221,12 @@ def main() -> int:
             clock = time.time()
             code, output = c.run(command, repo, timeout=c.maven_timeout(repo), log_path=log_path)
             maven_seconds += time.time() - clock
-            files = c.recent_files(search_root, "target/surefire-reports/TEST-*.xml", started)
+            files = c.recent_files(search_root, "target/surefire-reports/TEST-*.xml", started,
+                                   prefer=("target/surefire-reports/TEST-*.xml",))
             return code, output, files, parse_surefire(files)
 
-        for _ in range(max(1, args.repeat)):
+        planned = max(1, args.repeat or c.flaky_repeat(repo))
+        for _ in range(planned):
             code, output, report_files, results = attempt()
             # "auto": the fast build first; only a repo that has not installed its
             # modules pays for -am, and it is told how to stop paying.
@@ -261,6 +265,15 @@ def main() -> int:
                 command = build_command(with_am=retried_with_am, goals=["test"])
                 code, output, report_files, results = attempt()
             runs.append(results)
+
+        # A green suite is not run again - it would cost a full build to learn
+        # almost nothing. A suite that FAILED is: that second run is the one
+        # that separates a real failure from a flake.
+        if planned == 1 and any(r["status"] in ("FAILED", "ERROR") for r in runs[0]):
+            print("[tc-agent] a test failed - running the suite once more to tell a real failure "
+                  "from a flake", file=sys.stderr, flush=True)
+            code, output, report_files, confirmation = attempt()
+            runs.append(confirmation)
         log = log_path   # written live by c.run
 
         compiler_errors = [
@@ -322,7 +335,8 @@ def main() -> int:
             raise c.CheckError(f"{executed} tests ran but {exec_file.name} is missing/empty. {hint}")
 
         # Written by the report goal of the same call, for tc_coverage.py to read.
-        produced = c.recent_files(search_root, "**/jacoco.xml", run_started)
+        produced = c.recent_files(search_root, "**/jacoco.xml", run_started,
+                                  prefer=("target/site/jacoco/jacoco.xml",))
         jacoco_xml = produced[-1] if produced else None
 
         flaky = sorted(set().union(*(failed_ids(r) for r in runs)) - set.intersection(*(failed_ids(r) for r in runs))) if len(runs) > 1 else []

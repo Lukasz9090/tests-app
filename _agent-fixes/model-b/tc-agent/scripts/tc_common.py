@@ -577,6 +577,23 @@ def maven_lifecycle(repo: Path, skip_main: bool) -> list:
     return list(LEAN_GOALS) if (skip_main and maven_goals_only(repo)) else ["test"]
 
 
+def flaky_repeat(repo: Path) -> int:
+    """How many times a check runs the suite when nothing failed. Default 1.
+
+    Running a GREEN suite twice buys little: a flake that happens to pass twice
+    is still accepted, and the second build costs as much as the first. What
+    does pay is repeating a suite that FAILED - that is the run which tells a
+    real failure from a flake - and the check does that by itself. Raise this
+    for a module whose tests touch time, order or shared state, where catching
+    an intermittent green is worth the second build.
+    """
+    try:
+        value = int(profile(repo).get("flaky_repeat", 1))
+    except (TypeError, ValueError):
+        return 1
+    return max(1, value)
+
+
 def maven_args(repo: Path) -> list:
     """Extra flags for every maven call (profile `maven_args`), e.g. -o, -T1C."""
     return [str(a) for a in profile(repo).get("maven_args", []) or []]
@@ -1173,14 +1190,30 @@ def tool_version(repo: Path, tool: str, override=None, module: str | None = None
     return pom_plugin_version(repo, module, PLUGIN_ARTIFACT[tool]) or DEFAULT_VERSIONS[tool]
 
 
-def recent_files(root: Path, pattern: str, since: float) -> list:
+def recent_files(root: Path, pattern: str, since: float, prefer=()) -> list:
     """Files matching a glob that were written by the run we just made.
 
     Never trust a fixed path for maven output: multi-module layouts, custom
     reportsDirectory and aggregator roots all move it. Search, then filter by
     modification time so stale artefacts from earlier runs cannot be mistaken
     for fresh ones.
+
+    `prefer` holds the conventional places, checked first WITHOUT recursion.
+    The fallback walk crosses the whole module - in a big one that is target/
+    with its generated sources, classes and test-classes, tens of thousands of
+    entries, three times per round. When maven put the file where maven usually
+    puts it, that walk never happens.
     """
+    for quick in prefer:
+        hit = []
+        for path in root.glob(quick):
+            try:
+                if path.stat().st_mtime >= since:
+                    hit.append(path)
+            except OSError:
+                continue
+        if hit:
+            return sorted(hit)
     found = []
     for path in root.rglob(pattern):
         try:

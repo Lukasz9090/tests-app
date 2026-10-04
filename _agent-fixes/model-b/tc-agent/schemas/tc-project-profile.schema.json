@@ -48,6 +48,11 @@
       "minimum": 0,
       "description": "Legacy mode (without --interactive) refuses to freeze a target whose last commit is younger than this many days. Default 7."
     },
+    "flaky_repeat": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "How many times the tests check runs the suite when nothing fails. Default 1: running a green suite again costs a full build and catches little, while a suite that FAILED is repeated automatically - that is the run which tells a real failure from a flake. Raise it for a module whose tests touch time, ordering or shared state."
+    },
     "instruction_paths": {
       "type": "array",
       "items": {
