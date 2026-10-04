@@ -153,6 +153,18 @@ output instead: older means the last build already saw the file.
     "maven_skip_main_compile": true    # always reuse; only warn when stale
     "maven_skip_main_compile": false   # always compile, as maven would
 
+**JaCoCo and PIT do not have to be in the pom.** Every check calls their goals
+by full coordinates, and `prepare-agent` is injected on every run - including
+when the pom binds it, because a pom execution sitting in an inactive profile
+reads as "bound" while no agent ever attaches, and an empty exec file is a dead
+run. If the pom's execution does fire on top of ours, the forked VM dies with
+two agents; the check recognises that, re-runs once without its own goal, says
+so, and REMEMBERS it in `.test-agent/env.json`, so the next round goes straight
+to the working command. That file is a cache, not configuration: it is
+gitignored, and the moment the pom's agent stops attaching anything the run
+takes the agent back and forgets the hint. The exception that pom alone can solve: on JUnit 5, PIT needs
+`pitest-junit5-plugin` as a plugin dependency - the CLI cannot add it.
+
 **Tooling** is deliberately absent. `tool_version()` resolves a version as
 CLI flag → this file → the version declared in the pom → the agent default, so a
 value here OVERRIDES the pom. This repo's pom pins jacoco 0.8.15 and pitest

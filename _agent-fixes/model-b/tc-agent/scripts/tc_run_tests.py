@@ -108,8 +108,27 @@ def main() -> int:
         # surefire matches -Dtest most reliably on simple class names; PIT gets the FQCNs
         selectors = sorted({name.split(".")[-1] for name in tests})
         bound_pom = c.pom_binds_jacoco_agent(repo, module)
-        agent_goal = [] if bound_pom else [f"org.jacoco:jacoco-maven-plugin:{jacoco}:prepare-agent"]
-        agent_source = f"pom-bound ({bound_pom})" if bound_pom else f"cli goal ({jacoco})"
+        prepare_agent = f"org.jacoco:jacoco-maven-plugin:{jacoco}:prepare-agent"
+
+        # JaCoCo and PIT never have to be configured in the pom: the checks call
+        # their goals by full coordinates. prepare-agent is injected ALWAYS,
+        # because the alternative is reading the pom and guessing - and a pom
+        # whose execution sits in an inactive profile reads as "bound" while no
+        # agent ever attaches, which ends as an empty exec file and a dead run.
+        # The one thing that can go wrong - a pom-bound execution firing in the
+        # `test` phase on top of ours, two -javaagent switches, a forked VM that
+        # dies before the first test - is recognisable in the output and costs
+        # one retry (`drop_agent`), not a human.
+        # ... and once a repo has proved its pom really does bind the agent, the
+        # answer is remembered, so the doomed attempt is paid once, not once per
+        # round. The hint is disproved by an empty exec file below.
+        drop_agent = c.env_hint(repo, "jacoco_agent", module) == "pom"
+        if drop_agent:
+            print("[tc-agent] this pom bound the JaCoCo agent on an earlier run - leaving "
+                  "prepare-agent to it", file=sys.stderr, flush=True)
+
+        def agent_goals(goals: list) -> list:
+            return [] if drop_agent else [prepare_agent]
         also_make = c.maven_also_make(repo)
 
         skip_main = []
@@ -173,7 +192,7 @@ def main() -> int:
                 "-Dsurefire.failIfNoSpecifiedTests=false",
                 f"-Dtest={','.join(selectors)}",
                 f"-Djacoco.destFile={exec_file}",
-                *agent_goal,
+                *agent_goals(goals),
                 *goals,
                 *report_goal,
             ]
@@ -213,6 +232,16 @@ def main() -> int:
                 command = build_command(with_am=True, goals=lifecycle)
                 print("[tc-agent] the module's dependencies are not installed; rebuilding them "
                       "with -am. Run `mvn -DskipTests install` once to skip this.",
+                      file=sys.stderr, flush=True)
+                code, output, report_files, results = attempt()
+            # Two agents on one JVM: ours plus a pom-bound execution that the
+            # phase fired. Drop ours and let the pom's do the job.
+            if code != 0 and not drop_agent and c.duplicate_agent(output):
+                drop_agent = True
+                c.save_env_hint(repo, "jacoco_agent", module, "pom")
+                command = build_command(with_am=retried_with_am, goals=lifecycle)
+                print("[tc-agent] the forked VM died with two JaCoCo agents - this pom binds "
+                      "prepare-agent itself; re-running without ours, and remembering it.",
                       file=sys.stderr, flush=True)
                 code, output, report_files, results = attempt()
             # The lean path needs a complete target/ and a surefire that is not
@@ -256,6 +285,11 @@ def main() -> int:
                 % (search_root, code, module or "(repo root)", log, c.maven_error(output))
             )
 
+        agent_source = (f"pom-bound ({bound_pom})" if drop_agent
+                        else f"cli goal ({jacoco})"
+                        + (f" - the pom binds one too ({bound_pom}), but a pom execution does not "
+                           "fire outside the lifecycle" if bound_pom else ""))
+
         executed = sum(1 for r in results if r["status"] != "SKIPPED")
         if not executed:
             raise c.CheckError(
@@ -263,6 +297,18 @@ def main() -> int:
                 f"discovered class names and the module ({module or 'root'}); "
                 f"full log: {log}"
             )
+        if (not exec_file.exists() or exec_file.stat().st_size == 0) and drop_agent:
+            # The hint was wrong, or stopped being true: the pom's execution did
+            # not attach anything. Take the agent back and forget the hint.
+            print("[tc-agent] the pom's agent produced nothing - re-running with ours and "
+                  "forgetting that hint.", file=sys.stderr, flush=True)
+            drop_agent = False
+            c.save_env_hint(repo, "jacoco_agent", module, "cli")
+            command = build_command(with_am=retried_with_am, goals=lifecycle)
+            code, output, report_files, results = attempt()
+            runs[-1] = results
+            agent_source = f"cli goal ({jacoco})"
+
         if not exec_file.exists() or exec_file.stat().st_size == 0:
             pom = c.hardcoded_arg_line(repo, module)
             hint = (

@@ -73,10 +73,13 @@ Wszystkie pozycje w §1 są zaakceptowanymi decyzjami.
 | D57 | Wersję JUnita decydują istniejące testy, nie pom | `repo.junit` brało `spring-boot-starter-test` za dowód JUnita 5 - a przed Bootem 2.2 ten starter TO JUnit 4, i repo może mieć zadeklarowaną platformę, choć wszystkie testy jeżdżą na 4. Kosztowne, bo surefire nie wywala testu w złej wersji, tylko go CICHO nie uruchamia („surefire ran 0 tests"). Nowa kolejność źródeł: klucz `junit` z profilu → importy istniejących testów modułu (`jupiter` kontra `org.junit.Test`, dwa `git grep` ograniczone pathspekiem do modułu) → pomy, gdzie starter liczy się jako 5 tylko przy znalezionej wersji Boota >= 2.2. Kontrakt niesie `junit_source` (skąd) i `junit_mixed` (moduł ma oba - wtedy wzorem jest klasa, którą się rozszerza), a pack pisze to w linii TEST FRAMEWORK. | DECYZJA (§4) |
 | D58 | `auto` pyta o klasę pod testem, nie o cały moduł | D53 porównywało KAŻDE źródło pod `src/main` z jego klasą, więc w repo ciągniętym codziennie zawsze coś było nowsze i decyzja brzmiała „kompiluj" - 6500 plików, minuty, z powodu pliku, którego ten pomiar nawet nie czyta (komunikat wskazywał `D.java` przy teście klasy `A`, co wyglądało jak błąd). Teraz `auto` pyta o źródło targetu: to jego bajtkod czyta JaCoCo i PIT i jego numery linii trafiają do raportu. Nieaktualny współpracownik jest tylko raportowany - w najgorszym razie test zachowa się jak przy ostatnim buildzie, co widać jako czerwony test, nie jako cicho zły raport. `"strict"` wraca do pytania o cały moduł. | DECYZJA (§7) |
 | D59 | Przebieg mówi, na co poszedł czas | Każdy check zapisuje `maven_seconds` (suma wywołań mavena tego checku) i wypisuje to w summary; `tests` dodaje `lifecycle` i `compiled_src_main`, więc widać, czy płaciło się za kompilację `src/main`. `run-report.md` dokłada linię `maven time: tests Xs, coverage Ys, mutation Zs`. Dodatkowo zielony check nie USUWA już logu mavena, tylko przycina go do ostatnich 60 linii - czyli zostaje `Total time`, podsumowanie reaktora i linie `Compiling ...`, a to jedyny plik, który odpowiada na pytanie „czemu to trwało 4 minuty". | DECYZJA (§7) |
-| D60 | Testy i raport pokrycia w JEDNYM wywołaniu mavena | `tc_run_tests.py` dokleja `jacoco-maven-plugin:report` z przypiętym `dataFile` do tej samej komendy: agent zrzuca `.exec` przy wyjściu JVM surefire'a, więc gol raportu czyta go w tym samym przebiegu. Ścieżkę do `jacoco.xml` niesie payload checku testów (`jacoco_xml`), a `tc_coverage.py` czyta ją i NIE startuje mavena (`maven_seconds: 0`). Maven zostaje tam na wypadek, gdy raport nie powstał: czerwone testy (maven zatrzymuje się przed golem raportu), pom nadpisujący formaty, stary `tc_run_tests.py`. Zysk: jeden pełny start reaktora mniej na rundę (w `ces` 20-40 s) i pokrycie mieści się w tym samym 300-sekundowym oknie terminala co testy, czyli nie przepada razem z nim. | DECYZJA (§7) |
+| D60 | Testy i raport pokrycia w JEDNYM wywołaniu mavena | `tc_run_tests.py` dokleja `jacoco-maven-plugin:report` z przypiętym `dataFile` do tej samej komendy: agent zrzuca `.exec` przy wyjściu JVM surefire'a, więc gol raportu czyta go w tym samym przebiegu. Ścieżkę do `jacoco.xml` niesie payload checku testów (`jacoco_xml`), a `tc_coverage.py` czyta ją i NIE startuje mavena (`maven_seconds: 0`). Maven zostaje tam na wypadek, gdy raport nie powstał: czerwone testy (maven zatrzymuje się przed golem raportu), pom nadpisujący formaty, stary `tc_run_tests.py`. Zysk: jeden pełny start reaktora mniej na rundę (w `ces` 20-40 s) i pokrycie mieści się w tym samym 300-sekundowym oknie terminala co testy, czyli nie przepada razem z nim. | DECYZJA (§7.1) |
 | D61 | `-nsu` na każdym wywołaniu + wspólna baza komendy | Nowy `c.mvn_base(repo)` składa `mvn -B [-nsu] <maven_args>` dla wszystkich trzech checków (koniec z powtarzaniem tej listy w każdym skrypcie). SNAPSHOT-y nie są już odświeżane: przebieg mierzy kod z TEGO drzewa roboczego, więc nowszy snapshot kolegi wpadający między check testów a check mutacji znaczyłby, że liczby pochodzą z różnych zależności - a dzienny refresh metadanych to runda do Artifactory na każdy siostrzany SNAPSHOT, czyli większość „Downloading from ..." przy pierwszym przebiegu dnia. `maven_snapshot_updates: true` przywraca zachowanie mavena. Flaga nie jest dublowana, gdy user ma już `-nsu` w `maven_args`. Do tego opis w profilu: generatory (OpenAPI/Swagger na front, npm, stampery) zdejmuje `maven_goals_only`, a gdy nie można - skipy per plugin w `maven_args`. | DECYZJA (§7) |
 | D62 | Przebieg wypisuje, które pluginy mavena się odpaliły | Maven nie podaje czasów per gol, więc najbliżej odpowiedzi „co zjadło te minuty" jest LISTA goli. `maven_goals_run(output)` czyta banery `--- plugin:wersja:gol (id) @ moduł ---`, payload checku testów niesie je jako `plugins_run`, a summary wypisuje pierwsze dwanaście. `trim_log` zachowuje teraz wszystkie banery goli oprócz ogona logu, więc po zielonym checku nadal widać, czy przed surefire przeszedł generator OpenAPI albo build node'owy. | DECYZJA (§7) |
-| D63 | Gole zamiast fazy `test` jako DOMYŚLNE zachowanie | `maven_goals_only` startuje teraz z `true`. Powód z praktyki: opcja, o którą trzeba poprosić, nie jest używana - w `ces` przebieg wciąż wołał fazę `test`, bo klucza nie było w profilu, i płacił za generator OpenAPI na front, filtrowanie resource'ów i pobieranie pluginów, których unit test nie potrzebuje. Do listy goli doszło `resources:testResources` (milisekundy), żeby test czytający `application.yml` z classpatha nie padał z powodu niemającego nic wspólnego z testem. Bezpieczeństwo bez zmian: gole działają tylko wtedy, gdy `src/main` i tak nie jest kompilowany, czyli gdy `target/` jest zgodny z kodem - więc klasy wygenerowane przez pluginy też tam są; a gdy gole padną albo nic nie uruchomią, przebieg raz płaci za pełną fazę i mówi o tym. `maven_goals_only: false` wymusza fazę. | DECYZJA (§7) |
+| D63 | Gole zamiast fazy `test` jako DOMYŚLNE zachowanie | `maven_goals_only` startuje teraz z `true`. Powód z praktyki: opcja, o którą trzeba poprosić, nie jest używana - w `ces` przebieg wciąż wołał fazę `test`, bo klucza nie było w profilu, i płacił za generator OpenAPI na front, filtrowanie resource'ów i pobieranie pluginów, których unit test nie potrzebuje. Do listy goli doszło `resources:testResources` (milisekundy), żeby test czytający `application.yml` z classpatha nie padał z powodu niemającego nic wspólnego z testem. Bezpieczeństwo bez zmian: gole działają tylko wtedy, gdy `src/main` i tak nie jest kompilowany, czyli gdy `target/` jest zgodny z kodem - więc klasy wygenerowane przez pluginy też tam są; a gdy gole padną albo nic nie uruchomią, przebieg raz płaci za pełną fazę i mówi o tym. `maven_goals_only: false` wymusza fazę. | DECYZJA (§7.1) |
+| D64 | `prepare-agent` musi być poproszony na lean pathcie | Regresja z D63: pomowa egzekucja `prepare-agent` wisi na FAZIE, więc przy wywołaniu samych goli nie odpala się wcale - testy chodziły bez agenta i `.exec` zostawał pusty („7 tests ran but jacoco-v1-r1.exec is missing/empty"). Teraz decyzja zależy od wybranej ścieżki: lean path ZAWSZE dokłada gol `prepare-agent` z CLI (pomowa egzekucja i tak nie wystartuje, więc nie ma dwóch agentów), a pełna faza dokłada go tylko wtedy, gdy pom go nie binduje - dwa `-javaagent` zabijają forkowaną JVM przed pierwszym testem. `jacoco_agent` w payloadzie mówi, skąd agent przyszedł w TYM przebiegu. Przy okazji: reviewer wpisywał `NOT_RUN`, czego schemat nie dopuszcza nigdzie - prompt mówił „UNAVAILABLE (or NOT_RUN)", więc nasza własna niespójność kosztowała rundę; teraz podaje dokładne wartości per pole. | DECYZJA (§7.1) |
+| D65 | Pom nie jest potrzebny ani dla JaCoCo, ani dla PIT | `prepare-agent` jest dokładany ZAWSZE, zamiast czytać pom i zgadywać. Powód: regex nie wie o profilach - egzekucja w nieaktywnym profilu czyta się jako „zbindowana", agent nie dołącza się wcale, `.exec` zostaje pusty i przebieg umiera, a naprawić to może tylko człowiek. Jedyne realne ryzyko odwrotne - pomowa egzekucja odpalona przez fazę na dodatek do naszej, dwa `-javaagent`, forkowana JVM ginie przed pierwszym testem - jest rozpoznawalne w wyjściu (`duplicate class definition for java.lang.$JaCoCo`, „forked VM terminated"), więc przebieg raz powtarza build bez swojego gola i mówi o tym. Zamiana błędu blokującego na błąd kosztujący jeden build. Wyjątek, którego CLI nie załatwi: PIT na JUnit 5 wymaga `pitest-junit5-plugin` w pomie. Opisane w README (Setup) i w profilu. | DECYZJA (§7.1) |
+| D66 | Przebieg zapamiętuje, czyj jest agent | Statycznie tego nie da się rozstrzygnąć: czy pomowa egzekucja `prepare-agent` wystartuje, zależy od aktywnych profili, properties z `settings.xml`, pomu-rodzica spoza repo, `jacoco.skip` i od tego, czy surefire podstawia tę samą property - czyli od efektywnego pomu TEGO uruchomienia, a nie od tekstu pliku. Pewną odpowiedź dałby `help:effective-pom`, czyli dokładnie ten pełny start reaktora, który oszczędzamy. Więc zamiast przewidywać, przebieg sprawdza empirycznie i ZAPISUJE wynik w `.test-agent/env.json` (`jacoco_agent: pom|cli`, per moduł). Repo, które naprawdę binduje agenta, płaci za skazane wywołanie raz, nie w każdej rundzie. Hint sam się unieważnia: gdy pomowy agent przestaje cokolwiek podpinać (`.exec` pusty), przebieg odbiera agenta z powrotem i kasuje wpis. Plik jest w .gitignore, więc to cache, nie konfiguracja. | DECYZJA (§7.1) |
 ---
 
 ## 2. Przebieg z lotu ptaka
@@ -611,6 +614,65 @@ Nowe pola scenariusza: `replaces` (opcjonalny `Class#method` — test stale do p
 | `tc_build_context.py` | zapis do `<run_dir>/context-pack.md`; przy każdym EXISTING TEST krótki nagłówek z liczbą metod z metadanymi tc-agent i zaślepek; usunięte `.test-agent/conventions.md`. **Sekcja REPO CONVENTIONS** zbudowana wg §10.3: pliki instrukcji repo, filtrowanie `.instructions.md` po `applyTo`, nagłówek z zasadą pierwszeństwa. Gdy repo nie ma żadnych instrukcji, pack mówi to wprost („none — agent defaults apply”) |
 | `tc_evidence_strength.py`, `tc_verify_refs.py`, `tc_validate_plan.py`, `tc_md_payload.py` | bez zmian logiki, tylko ścieżki |
 
+
+### 7.1 Kto dostarcza JaCoCo i PIT (D60, D63-D66)
+
+Sekcja jest kontraktem, nie opisem implementacji: agent weryfikujący ma czym
+sprawdzić, czy zachowanie jest zamierzone, a nie przypadkowe.
+
+**Zasada nadrzędna: pom nie jest wymagany.** Checki wołają JaCoCo i PIT po
+pełnych koordynatach (`org.jacoco:jacoco-maven-plugin:<wer>:<gol>`,
+`org.pitest:pitest-maven:<wer>:mutationCoverage`), więc repo bez żadnej
+konfiguracji działa. Pom, gdy coś deklaruje, jest tylko ŹRÓDŁEM WERSJI
+(`tool_version`: flaga CLI → profil → pom → domyślna agenta). Jedyny wyjątek,
+którego CLI nie zastąpi: **PIT na JUnit 5 wymaga `pitest-junit5-plugin` jako
+zależności plugina w pomie** - bez niego mutacje są raportowane jako
+`SKIPPED_UNAVAILABLE`, i to nie jest błąd pipeline'u.
+
+Ścieżka buildu wynika z JEDNEJ decyzji - czy `src/main` jest kompilowany
+(`maven_skip_main_compile`, D53/D58). Gole lecą tylko wtedy, gdy nie jest:
+
+| stan `target/` modułu | cykl | co z tego wynika |
+|---|---|---|
+| brak `target/classes` | pełna faza `test` | buduje wszystko, generatory włącznie; raz, zwykle przy pierwszym checku przebiegu (derive-state), nie dopiero w review |
+| jest, ale źródło klasy pod testem nowsze niż jej `.class` | pełna faza `test` | pomiar musi zgadzać się z kodem |
+| jest i klasa pod testem aktualna | `resources:testResources compiler:testCompile surefire:test` | żaden plugin przypięty do fazy się nie odpala |
+
+Stąd tabela odpowiedzialności. Zmiana któregokolwiek wiersza to zmiana
+kontraktu, nie detal:
+
+| element | skąd pochodzi | zależy od targetu? |
+|---|---|---|
+| `jacoco:report` | ZAWSZE z CLI, dołączony do wywołania testów (D60) | nie |
+| PIT (`mutationCoverage`) | ZAWSZE z CLI, osobne wywołanie mavena poza cyklem życia | nie |
+| `jacoco:prepare-agent` | z CLI dokładany ZAWSZE (D65); przy pełnej fazie pomowa egzekucja - jeśli istnieje i jest aktywna - odpala się dodatkowo | tak, jedyny taki element |
+
+Dlaczego `prepare-agent` nie jest rozstrzygany statycznie (D65): to, czy pomowa
+egzekucja wystartuje, zależy od efektywnego pomu TEGO uruchomienia - aktywnych
+profili, `settings.xml`, pomu-rodzica spoza repo, `jacoco.skip`, i od tego, czy
+surefire podstawia tę samą property (`argLine` kontra własne `propertyName`).
+Regex po tekście pomu tego nie wie; pewną odpowiedź dałby `help:effective-pom`,
+czyli pełny start reaktora, który cały ten wysiłek oszczędza. Dlatego decyzja
+jest empiryczna i trzystopniowa:
+
+1. dokładamy swój gol zawsze;
+2. gdy build ginie na dwóch agentach (`duplicate class definition for
+   java.lang.$JaCoCo`, „forked VM terminated"), przebieg raz powtarza build bez
+   swojego gola i zapisuje `jacoco_agent: "pom"` w `.test-agent/env.json` (D66);
+3. gdy zapamiętany pomowy agent przestaje cokolwiek podpinać (`.exec` pusty),
+   przebieg odbiera agenta z powrotem i kasuje wpis.
+
+`.test-agent/env.json` jest CACHE'EM, nie konfiguracją: leży w gitignore, każdy
+wpis da się obalić w jednym przebiegu, a jego utrata kosztuje jedno powtórzone
+wywołanie, nigdy poprawność. Payload checku testów niesie `jacoco_agent`,
+`lifecycle`, `compiled_src_main` i `plugins_run`, więc każdy przebieg daje się
+zweryfikować po fakcie bez zgadywania.
+
+Czego ta konstrukcja świadomie NIE gwarantuje: jeśli pom ustawia własne
+`<propertyName>` dla agenta albo literalne `<argLine>` bez `@{argLine}`, agent
+nie dołączy się na żadnej ścieżce - check kończy się wtedy komunikatem
+wskazującym `argLine`, a wyjściem awaryjnym jest `maven_goals_only: false`.
+
 ---
 
 ## 8. Schematy
@@ -937,3 +999,6 @@ Otwartych decyzji nie ma. Następny krok: etap 1 (aktualizacja `MODEL-B-SPEC.md`
 - **„Downloading from artifactory" przy każdym uruchomieniu testów (D61):** to nie były nasze pluginy, a dzienne odświeżanie siostrzanych SNAPSHOT-ów reaktora. `-nsu` zdejmuje ruch i zamraża zależności na czas przebiegu.
 - **481 s na checku testów (D62):** sam czas nie mówił, co go zjadło - payload podawał `maven_seconds`, ale nie listę pluginów. Teraz podaje jedno i drugie, a log zielonego checku zachowuje banery goli.
 - **Faza `test` mimo wszystkich poprawek (D63):** komenda w logu kończyła się słowem `test`, bo `maven_goals_only` było opcjonalne i nikt go nie włączył. Domyślka odwrócona - teraz trzeba poprosić o fazę, nie o jej pominięcie.
+- **Puste `.exec` mimo 7 uruchomionych testów (D64):** cena domyślnego lean patha - pomowy `prepare-agent` nie fires poza cyklem życia. Gol z CLI dokładany jest teraz zawsze, gdy lecą gole.
+- **Czy jacoco i pit muszą być w pomie (D65):** nie muszą i nigdy nie musiały poza `prepare-agent`; ta ostatnia zależność od pomu zniknęła wraz z samonaprawiającym się retry.
+- **„Czy nie da się tego zautomatyzować" (D66):** da się, ale nie przez czytanie pomu - warunki startu pomowej egzekucji zna tylko efektywny pom danego uruchomienia. Automatyzacja jest więc empiryczna: spróbuj, rozpoznaj, zapamiętaj, unieważnij gdy przestanie być prawdą.

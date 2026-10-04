@@ -447,6 +447,57 @@ def test_junit_version_follows_the_existing_tests():
         tc._PROFILE_CACHE.clear()
 
 
+def test_a_pom_bound_agent_still_has_to_be_asked_for_on_the_lean_path():
+    """prepare-agent is bound to a PHASE, so calling goals directly skips it.
+
+    Symptom when it is missed: "7 tests ran but jacoco-v1-r1.exec is
+    missing/empty" - the tests run, the agent never attaches, coverage and
+    mutation have nothing to read.
+    """
+    with fixture() as repo:
+        repo.write("pom.xml",
+                   '<?xml version="1.0"?><project><modelVersion>4.0.0</modelVersion>'
+                   "<groupId>x</groupId><artifactId>fixture</artifactId><version>1</version>"
+                   "<build><plugins><plugin><artifactId>jacoco-maven-plugin</artifactId>"
+                   "<executions><execution><goals><goal>prepare-agent</goal></goals>"
+                   "</execution></executions></plugin></plugins></build></project>")
+        compiled = repo.root / "target" / "classes" / "com" / "acme"
+        compiled.mkdir(parents=True)
+        (compiled / "OrderService.class").write_bytes(b"\xca\xfe\xba\xbe")
+        out = start(repo)
+        expect_true("the lean path ran", "surefire:test" in out["mvn"][0])
+        expect_true("and asked for the agent itself", ":prepare-agent" in out["mvn"][0])
+        tests = load_payload(out["dir"] / "checks" / "tests-entry.md")[0]
+        expect_true("the payload says where the agent came from",
+                    tests["jacoco_agent"].startswith("cli goal"))
+
+        # ... and when the pom's own execution DOES fire on top of ours, the
+        # forked VM dies - which the run recognises and heals by itself.
+        repo.write(".github/agents/tc-agent/references/tc-project-profile.md",
+                   '# p\n\n```json\n{"schema_version": 1, "maven_goals_only": false}\n```\n')
+        (repo.root / "mvn.log").unlink()           # only the next run's calls
+        out = start(repo, {"FAKE_MVN_POM_AGENT": "1"})
+        expect("the run is still DONE", out["state"]["next_action"], "DONE")
+        expect_true("the first try asked for the agent", ":prepare-agent" in out["mvn"][0])
+        expect_true("the retry did not", ":prepare-agent" not in out["mvn"][1])
+        tests = load_payload(out["dir"] / "checks" / "tests-entry.md")[0]
+        expect_true("and the payload credits the pom",
+                    tests["jacoco_agent"].startswith("pom-bound"))
+        expect("the answer is remembered", c.env_hint(repo.root, "jacoco_agent", None), "pom")
+
+        # Next round: no doomed attempt, because the hint is already there.
+        (repo.root / "mvn.log").unlink()
+        out = start(repo, {"FAKE_MVN_POM_AGENT": "1"})
+        expect("two calls, not three - the first one is skipped", len(out["mvn"]), 2)
+        expect_true("none of them asks for the agent", ":prepare-agent" not in out["mvn"][0])
+
+        # ... and the hint is disproved the moment the pom stops attaching one.
+        (repo.root / "mvn.log").unlink()
+        out = start(repo, {"FAKE_MVN_POM_AGENT": "1", "FAKE_MVN_NO_EXEC": "1"})
+        expect_true("the run takes the agent back", ":prepare-agent" in out["mvn"][-1])
+        expect("and forgets the hint", c.env_hint(repo.root, "jacoco_agent", None), "cli")
+
+
 def test_silent_goals_fall_back_to_the_real_phase():
     """A surefire configured per execution runs nothing from the CLI and exits 0.
 

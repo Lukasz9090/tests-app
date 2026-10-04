@@ -819,6 +819,57 @@ def is_module(repo: Path, candidate: str) -> bool:
     return path.is_dir() and (path / "pom.xml").exists()
 
 
+DOUBLE_AGENT = (
+    "duplicate class definition for java.lang.$jacoco",
+    "duplicate class definition for class java.lang.$jacoco",
+    "forked vm terminated without properly saying goodbye",
+)
+
+
+def env_hints(repo: Path) -> dict:
+    """What earlier runs LEARNED about this machine's build, per module.
+
+    Not configuration: every value here is a performance hint that the run can
+    disprove by itself, and `.test-agent/` is gitignored, so it never travels to
+    anybody else. It exists so a repo whose pom really does bind the JaCoCo
+    agent stops paying for the doomed first attempt on every single round.
+    """
+    path = repo / ".test-agent" / "env.json"
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def save_env_hint(repo: Path, key: str, module: str | None, value) -> None:
+    """Remember one such fact. Best effort: a hint that cannot be written costs
+    a repeated attempt next time, never a failure."""
+    hints = env_hints(repo)
+    hints.setdefault(key, {})[module or ""] = value
+    path = repo / ".test-agent" / "env.json"
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(hints, indent=2) + "\n", encoding="utf-8")
+    except OSError:
+        pass
+
+
+def env_hint(repo: Path, key: str, module: str | None):
+    return env_hints(repo).get(key, {}).get(module or "")
+
+
+def duplicate_agent(output: str) -> bool:
+    """Did this build die because TWO JaCoCo agents were on the forked JVM?
+
+    The second premain cannot define its class again, so the VM dies before a
+    single test runs and surefire reports it as its own crash. Recognising it
+    is what lets the check inject prepare-agent unconditionally and still work
+    on a pom that binds it.
+    """
+    low = output.lower()
+    return any(marker in low for marker in DOUBLE_AGENT)
+
+
 def pom_binds_jacoco_agent(repo: Path, module: str | None) -> Path | None:
     """Return the pom that already binds jacoco's prepare-agent to the build.
 

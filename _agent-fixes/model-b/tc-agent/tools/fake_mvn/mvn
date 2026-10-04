@@ -16,6 +16,9 @@ Behaviour is steered by environment variables:
   FAKE_MVN_MUTANTS   "killed,survived" mutants per class (default 4,0)
   FAKE_MVN_UNTESTED  comma list of method names no test executes (0 covered lines)
   FAKE_MVN_LOG       append each argv to this file
+  FAKE_MVN_NO_EXEC       no exec file unless prepare-agent is on the command line
+  FAKE_MVN_POM_AGENT     a build that gets a prepare-agent goal dies the way a JVM
+                     with two JaCoCo agents does
   FAKE_MVN_GOALS_SILENT  `surefire:test` exits 0 writing no reports, the way a
                      surefire configured in a pom <execution> does from the CLI
 """
@@ -52,6 +55,13 @@ def main_classes():
 def test_files():
     return list((cwd / "src" / "test" / "java").rglob("*.java"))
 
+
+if os.environ.get("FAKE_MVN_POM_AGENT") and any("prepare-agent" in a for a in args):
+    # A pom that binds prepare-agent itself: a second -javaagent kills the VM.
+    print("[ERROR] Error occurred in starting fork, check output in log")
+    print("[ERROR] The forked VM terminated without properly saying goodbye. VM crash?")
+    print("[ERROR] java.lang.ClassFormatError: duplicate class definition for java.lang.$JaCoCo")
+    sys.exit(1)
 
 goals_run = "surefire:test" in args
 if goals_run and os.environ.get("FAKE_MVN_GOALS_SILENT"):
@@ -95,6 +105,8 @@ if "test" in args or goals_run:
             f'<?xml version="1.0"?><testsuite name="{fqcn}">' + "".join(cases) + "</testsuite>",
             encoding="utf-8")
     dest = prop("jacoco.destFile")
+    if dest and os.environ.get("FAKE_MVN_NO_EXEC") and not any("prepare-agent" in a for a in args):
+        dest = None            # tests ran, nothing attached: an empty exec file
     if dest:
         Path(dest).parent.mkdir(parents=True, exist_ok=True)
         Path(dest).write_bytes(b"fake-exec")
