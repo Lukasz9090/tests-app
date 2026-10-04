@@ -329,6 +329,64 @@ def test_goals_only_needs_a_built_src_main():
         tc._PROFILE_CACHE.clear()
 
 
+def test_junit_version_follows_the_existing_tests():
+    """The poms lie more often than the tests do.
+
+    `spring-boot-starter-test` was taken as proof of JUnit 5 - but before Boot
+    2.2 that starter IS JUnit 4, and a repo can declare the platform while every
+    test still runs on JUnit 4. Surefire does not fail a @Test of the wrong
+    version, it silently does not run it, so what the neighbours import decides.
+    """
+    import tc_common as tc
+    pom = ('<?xml version="1.0"?><project><modelVersion>4.0.0</modelVersion>'
+           "<groupId>x</groupId><artifactId>fixture</artifactId><version>1</version>%s</project>")
+    boot = ("<parent><groupId>org.springframework.boot</groupId>"
+            "<artifactId>spring-boot-starter-parent</artifactId><version>%s</version></parent>"
+            "<dependencies><dependency><groupId>org.springframework.boot</groupId>"
+            "<artifactId>spring-boot-starter-test</artifactId></dependency></dependencies>")
+    with FixtureRepo() as repo:
+        repo.write("pom.xml", pom % "<dependencies><dependency><groupId>junit</groupId>"
+                                    "<artifactId>junit</artifactId></dependency></dependencies>")
+        tc._PROFILE_CACHE.clear()
+        expect("a plain junit dependency is JUnit 4",
+               tc.repo_contract(repo.root, None)["junit"], "4")
+
+        repo.write("pom.xml", pom % (boot % "2.1.9.RELEASE"))
+        expect("the starter before Boot 2.2 is not JUnit 5",
+               tc.repo_contract(repo.root, None)["junit"], None)
+        repo.write("pom.xml", pom % (boot % "2.6.3"))
+        contract = tc.repo_contract(repo.root, None)
+        expect("from Boot 2.2 on it is", (contract["junit"], contract["junit_source"]),
+               ("5", "pom"))
+
+        repo.write("src/test/java/com/acme/LegacyTest.java",
+                   "package com.acme;\nimport org.junit.Test;\nimport org.junit.Assert;\n"
+                   "public class LegacyTest { @Test public void a() {} }\n")
+        contract = tc.repo_contract(repo.root, None)
+        expect("but a JUnit 4 test in the module wins over the pom", contract["junit"], "4")
+        expect_true("and says where that came from",
+                    contract["junit_source"].startswith("existing tests"))
+        expect("one flavor only is not mixed", contract["junit_mixed"], False)
+
+        repo.write("src/test/java/com/acme/ModernTest.java",
+                   "package com.acme;\nimport org.junit.jupiter.api.Test;\n"
+                   "class ModernTest { @Test void b() {} }\n")
+        repo.write("src/test/java/com/acme/AlsoModernTest.java",
+                   "package com.acme;\nimport org.junit.jupiter.api.Test;\n"
+                   "class AlsoModernTest { @Test void b() {} }\n")
+        contract = tc.repo_contract(repo.root, None)
+        expect("the majority decides", contract["junit"], "5")
+        expect("and both present is flagged", contract["junit_mixed"], True)
+
+        repo.write(".github/agents/tc-agent/references/tc-project-profile.md",
+                   '# p\n\n```json\n{"schema_version": 1, "junit": "4"}\n```\n')
+        tc._PROFILE_CACHE.clear()
+        contract = tc.repo_contract(repo.root, None)
+        expect("the profile overrides everything", (contract["junit"], contract["junit_source"]),
+               ("4", "profile"))
+        tc._PROFILE_CACHE.clear()
+
+
 def test_silent_goals_fall_back_to_the_real_phase():
     """A surefire configured per execution runs nothing from the CLI and exits 0.
 

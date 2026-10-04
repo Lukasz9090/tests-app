@@ -33,6 +33,18 @@ guessed from file names - a file is used because somebody named it here or on
 the command line. In an `interactive` run with no such file, the planner offers
 to take one or to walk through a few questions.
 
+**JUnit version** (`junit`, optional, `"4"` or `"5"`): normally nothing to set.
+The agent reads the version from what the module's EXISTING tests import, and
+from the poms only when the module has none. That order matters, because a pom
+proves little: `spring-boot-starter-test` is JUnit 4 before Boot 2.2 and JUnit 5
+after it, a repo can declare the platform while every test still runs on JUnit
+4, and surefire does not fail a test of the wrong version - it silently does not
+run it, which arrives as "surefire ran 0 tests". Set this key when the detection
+is wrong anyway: a module mid-migration, or JUnit inherited from a parent pom
+outside the repo. `derive-state.md` says which source was used
+(`repo.junit_source`), and the context pack repeats it on the TEST FRAMEWORK
+line.
+
 **Maven** (`maven_timeout_seconds`, `maven_also_make`, `maven_args`, all
 optional): one maven call may take 600 seconds by default; past that the check
 stops with a clear error instead of hanging, and every command is echoed to

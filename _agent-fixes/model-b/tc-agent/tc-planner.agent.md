@@ -102,9 +102,13 @@ Read `repo` in `derive-state.md` — derive-state already read the poms: `build`
 goals — both work), `jacoco_agent_bound` and `pit_junit5_plugin`. **Do not run
 `mvn` yourself to check this.**
 
-`junit: null` means no JUnit was visible in the repo's poms. Only then read the
-pom (and a `<parent>` inside the repo) yourself; JUnit inherited from a parent
-outside the repo counts. Write a note for each fact you rely on.
+`junit_source` says where the version came from: `existing tests (<n> JUnit 5,
+<m> JUnit 4)`, `pom`, or `profile`. `junit_mixed: true` means the module holds
+both, so the version to write is the one in the class you extend.
+
+`junit: null` means neither the poms nor the module's tests showed one. Only
+then read the pom (and a `<parent>` inside the repo) yourself; JUnit inherited
+from a parent outside the repo counts. Write a note for each fact you rely on.
 
 When a check fails, write a plan whose JSON holds only
 `{"schema_version":1,"plan_version":<N>,"status":"UNSUPPORTED_REPOSITORY",

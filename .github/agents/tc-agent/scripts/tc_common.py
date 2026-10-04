@@ -919,33 +919,91 @@ def _poms(repo: Path, module: str | None) -> list:
     return out
 
 
+JUNIT5_MARKERS = ["jupiter"]
+JUNIT4_MARKERS = ["org.junit.Test", "org.junit.Assert", "junit.framework", "@RunWith"]
+
+
+def junit_in_tests(repo: Path, module: str | None) -> tuple:
+    """`(flavor, five, four)` from the imports of the module's EXISTING tests.
+
+    The only fully reliable signal. A pom that declares both JUnit 4 and the
+    platform says nothing about which one a new test must use, and surefire does
+    not fail a test it cannot run: write a @Test from the wrong version and it
+    is silently NOT EXECUTED. What the neighbours import is both the house style
+    and proof of what runs here. `(None, 0, 0)` when git cannot answer or the
+    module has no tests yet.
+    """
+    # Scope the grep to the module: git's pathspec wildcard crosses directories,
+    # so this is the module's whole subtree and not the other 50k files.
+    pathspec = f"{module}/*.java" if module else "*.java"
+    five = grep_files(repo, JUNIT5_MARKERS, pathspec)
+    four = grep_files(repo, JUNIT4_MARKERS, pathspec)
+    if five is None or four is None:
+        return None, 0, 0
+    root = str(module_dir(repo, module).resolve()) + os.sep
+
+    def mine(files):
+        return [f for f in files
+                if str(f).startswith(root) and f"{os.sep}src{os.sep}test{os.sep}" in str(f)]
+
+    five, four = mine(five), mine(four)
+    if not five and not four:
+        return None, 0, 0
+    return ("5" if len(five) > len(four) else "4"), len(five), len(four)
+
+
+BOOT_VERSION = re.compile(
+    r"<artifactId>\s*spring-boot-(?:starter-parent|dependencies)\s*</artifactId>\s*"
+    r"<version>\s*(\d+)\.(\d+)")
+
+
 def repo_contract(repo: Path, module: str | None) -> dict:
-    """What the Planner's Phase 0 needs, read from the poms WITHOUT running maven.
+    """What the Planner's Phase 0 needs, read WITHOUT running maven.
 
     Static on purpose: an agent that runs `mvn -Dincludes=org.junit.jupiter ...`
     in PowerShell gets the argument split at the dots ("No plugin found for
     prefix '.junit.jupiter'"). Reading the pom text is deterministic and free.
-    JUnit through spring-boot-starter-test counts as JUnit 5 (Boot >= 2.2).
+
+    The JUnit version comes from three sources, in this order: the profile key
+    `junit` (you overrode it), the imports of the module's existing tests (what
+    demonstrably runs here), and only then the poms.
     """
     text = " ".join(re.sub(r"\s+", " ", p.read_text(encoding="utf-8", errors="replace"))
                     for p in _poms(repo, module))
-    if re.search(r"<artifactId>\s*junit-jupiter[\w-]*\s*</artifactId>", text) \
-            or "spring-boot-starter-test" in text:
-        junit = "5"
-    elif re.search(r"<groupId>\s*junit\s*</groupId>", text):
-        junit = "4"
+    jupiter = bool(re.search(r"<artifactId>\s*junit-jupiter[\w-]*\s*</artifactId>", text))
+    junit4_dep = bool(re.search(r"<groupId>\s*junit\s*</groupId>", text))
+    boot = BOOT_VERSION.search(text)
+    # The starter pulls JUnit 5 only from Boot 2.2 on - before that it IS JUnit 4,
+    # and with no version in sight it proves nothing either way.
+    starter5 = ("spring-boot-starter-test" in text and bool(boot)
+                and (int(boot.group(1)), int(boot.group(2))) >= (2, 2))
+    if jupiter or starter5:
+        junit, source = "5", "pom"
+    elif junit4_dep:
+        junit, source = "4", "pom"
     else:
-        junit = None
+        junit, source = None, None
+
+    override = str(profile(repo).get("junit", "") or "")
+    from_tests, five, four = junit_in_tests(repo, module)
+    if override in ("4", "5"):
+        junit, source = override, "profile"
+    elif from_tests:
+        junit, source = from_tests, f"existing tests ({five} JUnit 5, {four} JUnit 4)"
+
     jacoco = "pom" if "jacoco-maven-plugin" in text else "cli"
     pit = "pom" if "pitest-maven" in text else "cli"
     return {
         "build": "maven",
         "junit": junit,
+        "junit_source": source,
+        "junit_mixed": bool(five and four),
         "jacoco": jacoco,
         "jacoco_agent_bound": bool(pom_binds_jacoco_agent(repo, module)),
         "pit": pit,
         "pit_junit5_plugin": "pitest-junit5-plugin" in text,
-        "note": "static read of the pom(s); dependencies inherited from a parent outside the repo are not seen",
+        "note": "static read of the pom(s) and of what the module's tests import; "
+                "dependencies inherited from a parent outside the repo are not seen",
     }
 
 

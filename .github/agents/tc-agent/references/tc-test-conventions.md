@@ -14,13 +14,16 @@ it tries, follow §A and mention the conflict in your artifact's `notes`.
 ## §A — Pipeline integrity (not overridable)
 
 **A0. The test framework is the repo's, not a default.** The run's
-`derive-state.md` carries `repo.junit` (`"5"`, `"4"` or null) and the context
-pack repeats it as TEST FRAMEWORK. Write every test with the annotations and
-assertions of THAT version, and never add a dependency to make your favorite
-one available. Where a rule below differs, it says "JUnit 5" and "JUnit 4"
-explicitly. Both present (JUnit 4 plus the vintage engine) counts as JUnit 5.
-When the pack says the framework is unknown, follow the existing test class;
-with no test class either, write JUnit 5 and say so in your artifact's `notes`.
+`derive-state.md` carries `repo.junit` (`"5"`, `"4"` or null) with
+`repo.junit_source`, and the context pack repeats both as TEST FRAMEWORK. Write
+every test with the annotations and assertions of THAT version, and never add a
+dependency to make your favorite one available. Where a rule below differs, it
+says "JUnit 5" and "JUnit 4" explicitly. The version is read from the module's
+existing tests first and from the poms only as a fallback, because surefire does
+not fail a test of the wrong version - it silently does not run it. When
+`junit_mixed` is true the module holds both, so match the class you extend. When
+the pack says the framework is unknown, follow the existing test class; with no
+test class either, write JUnit 5 and say so in your artifact's `notes`.
 
 **A1. Metadata.** Every test method you write carries a Javadoc: one prose line,
 a blank line, then one `tc-agent` metadata line per fact. Metadata goes on

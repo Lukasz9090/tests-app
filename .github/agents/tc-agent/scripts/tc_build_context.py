@@ -338,8 +338,12 @@ def main():
     # --- assemble with budget ---
     contract = c.repo_contract(repo, target.module)
     junit = contract.get("junit")
-    framework = (f"JUnit {junit}" if junit else
-                 "unknown (the pom declares none) - follow the existing test class")
+    source = contract.get("junit_source")
+    framework = (f"JUnit {junit}" + (f" - from {source}" if source else "") if junit else
+                 "unknown (nothing in the poms or the module's tests) - follow the existing "
+                 "test class")
+    if contract.get("junit_mixed"):
+        framework += "; the module's tests use BOTH versions - match the class you extend"
     out = [f"# Context Pack: {slug}", "",
            f"Repo: {repo}", f"TEST FRAMEWORK: {framework} "
            f"(tc-test-conventions.md A0: write the annotations of THIS version)",
