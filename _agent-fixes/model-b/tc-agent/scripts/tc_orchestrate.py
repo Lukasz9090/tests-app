@@ -588,6 +588,7 @@ def collect(repo: Path, directory: Path, state: dict) -> dict:
         gates["mutation"] = {"ratio": mut.get("score"), "gate": mut.get("gate")}
 
     history = review_history(directory)
+    timings = check_timings(directory)
 
     # CONFIRM questions from EVERY plan version, not only the last one.
     notes = []
@@ -616,7 +617,29 @@ def collect(repo: Path, directory: Path, state: dict) -> dict:
         "red": red,
         "gates": gates,
         "history": history,
+        "timings": timings,
     }
+
+
+def check_timings(directory: Path) -> dict:
+    """Seconds maven spent per kind of check, summed over every round.
+
+    Written so "the run took four minutes" can be answered from the run
+    directory instead of from a log a green check used to delete.
+    """
+    out = {}
+    folder = directory / "checks"
+    if not folder.is_dir():
+        return out
+    for kind in ("tests", "coverage", "mutation"):
+        total = 0.0
+        for path in sorted(folder.glob(f"{kind}-*.md")):
+            value = _safe(path).get("maven_seconds")
+            if isinstance(value, (int, float)):
+                total += value
+        if total:
+            out[kind] = round(total)
+    return out
 
 
 def confirm_lines(notes: list) -> list:
@@ -768,6 +791,11 @@ def render_report(info: dict, state: dict, outcome: str, summary: str, commit: d
                  f"placeholders now in the code: {len(info['placeholders_in_code'])}")
     if info["test_files"]:
         lines.append(f"- files changed in the working tree: {', '.join(info['test_files'])}")
+    if info.get("timings"):
+        spent = info["timings"]
+        lines.append("- maven time: "
+                     + ", ".join(f"{k} {v}s" for k, v in spent.items())
+                     + f" ({sum(spent.values())}s in total)")
     if info["gates"]:
         g_ = info["gates"]
         parts = []

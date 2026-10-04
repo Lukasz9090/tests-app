@@ -86,8 +86,10 @@ def main() -> int:
         )
 
         started = time.time() - 2
+        clock = time.time()
         code, output = c.run(command, repo, timeout=c.maven_timeout(repo),
                                  log_path=c.checks_dir(directory) / f"maven-mutation-{args.label}.log")
+        maven_seconds = time.time() - clock
         log = c.checks_dir(directory) / f"maven-mutation-{args.label}.log"   # written live by c.run
         found = c.recent_files(c.module_dir(repo, module), "**/mutations.xml", started)
         xml_path = found[-1] if found else c.module_dir(repo, module) / "target" / "pit-reports" / "mutations.xml"
@@ -153,6 +155,7 @@ def main() -> int:
             "survived": sum(1 for s in survivors if s["status"] == "SURVIVED"),
             "no_coverage": sum(1 for s in survivors if s["status"] == "NO_COVERAGE"),
             "survivors": sorted(survivors, key=lambda s: s["line"])[:60],
+            "maven_seconds": round(maven_seconds, 1),
         }
         if not total:
             data["reason"] = "no mutants generated for this scope"
@@ -160,9 +163,11 @@ def main() -> int:
             f"{scope}: score {score:.0%} of {total} mutants (gate {gate:.0%})",
             "survivors: "
             + (", ".join(f"{s['line']}/{s['mutator']}" for s in data["survivors"][:12]) or "none"),
+            f"maven took {round(maven_seconds)}s for {total} mutants "
+            f"(PIT re-runs the tests once per mutant)",
         ]
         if passed:
-            log.unlink(missing_ok=True)   # keep the maven log only for a non-green check
+            c.trim_log(log)   # a green check keeps only the tail of its maven log
         return c.finish(directory, name, "Check: mutation", summary, data, 0 if passed else 1)
 
     except c.CheckError as exc:

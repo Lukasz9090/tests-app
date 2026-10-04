@@ -72,11 +72,28 @@ def test_green_run_is_done_through_all_three_scripts():
         out = start(repo)
         state = out["state"]
         expect("DONE", (state["next_action"], state["reasons"]), ("DONE", ["GATES_MET"]))
-        expect("three maven calls", len(out["mvn"]), 3)
+        expect("two maven calls: tests+report, then pit", len(out["mvn"]), 2)
         expect_true("-Dtest is the discovered class only", "-Dtest=OrderServiceTest " in out["mvn"][0] + " ")
         expect_true("exec file is per label", "jacoco-entry.exec" in out["mvn"][0])
-        expect_true("coverage reads that exec", "jacoco-entry.exec" in out["mvn"][1])
-        expect_true("PIT targets the target class", "-Dpit.targetClasses=com.acme.OrderService" in out["mvn"][2])
+        expect_true("the report goal rides along", "jacoco-maven-plugin" in out["mvn"][0]
+                    and ":report" in out["mvn"][0])
+        expect_true("and reads the same exec", "-Djacoco.dataFile=" in out["mvn"][0])
+        expect_true("PIT targets the target class", "-Dpit.targetClasses=com.acme.OrderService" in out["mvn"][1])
+        coverage = load_payload(out["dir"] / "checks" / "coverage-entry.md")[0]
+        expect("coverage started no maven of its own", coverage["maven_seconds"], 0.0)
+        # ... but it must still work when that report never happened.
+        Path(coverage["report"]).unlink()
+        before = len(out["mvn"])
+        again = subprocess.run(
+            [sys.executable, str(TC / "scripts" / "tc_coverage.py"), "OrderService",
+             "--repo", str(repo.root), "--run", out["run_dir"].rsplit("/", 1)[-1],
+             "--label", "entry"],
+            capture_output=True, text=True,
+            env={**os.environ, "PATH": f"{FAKE}{os.pathsep}{os.environ['PATH']}",
+                 "FAKE_MVN_LOG": str(repo.root / "mvn.log")})
+        expect("the fallback report is green too", again.returncode, 0)
+        expect("and it did start maven",
+               len((repo.root / "mvn.log").read_text().splitlines()), before + 1)
         checks = sorted(p.name for p in (out["dir"] / "checks").glob("*.md"))
         expect("reports in the run directory", checks,
                ["coverage-entry.md", "mutation-entry.md", "tests-entry.md"])
@@ -105,7 +122,7 @@ def test_coverage_gap_plans_with_lines():
         state = out["state"]
         expect("PLAN / COVERAGE_GAP", (state["next_action"], state["reasons"]), ("PLAN", ["COVERAGE_GAP"]))
         expect("uncovered line of the if", [u["line"] for u in state["coverage"]["uncovered"]], [5])
-        expect("PIT not run", len(out["mvn"]), 2)
+        expect("PIT not run - one call did tests and the report", len(out["mvn"]), 1)
 
 
 def test_mutation_gap_plans():
@@ -445,10 +462,11 @@ def test_silent_goals_fall_back_to_the_real_phase():
         out = start(repo, {"FAKE_MVN_GOALS_SILENT": "1"})
         expect("the run still finishes", out["state"]["next_action"], "DONE")
         calls = out["mvn"]
-        expect("four maven calls: goals, the phase, coverage, pit", len(calls), 4)
+        expect("three maven calls: goals, the phase, pit", len(calls), 3)
         expect_true("the lean goals went first", "surefire:test" in calls[0])
         expect_true("src/main was skipped there", "-Dmaven.main.skip=true" in calls[0])
-        expect_true("then the real phase", calls[1].rstrip().endswith(" test"))
+        expect_true("then the real phase", " test " in calls[1] + " "
+                    and "surefire:test" not in calls[1])
         tests = load_payload(out["dir"] / "checks" / "tests-entry.md")[0]
         expect("and the tests were measured", tests["total"], 3)
 

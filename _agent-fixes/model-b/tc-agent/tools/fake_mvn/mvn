@@ -98,7 +98,10 @@ if "test" in args or goals_run:
     if dest:
         Path(dest).parent.mkdir(parents=True, exist_ok=True)
         Path(dest).write_bytes(b"fake-exec")
-    sys.exit(1 if any_fail else 0)
+    # Real maven stops at a failed surefire, so a report goal in the SAME command
+    # runs only when the tests passed - and then this falls through to write it.
+    if any_fail or not any(":report" in a for a in args):
+        sys.exit(1 if any_fail else 0)
 
 if any(":report" in a for a in args):
     covered, missed = (int(x) for x in os.environ.get("FAKE_MVN_BRANCH", "8,0").split(","))

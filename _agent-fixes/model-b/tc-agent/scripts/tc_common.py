@@ -1141,6 +1141,24 @@ def finish(directory: Path, name: str, title: str, summary: list, data: dict, co
     return code
 
 
+def trim_log(path: Path, keep: int = 60) -> None:
+    """Keep only the tail of a maven log (the reactor summary and `Total time`).
+
+    A green check used to DELETE its log, which is exactly the file you want
+    when the question is "why did this take four minutes". The tail answers that
+    and costs a few kilobytes instead of a few hundred.
+    """
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return
+    if len(lines) <= keep:
+        return
+    head = f"[tc-agent] green check - only the last {keep} lines of this log are kept " \
+           f"({len(lines)} in total while it ran)"
+    path.write_text("\n".join([head, ""] + lines[-keep:]) + "\n", encoding="utf-8")
+
+
 def fail(message: str) -> int:
     print(f"CHECK_UNAVAILABLE: {message}", file=sys.stderr)
     return 2

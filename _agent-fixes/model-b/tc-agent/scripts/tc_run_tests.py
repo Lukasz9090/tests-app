@@ -157,32 +157,48 @@ def main() -> int:
             print("[tc-agent] running the goals directly (compiler:testCompile surefire:test) - "
                   "no generators, no resource filtering", file=sys.stderr, flush=True)
 
-        COMMAND_TAIL = [
-            "-DfailIfNoTests=false",
-            "-Dsurefire.failIfNoSpecifiedTests=false",
-            f"-Dtest={','.join(selectors)}",
-            f"-Djacoco.destFile={exec_file}",
-            *agent_goal,
-            *lifecycle,
-        ]
+        # The coverage report in the SAME call: the agent has just flushed the exec
+        # file when surefire's JVM exited, so the report goal can read it here and
+        # tc_coverage.py needs no maven of its own. One maven start less, and in a
+        # big reactor that start was 20-40 seconds of the run's budget. It only
+        # runs when the tests pass (maven stops at a failed surefire), which is
+        # exactly when coverage is worth measuring.
+        report_goal = [f"org.jacoco:jacoco-maven-plugin:{jacoco}:report",
+                       f"-Djacoco.dataFile={exec_file}"]
 
-        def build_command(with_am: bool) -> list:
+        def command_tail(goals: list) -> list:
+            return [
+                "-DfailIfNoTests=false",
+                "-Dsurefire.failIfNoSpecifiedTests=false",
+                f"-Dtest={','.join(selectors)}",
+                f"-Djacoco.destFile={exec_file}",
+                *agent_goal,
+                *goals,
+                *report_goal,
+            ]
+
+        def build_command(with_am: bool, goals: list) -> list:
             return ([c.mvn_executable(), "-B", *c.maven_args(repo), *skip_main]
-                    + c.module_args(module, also_make=with_am) + COMMAND_TAIL)
+                    + c.module_args(module, also_make=with_am) + command_tail(goals))
 
-        command = build_command(with_am=(also_make is True))
+        command = build_command(with_am=(also_make is True), goals=lifecycle)
         retried_with_am = False
 
         runs = []
         output = ""
         report_files = []
+        maven_seconds = 0.0
+        run_started = time.time() - 2
         log_path = c.checks_dir(directory) / f"maven-tests-{args.label}.log"
 
         def attempt():
             """One maven call, with the reports it wrote."""
+            nonlocal maven_seconds
             started = time.time() - 2  # filesystem mtime granularity slack
             exec_file.unlink(missing_ok=True)
+            clock = time.time()
             code, output = c.run(command, repo, timeout=c.maven_timeout(repo), log_path=log_path)
+            maven_seconds += time.time() - clock
             files = c.recent_files(search_root, "target/surefire-reports/TEST-*.xml", started)
             return code, output, files, parse_surefire(files)
 
@@ -193,7 +209,7 @@ def main() -> int:
             if (code != 0 and also_make == "auto" and not retried_with_am
                     and c.needs_also_make(output)):
                 retried_with_am = True
-                command = build_command(with_am=True)
+                command = build_command(with_am=True, goals=lifecycle)
                 print("[tc-agent] the module's dependencies are not installed; rebuilding them "
                       "with -am. Run `mvn -DskipTests install` once to skip this.",
                       file=sys.stderr, flush=True)
@@ -212,8 +228,7 @@ def main() -> int:
                           "execution, so `maven_goals_only` buys nothing here"),
                       file=sys.stderr, flush=True)
                 goals_only = False
-                COMMAND_TAIL[-len(lifecycle):] = ["test"]
-                command = build_command(with_am=retried_with_am)
+                command = build_command(with_am=retried_with_am, goals=["test"])
                 code, output, report_files, results = attempt()
             runs.append(results)
         log = log_path   # written live by c.run
@@ -259,6 +274,10 @@ def main() -> int:
             )
             raise c.CheckError(f"{executed} tests ran but {exec_file.name} is missing/empty. {hint}")
 
+        # Written by the report goal of the same call, for tc_coverage.py to read.
+        produced = c.recent_files(search_root, "**/jacoco.xml", run_started)
+        jacoco_xml = produced[-1] if produced else None
+
         flaky = sorted(set().union(*(failed_ids(r) for r in runs)) - set.intersection(*(failed_ids(r) for r in runs))) if len(runs) > 1 else []
         failures = [r for r in results if r["status"] in ("FAILED", "ERROR")]
         data = {
@@ -271,6 +290,10 @@ def main() -> int:
             "failures": failures,
             "flaky": flaky,
             "jacoco_agent": agent_source,
+            "jacoco_xml": str(jacoco_xml) if jacoco_xml else None,
+            "maven_seconds": round(maven_seconds, 1),
+            "lifecycle": " ".join(lifecycle) if goals_only else "test",
+            "compiled_src_main": not skip_main,
             "module": module,
             "label": args.label,
             "exec_file": str(exec_file),
@@ -280,13 +303,15 @@ def main() -> int:
             f"{data['total']} tests, {data['failed']} failed, {data['skipped']} skipped",
             f"flaky across {len(runs)} runs: {', '.join(flaky) if flaky else 'none'}",
             f"jacoco agent: {agent_source}",
+            f"maven took {round(maven_seconds)}s"
+            + (" including compiling src/main" if not skip_main else ""),
         ]
         if failures:
             phases = {f.get("failure_phase") for f in failures}
             summary.append("failure phases: " + ", ".join(sorted(p for p in phases if p)))
         code = 1 if (failures or flaky) else 0
         if code == 0:
-            log.unlink(missing_ok=True)   # keep the maven log only for a non-green check
+            c.trim_log(log)   # a green check keeps only the tail of its maven log
         return c.finish(directory, name, "Check: tests", summary, data, code)
 
     except c.CheckError as exc:

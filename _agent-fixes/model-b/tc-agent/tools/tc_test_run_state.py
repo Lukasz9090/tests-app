@@ -635,5 +635,40 @@ def test_start_cli_writes_run_json():
         expect("tdd is refused", bad.returncode, 2)
 
 
+def test_maven_time_is_recorded_per_check():
+    """"The run took four minutes" must be answerable from the run directory."""
+    with FixtureRepo() as repo:
+        run = Run(repo)
+        checks = c.checks_dir(run.dir)
+        for name, title, seconds in (("tests-v1.md", "Check: tests", 95.4),
+                                     ("tests-v1-r2.md", "Check: tests", 60.0),
+                                     ("coverage-v1.md", "Check: coverage", 28.2),
+                                     ("mutation-v1.md", "Check: mutation", 110.0)):
+            c.write_container(checks / name, title, ["x"],
+                              {"status": "PASSED", "maven_seconds": seconds})
+        spent = o.check_timings(run.dir)
+        expect("summed over rounds", spent["tests"], 155)
+        expect("coverage on its own", spent["coverage"], 28)
+        expect("mutation on its own", spent["mutation"], 110)
+        c.write_container(checks / "tests-v2.md", "Check: tests", ["x"], {"status": "PASSED"})
+        expect("a check without a timing is skipped, not an error",
+               o.check_timings(run.dir)["tests"], 155)
+
+
+def test_a_green_check_keeps_the_tail_of_its_log():
+    with FixtureRepo() as repo:
+        log = repo.root / "maven.log"
+        log.write_text("\n".join(f"line {i}" for i in range(500)) + "\n", encoding="utf-8")
+        c.trim_log(log, keep=10)
+        kept = log.read_text(encoding="utf-8").splitlines()
+        expect_true("says it was trimmed", kept[0].startswith("[tc-agent] green check"))
+        expect("keeps the last lines - where Total time lives", kept[-1], "line 499")
+        expect("and only those", len(kept), 12)
+        short = repo.root / "short.log"
+        short.write_text("one\ntwo\n", encoding="utf-8")
+        c.trim_log(short, keep=10)
+        expect("a short log is left alone", short.read_text(encoding="utf-8"), "one\ntwo\n")
+
+
 if __name__ == "__main__":
     sys.exit(run_all(globals(), "RUN_LIFECYCLE_OK"))

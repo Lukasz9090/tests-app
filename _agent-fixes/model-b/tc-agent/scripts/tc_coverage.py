@@ -90,6 +90,22 @@ def main() -> int:
                 "would be empty too; re-run tc_run_tests.py and read its diagnosis"
             )
 
+        # The tests check now asks for the report in its own maven call, so most
+        # of the time the XML is already on disk and this check reads it without
+        # starting maven at all - one full reactor start less per round. Maven is
+        # still here for the cases where that report never happened: red tests
+        # (maven stops before the report goal), a pom that overrides the output
+        # formats, or an older tc_run_tests.py.
+        reused = None
+        tests_payload = c.checks_dir(directory) / f"tests-{args.label}.md"
+        if tests_payload.exists():
+            try:
+                told = c.payload(tests_payload).get("jacoco_xml")
+            except c.CheckError:
+                told = None
+            if told and Path(told).is_file() and Path(told).stat().st_mtime >= exec_file.stat().st_mtime:
+                reused = Path(told)
+
         # dataFile HAS a user property, outputDirectory does NOT (it defaults to
         # ${project.reporting.outputDirectory}/jacoco and cannot be set from the CLI),
         # so the exec file is pinned and the report is discovered afterwards.
@@ -101,11 +117,18 @@ def main() -> int:
                 f"-Djacoco.dataFile={exec_file}",
             ]
         )
-        started = time.time() - 2
-        code, output = c.run(command, repo, timeout=c.maven_timeout(repo),
-                                 log_path=c.checks_dir(directory) / f"maven-coverage-{args.label}.log")
-        log = c.checks_dir(directory) / f"maven-coverage-{args.label}.log"   # written live by c.run
+        log = c.checks_dir(directory) / f"maven-coverage-{args.label}.log"
         notes = []
+        maven_seconds = 0.0
+        code, output, started = 0, "", time.time() - 2
+        if reused is None:
+            clock = time.time()
+            code, output = c.run(command, repo, timeout=c.maven_timeout(repo), log_path=log)
+            maven_seconds = time.time() - clock
+        else:
+            notes.append("report reused from the tests check - maven was not started")
+            print(f"[tc-agent] reusing the jacoco report written by the tests check ({reused})",
+                  file=sys.stderr, flush=True)
 
         # The agent version may come from the pom (it runs during the build), but the
         # REPORT must also be able to ANALYZE the class files. A newer JaCoCo reads an
@@ -123,13 +146,18 @@ def main() -> int:
                 for part in command
             ]
             started = time.time() - 2
+            clock = time.time()
             code, output = c.run(command, repo, timeout=c.maven_timeout(repo),
                                  log_path=c.checks_dir(directory) / f"maven-coverage-{args.label}.log")
+            maven_seconds += time.time() - clock
             log = c.checks_dir(directory) / f"maven-coverage-{args.label}.log"   # written live by c.run
             jacoco = newest
 
-        produced = c.recent_files(c.module_dir(repo, module), "**/jacoco.xml", started)
-        xml_path = produced[-1] if produced else None
+        if reused is not None:
+            xml_path = reused
+        else:
+            produced = c.recent_files(c.module_dir(repo, module), "**/jacoco.xml", started)
+            xml_path = produced[-1] if produced else None
         if code != 0:
             raise c.CheckError(
                 "jacoco:report failed (maven exit %s, full log: %s):\n%s"
@@ -222,15 +250,18 @@ def main() -> int:
             "uncovered": uncovered[:200],
             "methods": methods,
             "jacoco_version": jacoco,
+            "maven_seconds": round(maven_seconds, 1),
         }
         if notes:
             data["notes"] = notes
         summary = [
             f"{scope}: branch {branch_ratio:.0%}, line {line_ratio:.0%} (gate {gate:.0%})",
             f"uncovered lines: {', '.join(str(u['line']) for u in uncovered[:12]) or 'none'}",
+            (f"maven took {round(maven_seconds)}s (report only - no tests are re-run)"
+             if reused is None else "no maven call - the tests check already wrote the report"),
         ] + notes
         if passed:
-            log.unlink(missing_ok=True)   # keep the maven log only for a non-green check
+            c.trim_log(log)   # a green check keeps only the tail of its maven log
         return c.finish(directory, name, "Check: coverage", summary, data, 0 if passed else 1)
 
     except c.CheckError as exc:
