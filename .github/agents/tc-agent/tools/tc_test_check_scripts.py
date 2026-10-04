@@ -288,16 +288,27 @@ def test_skipping_main_compile_needs_built_classes():
         found = tc.built_classes(repo.root, None)
         expect_true("built classes are found", found is not None)
         expect("nothing is newer than them", tc.stale_classes(repo.root, None, found), None)
-        new_source = repo.root / "src/main/java/com/acme/Added.java"
-        new_source.write_text("class Added {}\n", encoding="utf-8")
-        expect("a source with no class at all is stale",
-               tc.stale_classes(repo.root, None, found), "src/main/java/com/acme/Added.java")
-        new_source.unlink()
         import time as _t
+        old_source = repo.root / "src/main/java/com/acme/Helpers.java"
+        old_source.write_text("class Util {}\n", encoding="utf-8")
+        import os as _os
+        then = (classes / "OrderService.class").stat().st_mtime - 3600
+        _os.utime(old_source, (then, then))
+        expect("a source the build chose not to compile is NOT stale",
+               tc.stale_classes(repo.root, None, found), None)
+        old_source.unlink()
+        new_source = repo.root / "src/main/java/com/acme/Added.java"
+        _t.sleep(0.05)
+        new_source.write_text("class Added {}\n", encoding="utf-8")
+        expect("a source younger than the whole build is stale",
+               tc.stale_classes(repo.root, None, found),
+               ("src/main/java/com/acme/Added.java", "missing"))
+        new_source.unlink()
         _t.sleep(0.05)
         (repo.root / repo.target_path).write_text("class OrderService { int x; }\n", encoding="utf-8")
-        expect_true("a newer source is reported",
-                    (tc.stale_classes(repo.root, None, found) or "").endswith("OrderService.java"))
+        stale = tc.stale_classes(repo.root, None, found)
+        expect_true("a newer source is reported", (stale or ("", ""))[0].endswith("OrderService.java"))
+        expect("and says why", (stale or ("", ""))[1], "newer")
         tc._PROFILE_CACHE.clear()
 
 
@@ -316,6 +327,30 @@ def test_goals_only_needs_a_built_src_main():
         expect("but never when src/main still has to be compiled",
                tc.maven_lifecycle(repo.root, skip_main=False), ["test"])
         tc._PROFILE_CACHE.clear()
+
+
+def test_silent_goals_fall_back_to_the_real_phase():
+    """A surefire configured per execution runs nothing from the CLI and exits 0.
+
+    That used to surface as "no surefire reports written (maven exited 0)" -
+    tests UNAVAILABLE, review BLOCKED. Now the run notices it executed nothing
+    and pays for the full phase once.
+    """
+    with fixture() as repo:
+        repo.write(".github/agents/tc-agent/references/tc-project-profile.md",
+                   '# p\n\n```json\n{"schema_version": 1, "maven_goals_only": true}\n```\n')
+        compiled = repo.root / "target" / "classes" / "com" / "acme"
+        compiled.mkdir(parents=True)
+        (compiled / "OrderService.class").write_bytes(b"\xca\xfe\xba\xbe")
+        out = start(repo, {"FAKE_MVN_GOALS_SILENT": "1"})
+        expect("the run still finishes", out["state"]["next_action"], "DONE")
+        calls = out["mvn"]
+        expect("four maven calls: goals, the phase, coverage, pit", len(calls), 4)
+        expect_true("the lean goals went first", "surefire:test" in calls[0])
+        expect_true("src/main was skipped there", "-Dmaven.main.skip=true" in calls[0])
+        expect_true("then the real phase", calls[1].rstrip().endswith(" test"))
+        tests = load_payload(out["dir"] / "checks" / "tests-entry.md")[0]
+        expect("and the tests were measured", tests["total"], 3)
 
 
 def test_maven_args_from_the_profile_reach_the_command():

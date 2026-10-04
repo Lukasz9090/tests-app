@@ -117,21 +117,25 @@ def main() -> int:
         if mode is not False:
             classes = c.built_classes(repo, module)
             stale = c.stale_classes(repo, module, classes) if classes else None
+            why = ""
+            if stale:
+                path, reason = stale
+                why = (f"{path} is newer than the class it compiles to" if reason == "newer"
+                       else f"{path} has no compiled class and is newer than the whole build")
             if classes is None:
                 print("[tc-agent] nothing is compiled under "
                       f"{c.module_dir(repo, module)}/target/classes yet - building src/main this "
                       "once; in a big module this can take minutes.",
                       file=sys.stderr, flush=True)
             elif stale and mode == "auto":
-                print(f"[tc-agent] {stale} is newer than the compiled classes - rebuilding "
-                      "src/main so the measurement matches the code; in a big module this can "
-                      "take minutes.", file=sys.stderr, flush=True)
+                print(f"[tc-agent] {why} - rebuilding src/main so the measurement matches the "
+                      "code; in a big module this can take minutes.",
+                      file=sys.stderr, flush=True)
             else:
                 if stale:
-                    print(f"[tc-agent] WARNING: {stale} is newer than the compiled classes this "
-                          "run measures (maven_skip_main_compile: true). Run "
-                          "`mvn -DskipTests install` if the results look wrong.",
-                          file=sys.stderr, flush=True)
+                    print(f"[tc-agent] WARNING: {why}, and this run measures the classes as they "
+                          "are (maven_skip_main_compile: true). Run `mvn -DskipTests install` if "
+                          "the results look wrong.", file=sys.stderr, flush=True)
                 else:
                     print("[tc-agent] src/main is already compiled and unchanged - running "
                           "against target/classes", file=sys.stderr, flush=True)
@@ -164,11 +168,18 @@ def main() -> int:
         runs = []
         output = ""
         report_files = []
-        for _ in range(max(1, args.repeat)):
+        log_path = c.checks_dir(directory) / f"maven-tests-{args.label}.log"
+
+        def attempt():
+            """One maven call, with the reports it wrote."""
             started = time.time() - 2  # filesystem mtime granularity slack
             exec_file.unlink(missing_ok=True)
-            code, output = c.run(command, repo, timeout=c.maven_timeout(repo),
-                                 log_path=c.checks_dir(directory) / f"maven-tests-{args.label}.log")
+            code, output = c.run(command, repo, timeout=c.maven_timeout(repo), log_path=log_path)
+            files = c.recent_files(search_root, "target/surefire-reports/TEST-*.xml", started)
+            return code, output, files, parse_surefire(files)
+
+        for _ in range(max(1, args.repeat)):
+            code, output, report_files, results = attempt()
             # "auto": the fast build first; only a repo that has not installed its
             # modules pays for -am, and it is told how to stop paying.
             if (code != 0 and also_make == "auto" and not retried_with_am
@@ -178,23 +189,26 @@ def main() -> int:
                 print("[tc-agent] the module's dependencies are not installed; rebuilding them "
                       "with -am. Run `mvn -DskipTests install` once to skip this.",
                       file=sys.stderr, flush=True)
-                exec_file.unlink(missing_ok=True)
-                code, output = c.run(command, repo, timeout=c.maven_timeout(repo),
-                                 log_path=c.checks_dir(directory) / f"maven-tests-{args.label}.log")
-            if code != 0 and goals_only:
-                # The lean path needs a complete target/; when it is not there,
-                # pay for the real phase once rather than reporting a failure.
-                print("[tc-agent] the direct goals failed - falling back to the full `test` "
-                      "phase for this run", file=sys.stderr, flush=True)
+                code, output, report_files, results = attempt()
+            # The lean path needs a complete target/ and a surefire that is not
+            # configured per execution. It can also "succeed" without running
+            # anything, so SILENCE counts as a failure too: no reports, or only
+            # skipped ones, falls back to the real phase instead of reporting
+            # the tests as unavailable.
+            ran = any(r["status"] != "SKIPPED" for r in results)
+            if goals_only and (code != 0 or not ran):
+                print("[tc-agent] the direct goals %s - falling back to the full `test` phase for "
+                      "this run%s" % (
+                          "failed" if code != 0 else "ran no tests (maven exited 0)",
+                          "" if code != 0 else "; surefire is probably configured in a pom "
+                          "execution, so `maven_goals_only` buys nothing here"),
+                      file=sys.stderr, flush=True)
                 goals_only = False
                 COMMAND_TAIL[-len(lifecycle):] = ["test"]
                 command = build_command(with_am=retried_with_am)
-                exec_file.unlink(missing_ok=True)
-                code, output = c.run(command, repo, timeout=c.maven_timeout(repo),
-                                     log_path=c.checks_dir(directory) / f"maven-tests-{args.label}.log")
-            report_files = c.recent_files(search_root, "target/surefire-reports/TEST-*.xml", started)
-            runs.append(parse_surefire(report_files))
-        log = c.checks_dir(directory) / f"maven-tests-{args.label}.log"   # written live by c.run
+                code, output, report_files, results = attempt()
+            runs.append(results)
+        log = log_path   # written live by c.run
 
         compiler_errors = [
             f"{Path(m.group(1)).name}:{m.group(2)} {m.group(4).strip()}"

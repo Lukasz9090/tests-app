@@ -16,6 +16,8 @@ Behaviour is steered by environment variables:
   FAKE_MVN_MUTANTS   "killed,survived" mutants per class (default 4,0)
   FAKE_MVN_UNTESTED  comma list of method names no test executes (0 covered lines)
   FAKE_MVN_LOG       append each argv to this file
+  FAKE_MVN_GOALS_SILENT  `surefire:test` exits 0 writing no reports, the way a
+                     surefire configured in a pom <execution> does from the CLI
 """
 
 import os
@@ -51,7 +53,15 @@ def test_files():
     return list((cwd / "src" / "test" / "java").rglob("*.java"))
 
 
-if "test" in args:
+goals_run = "surefire:test" in args
+if goals_run and os.environ.get("FAKE_MVN_GOALS_SILENT"):
+    # What a surefire configured inside a pom <execution> does when the goal is
+    # called straight from the CLI: nothing at all, successfully.
+    print("[INFO] Tests are skipped.")
+    print("[INFO] BUILD SUCCESS")
+    sys.exit(0)
+
+if "test" in args or goals_run:
     if os.environ.get("FAKE_MVN_COMPILE"):
         print(f"[ERROR] /x/src/test/java/Broken.java:[3,5] {os.environ['FAKE_MVN_COMPILE']}")
         print("[ERROR] COMPILATION ERROR")

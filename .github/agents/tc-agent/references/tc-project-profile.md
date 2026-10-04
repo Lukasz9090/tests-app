@@ -68,7 +68,11 @@ integration tests out.
 The check then runs `compiler:testCompile surefire:test` - the test sources the
 agent just wrote, then the tests, and nothing else. It needs a complete
 `target/` (so `mvn -DskipTests install` first) and falls back to the full `test`
-phase for that run if the goals fail.
+phase for that run if the goals fail - or if they run NOTHING: a surefire
+configured inside a pom `<execution>` ignores a CLI invocation of its goal and
+exits 0 without a single report, which would otherwise look like missing tests.
+The fallback says so in the log; if you see it on every run, this repo cannot
+use the option and the cost has to come off somewhere else.
 
 The other half of the cost is compiling `src/main` before every check. During a
 run the production code never changes - legacy mode requires it committed, and
@@ -82,6 +86,12 @@ it compiles and says this can take minutes. Nothing newer means the classes
 already match the code, so it runs against `<module>/target/classes` and the
 whole compile disappears. Building in your IDE counts - IntelliJ writes to the
 same directory.
+
+A source with no class of its own name does not count as newer by itself. Such
+files are normal - a package-private type named differently from its file, a
+source the compiler plugin excludes - and taking them as proof of a stale build
+would force a full rebuild forever. They are compared with the newest build
+output instead: older means the last build already saw the file.
 
     "maven_skip_main_compile": true    # always reuse; only warn when stale
     "maven_skip_main_compile": false   # always compile, as maven would

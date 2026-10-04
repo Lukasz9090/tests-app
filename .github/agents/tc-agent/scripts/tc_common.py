@@ -489,27 +489,47 @@ def built_classes(repo: Path, module: str | None) -> Path | None:
     return classes if any(classes.rglob("*.class")) else None
 
 
-def stale_classes(repo: Path, module: str | None, classes: Path) -> str | None:
-    """The first source that is newer than ITS OWN compiled class, if any.
+def stale_classes(repo: Path, module: str | None, classes: Path) -> tuple | None:
+    """The first out-of-date source as `(path, reason)`, or None. Reasons:
+
+    `"newer"`  - the source was edited after the class it produces was written.
+    `"missing"`- there is no class of that name AND the source is younger than
+                 the whole build, so the build cannot have seen it.
 
     Each source is compared with the class it produces (com/x/A.java ->
     com/x/A.class), not with the newest class in the module: that is two stats
     per file instead of walking every .class first, and it stops at the first
-    file that is out of date. A source with no class at all also counts - it was
-    added after the last build.
+    file that is out of date.
+
+    A missing class is NOT taken as proof of a stale build. Plenty of sources
+    produce no class of their own name - a file holding a package-private type
+    named differently, a source the compiler plugin excludes, a template the
+    build copies elsewhere - and in a 6000-file module one of them would force
+    a full rebuild on every check forever. So when the class is absent the
+    source is compared with the newest build output instead: older means the
+    last build already saw the file and chose not to emit it.
     """
     sources = module_dir(repo, module) / "src" / "main" / "java"
     if not sources.is_dir():
         return None
+    newest_build = None            # computed at most once, and only if needed
     for f in sources.rglob("*.java"):
         if f.name == "package-info.java":
             continue
         produced = classes / f.relative_to(sources).with_suffix(".class")
         try:
-            if f.stat().st_mtime > produced.stat().st_mtime:
-                return f.relative_to(repo).as_posix()
+            source_mtime = f.stat().st_mtime
+        except OSError:            # vanished mid-walk - not our problem
+            continue
+        try:
+            if source_mtime > produced.stat().st_mtime:
+                return f.relative_to(repo).as_posix(), "newer"
         except FileNotFoundError:
-            return f.relative_to(repo).as_posix()
+            if newest_build is None:
+                newest_build = max(
+                    (p.stat().st_mtime for p in classes.rglob("*.class")), default=0.0)
+            if source_mtime > newest_build:
+                return f.relative_to(repo).as_posix(), "missing"
     return None
 
 
