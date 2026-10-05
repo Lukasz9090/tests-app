@@ -101,6 +101,20 @@ def test_green_run_is_done_through_all_three_scripts():
         expect("placeholder counted as skipped", (tests["total"], tests["skipped"]), (3, 1))
 
 
+def test_a_green_suite_is_not_run_twice_but_a_failing_one_is():
+    """The second build is worth paying for only after a failure."""
+    with fixture() as repo:
+        out = start(repo)
+        tests = load_payload(out["dir"] / "checks" / "tests-entry.md")[0]
+        expect("green: one run", tests["runs"], 1)
+        expect("so one maven call for the tests", len(out["mvn"]), 2)   # tests+report, pit
+    with fixture() as repo:
+        out = start(repo, {"FAKE_MVN_FAIL": "OrderServiceTest#humanB"})
+        tests = load_payload(out["dir"] / "checks" / "tests-entry.md")[0]
+        expect("red: the suite is confirmed once", tests["runs"], 2)
+        expect("a failure in both runs is not a flake", tests["flaky"], [])
+
+
 def test_failing_human_test_is_red():
     with fixture() as repo:
         out = start(repo, {"FAKE_MVN_FAIL": "OrderServiceTest#humanB"})

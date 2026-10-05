@@ -156,7 +156,8 @@ def main() -> int:
         if reused is not None:
             xml_path = reused
         else:
-            produced = c.recent_files(c.module_dir(repo, module), "**/jacoco.xml", started)
+            produced = c.recent_files(c.module_dir(repo, module), "**/jacoco.xml", started,
+                                      prefer=("target/site/jacoco/jacoco.xml",))
             xml_path = produced[-1] if produced else None
         if code != 0:
             raise c.CheckError(

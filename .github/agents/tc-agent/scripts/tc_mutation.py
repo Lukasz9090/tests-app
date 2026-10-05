@@ -91,7 +91,8 @@ def main() -> int:
                                  log_path=c.checks_dir(directory) / f"maven-mutation-{args.label}.log")
         maven_seconds = time.time() - clock
         log = c.checks_dir(directory) / f"maven-mutation-{args.label}.log"   # written live by c.run
-        found = c.recent_files(c.module_dir(repo, module), "**/mutations.xml", started)
+        found = c.recent_files(c.module_dir(repo, module), "**/mutations.xml", started,
+                               prefer=("target/pit-reports/mutations.xml",))
         xml_path = found[-1] if found else c.module_dir(repo, module) / "target" / "pit-reports" / "mutations.xml"
 
         if not found:

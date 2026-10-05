@@ -16,6 +16,13 @@ freeze a target whose last commit is younger than this many days — nobody has
 validated that behavior yet, so a green characterization test would certify a
 possible bug. derive-state reports such a run as BLOCKED. Default 7.
 
+**Flakiness** (`flaky_repeat`, default 1): a GREEN suite is run once. Running
+it again costs a whole build and proves little - a flake that passes twice is
+accepted anyway. A suite that FAILED is repeated automatically, because that is
+the run which separates a real failure from a flake; what fails in both is a
+defect, what fails in one lands in `flaky`. Raise this only for a module whose
+tests touch time, ordering or shared state.
+
 **Repo instructions** (`instruction_paths`, optional): extra instruction files the
 context pack puts into REPO CONVENTIONS, relative to the repo root and allowed
 outside `.github` (e.g. `docs/code-conventions.instruction.md`). Files under

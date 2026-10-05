@@ -655,6 +655,29 @@ def test_maven_time_is_recorded_per_check():
                o.check_timings(run.dir)["tests"], 155)
 
 
+def test_the_conventional_output_path_is_checked_before_walking():
+    """The fallback walk crosses the whole of target/ - in a big module, slowly."""
+    import tempfile, time as _t
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        (root / "target" / "site" / "jacoco").mkdir(parents=True)
+        wanted = root / "target" / "site" / "jacoco" / "jacoco.xml"
+        wanted.write_text("<report/>", encoding="utf-8")
+        deep = root / "target" / "classes" / "a" / "b" / "c"
+        deep.mkdir(parents=True)
+        (deep / "jacoco.xml").write_text("<stale/>", encoding="utf-8")
+        found = c.recent_files(root, "**/jacoco.xml", 0, prefer=("target/site/jacoco/jacoco.xml",))
+        expect("the conventional file alone", [p.name for p in found], ["jacoco.xml"])
+        expect("and it is the right one", found[0], wanted)
+        expect("a file older than the run is not a hit",
+               c.recent_files(root, "**/jacoco.xml", _t.time() + 60,
+                              prefer=("target/site/jacoco/jacoco.xml",)), [])
+        wanted.unlink()
+        found = c.recent_files(root, "**/jacoco.xml", 0, prefer=("target/site/jacoco/jacoco.xml",))
+        expect_true("without it, the walk still finds the other one",
+                    found and found[0].parent.name == "c")
+
+
 def test_maven_goals_are_read_from_the_banners():
     """Maven prints no per-goal timings, so the list of goals is the diagnosis."""
     output = "\n".join([

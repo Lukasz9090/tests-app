@@ -39,7 +39,9 @@ so far — for the commit summary). Also read `run.json` (mode, interactive) and
 ## Steps — stop at the first step that decides
 
 **1. Run the tests.**
-`python $S/tc_run_tests.py <slug> --repo . --run <run_id> --label <label> --repeat 2`
+`python $S/tc_run_tests.py <slug> --repo . --run <run_id> --label <label>`
+(one run; the check repeats the suite by itself when something failed, which is the
+run that tells a real failure from a flake)
 It discovers every test class that exercises the target (human and AI). On
 `COMPILE_ERROR`, quote the compiler lines, decide REPAIR_IMPLEMENTATION, write
 the review and stop without reading the sources.
@@ -146,8 +148,13 @@ the decision: that is ACCEPT_PARTIAL, not a repair.
 ## Decision — the first match wins
 
 1. A script exited 2 → **BLOCKED**. Record `checks.tests.status: "UNAVAILABLE"`
-   (or `NOT_RUN`) plus the script's own reason. Exit 2 is never a pass.
+   plus the script's own reason. Exit 2 is never a pass.
    `CHECK_UNAVAILABLE: this check needs the jsonschema library` is one of these.
+   The checks that never ran because of it are written with the values their
+   field allows — and `NOT_RUN` is not one of them anywhere: `coverage.status:
+   "UNAVAILABLE"`, `mutation.status: "SKIPPED_UNAVAILABLE"`, and both stages
+   `"SKIPPED"`. Validate the artifact before you hand it over; an invented
+   status costs the run a whole round.
 2. Compile error → **REPAIR_IMPLEMENTATION**.
 3. `failure_phase: setup` → **REPAIR_IMPLEMENTATION** in every mode.
 4. `failure_phase: assertion` in mode `legacy` → **REPAIR_IMPLEMENTATION**,
