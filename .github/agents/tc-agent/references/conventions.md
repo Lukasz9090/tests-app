@@ -81,8 +81,10 @@ the first that answers:
 
 1. TEST DATA in the pack — files a human named for this repository or run;
 2. `known_test_data` — what a human answered earlier in this run;
-3. existing tests in the pack — a value a test already uses shows the shape;
-4. builders, fixtures, seeders and enums in the pack;
+3. DATA EXAMPLES and the existing tests in the pack — a value a test anywhere in
+   the repository already uses shows the shape; cite that line (`existing_test`);
+4. builders, fixtures, seeders, enums and validation constraints (`@Pattern`,
+   `@Size`) in the pack;
 5. a human — only in an `interactive` run (`modes/interactive.md`);
 6. nothing found: the scenario is deferred with a question.
 
@@ -91,13 +93,17 @@ value looks like. A value from these sources comes with a SHAPE (`customer id:
 9 digits, e.g. 123456789`): use the shape, not one literal — every field of that
 kind and every distinct entity gets its OWN value of that shape, never one id
 for two parties; the same value only when it means the same entity.
+Identifiers with a checksum (PESEL, NIP, REGON, IBAN, account numbers) are
+copied from an example, never derived from the shape.
 
 Two things are NOT business data and never make a scenario a placeholder:
 - **Relational values** — a value whose only role is to equal (or not equal)
   another value the test also controls: a key compared with the key of an entry
-  a mock returns, an id passed in and echoed back. A neutral literal named so
-  nobody reads it as real data (`"KEY-1"` / `"OTHER-KEY"`); the comparison line
-  is the evidence.
+  a mock returns, an id passed in and echoed back; the comparison line is the
+  evidence. When sources 1–4 show the shape of that field, use the shape — a
+  relational customer id still looks like a customer id. Only a field with no
+  known shape gets a neutral literal named so nobody reads it as real data
+  (`"KEY-1"` / `"OTHER-KEY"`).
 - **Object shapes** — a DTO or domain object built with its own constructor,
   builder or setters; the class declaration is the evidence. Fill only the
   fields the code under test reads.

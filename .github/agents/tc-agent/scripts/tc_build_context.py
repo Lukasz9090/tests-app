@@ -235,6 +235,111 @@ def test_data_files(repo: Path, run: dict) -> list:
     return out
 
 
+# --- DATA EXAMPLES: how the existing tests fill the fields this target uses ---
+# Only value-like types: an id, a code or an amount has a shape worth copying;
+# a collection or a domain object does not.
+VALUE_TYPES = {"String", "CharSequence", "Long", "long", "Integer", "int", "Short", "short",
+               "UUID", "BigDecimal", "BigInteger"}
+# Too generic to tell one concept from another: `id` of what, `name` of what.
+GENERIC_NAMES = {"id", "name", "value", "key", "type", "code", "data", "text", "result", "status"}
+FIELD_DECL = re.compile(r"^\s*(?:(?:private|protected|public|final|static)\s+)*([\w.<>\[\]]+)\s+([a-z]\w*)\s*(?:=[^;]*)?;",
+                        re.M)
+RECORD_DECL = re.compile(r"\brecord\s+\w+\s*\(([^)]*)\)")
+PUBLIC_METHOD = re.compile(r"^\s*public\s+(?:static\s+)?[\w<>\[\],.?\s]+?\s+\w+\s*\(([^)]*)\)", re.M)
+LITERAL = re.compile(r'"[^"\n]+"|\b\d{2,}L?\b')
+ASSERTION = re.compile(r"\b(?:assert\w*|isEqualTo|verify)\b")
+EXAMPLES_PER_NAME, MAX_NAMES, DATA_BUDGET = 3, 25, 6000
+
+
+def _params(decl: str) -> list:
+    """(type, name) pairs of a parameter list, commas inside generics respected."""
+    parts, depth, current = [], 0, ""
+    for ch in decl:
+        depth += ch == "<"
+        depth -= ch == ">"
+        if ch == "," and depth == 0:
+            parts.append(current)
+            current = ""
+        else:
+            current += ch
+    parts.append(current)
+    out = []
+    for part in parts:
+        tokens = re.sub(r"@\w+(?:\([^)]*\))?|\bfinal\b", " ", part).split()
+        if len(tokens) >= 2:
+            out.append((tokens[-2], tokens[-1]))
+    return out
+
+
+def value_field_names(target_text: str, dep_texts: list) -> list:
+    """Names of value-typed parameters of the target's public methods and of the
+    fields / record components of the classes it uses directly."""
+    pairs = []
+    for m in PUBLIC_METHOD.finditer(target_text):
+        pairs += _params(m.group(1))
+    for text in dep_texts:
+        pairs += [(t, n) for t, n in FIELD_DECL.findall(text)]
+        for m in RECORD_DECL.finditer(text):
+            pairs += _params(m.group(1))
+    names = []
+    for typ, name in pairs:
+        if (typ.split("<")[0].rsplit(".", 1)[-1] in VALUE_TYPES and len(name) > 2
+                and name.lower() not in GENERIC_NAMES and name not in names):
+            names.append(name)
+    return names[:MAX_NAMES]
+
+
+def data_examples(repo: Path, names: list, roots: list) -> str | None:
+    """Lines anywhere in the test tree that put a literal into one of these names.
+
+    One `git grep` for all names. Assertion lines are left out: they show what the
+    code returned, not what a real input looks like. None when git cannot answer
+    or nothing was found.
+    """
+    if not names or not roots:
+        return None
+    paths = []
+    for root in roots:
+        paths.append(root.relative_to(repo).as_posix())
+        resources = root.parent / "resources"
+        if resources.is_dir():
+            paths.append(resources.relative_to(repo).as_posix())
+    code, out = c.run(["git", "-C", str(repo), "grep", "-n", "-I", "--untracked", "-w", "-E",
+                       "(" + "|".join(re.escape(n) for n in names) + ")", "--", *paths], repo)
+    if code != 0:
+        return None
+    found = {n: [] for n in names}
+    for line in sorted(out.splitlines()):
+        parts = line.split(":", 2)
+        if len(parts) < 3 or ASSERTION.search(parts[2]) or not LITERAL.search(parts[2]):
+            continue
+        path, number, content = parts[0], parts[1], parts[2].strip()
+        for name in names:
+            picked = found[name]
+            if len(picked) >= EXAMPLES_PER_NAME or not re.search(rf"\b{re.escape(name)}\b", content):
+                continue
+            literal = LITERAL.search(content).group(0)
+            if all(literal != lit for _, _, _, lit in picked):
+                picked.append((path, number, content[:140], literal))
+    blocks, size = [], 0
+    for name in names:
+        if not found[name]:
+            continue
+        width = max(len(f"{p}:{n}") for p, n, _, _ in found[name])
+        block = name + "\n" + "".join(f"  {(p + ':' + n).ljust(width)}   {text}\n"
+                                       for p, n, text, _ in found[name])
+        if size + len(block) > DATA_BUDGET:
+            break
+        blocks.append(block)
+        size += len(block)
+    if not blocks:
+        return None
+    return ("\n## DATA EXAMPLES (lines from existing tests that set the fields this target uses)\n\n"
+            "From the WHOLE test tree, not only this target's tests. A value for one of these "
+            "fields takes the shape shown here (conventions.md §A4, source 3) and cites the line "
+            "as `existing_test` evidence.\n\n" + "\n".join(blocks))
+
+
 def test_summary(f: Path) -> str:
     try:
         methods, _ = tj.parse_file(f)
@@ -392,6 +497,14 @@ def main():
                 budget -= len(body)
             else:
                 notes.append(f"BUDGET: omitted test data {f.relative_to(repo)}")
+
+    names = value_field_names(target_text, [read(all_by_name[n]) for n in sorted(l1) if n in all_by_name])
+    examples = data_examples(repo, names, test_roots)
+    _say(f"data examples: {len(names)} field name(s) asked, "
+         f"{examples.count(chr(10) + '  ') if examples else 0} line(s) found")
+    if examples and len(examples) <= budget:
+        out.append(examples)
+        budget -= len(examples)
 
     # Repo-provided conventions (style only, NOT behavioral evidence)
     instructions = repo_instructions(repo, relevant)

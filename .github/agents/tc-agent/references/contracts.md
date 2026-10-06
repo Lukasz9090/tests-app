@@ -91,8 +91,9 @@ placeholders in §A2.
 ## 5. The context pack
 
 `<run_dir>/context-pack.md` (built by `tc_build_context.py`) is the main source
-about the repository: TEST FRAMEWORK, TEST DATA, REPO CONVENTIONS, the target,
-its existing tests, builders, enums and dependencies.
+about the repository: TEST FRAMEWORK, TEST DATA, DATA EXAMPLES (how tests
+anywhere in the repo fill the fields this target uses), REPO CONVENTIONS, the
+target, its existing tests, builders, enums and dependencies.
 
 A type the pack does not contain is never a reason to defer a scenario. Classes
 from a dependency jar are listed under TYPES FROM DEPENDENCIES, generated code

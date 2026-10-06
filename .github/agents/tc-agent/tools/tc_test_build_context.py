@@ -76,6 +76,36 @@ def test_test_data_files_are_included():
         c._PROFILE_CACHE.clear()
 
 
+def test_data_examples_come_from_the_whole_test_tree():
+    """The shape of a customerId lives in another class's test - the pack must show it."""
+    with FixtureRepo() as repo:
+        repo.write("src/main/java/com/acme/CreateOrderRequest.java",
+                   "package com.acme;\n\npublic record CreateOrderRequest(String customerId, int amount, String id) {}\n")
+        repo.write(repo.target_path, "package com.acme;\n\npublic class OrderService {\n"
+                   "    public int place(CreateOrderRequest request, String productCode) { return 1; }\n}\n")
+        repo.write("src/test/java/com/acme/CustomerServiceTest.java",
+                   "class CustomerServiceTest {\n"
+                   "    String customerId = \"123456789\";\n"
+                   "    void a() { req.customerId(\"987654321\"); }\n"
+                   "    void b() { assertThat(r.customerId()).isEqualTo(\"555000111\"); }\n"
+                   "    void c() { x.customerId(\"111111111\"); }\n"
+                   "    void e() { y.customerId(\"222222222\"); }\n"
+                   "    void d() { z.customerId(\"333333333\"); }\n"
+                   "    String id = \"77\"; String productCode = \"AGD-01\";\n}\n")
+        repo.write("src/test/resources/customer.json", '{"customerId": "444444444"}\n')
+        pack = build(repo)
+        expect_true("section is there", "## DATA EXAMPLES" in pack)
+        sec = pack[pack.index("## DATA EXAMPLES"):pack.index("## REPO CONVENTIONS")]
+        expect_true("value from another class's test", "123456789" in sec and "CustomerServiceTest.java:2" in sec)
+        expect_true("a target parameter counts too", "AGD-01" in sec)
+        expect("assertion lines are left out", "555000111" in sec, False)
+        expect("at most 3 examples per name", sum(v in sec for v in ("123456789", "987654321", "111111111",
+                                                                      "222222222", "333333333", "444444444")), 3)
+        expect("a generic name like id is not asked", "\nid\n" in sec, False)
+    with FixtureRepo() as repo:
+        expect("no tests -> no section", "## DATA EXAMPLES" in build(repo), False)
+
+
 def test_project_test_data_is_included_without_listing_it():
     with FixtureRepo() as repo:
         repo.write(".github/agents/tc-agent-project/test-data.md", "account number: PL + 26 digits\n")
