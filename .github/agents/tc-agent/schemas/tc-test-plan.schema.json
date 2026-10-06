@@ -16,7 +16,7 @@
     "plan_version": {
       "type": "integer",
       "minimum": 1,
-      "description": "Numbering inside ONE run only (plan_cap). Never read across runs."
+      "description": "Numbering inside ONE run only. Never read across runs."
     },
     "target": {
       "type": "object",

@@ -58,9 +58,19 @@ def short_sha(repo: Path, path: Path) -> str | None:
 
 
 def is_dirty(repo: Path, path: Path) -> bool:
-    """True when `path` has staged, unstaged or untracked changes."""
-    out = _out(repo, "status", "--porcelain", "--", rel(repo, path))
-    return bool(out)
+    """True when the CONTENT of `path` differs from HEAD (staged or not), or it is untracked.
+
+    Line endings do not count: a checkout whose CRLF differs from the committed LF
+    (no core.autocrlf) is the same code, and calling it dirty would block every
+    characterization run on it.
+    """
+    target = rel(repo, path)
+    code, _ = git(repo, "diff", "--quiet", "--ignore-cr-at-eol", "HEAD", "--", target)
+    if code == 1:
+        return True
+    if code != 0:                       # no HEAD yet (empty repository): plain status
+        return bool(_out(repo, "status", "--porcelain", "--", target))
+    return bool(_out(repo, "ls-files", "--others", "--exclude-standard", "--", target))
 
 
 def age_days(repo: Path, path: Path, now: float | None = None) -> float | None:
@@ -93,7 +103,8 @@ def changed_lines(repo: Path, path: Path, since: str) -> set | None:
 
     None when the diff cannot be computed (unknown sha, not a repo).
     """
-    code, out = git(repo, "diff", "-U0", "--no-color", f"{since}..HEAD", "--", rel(repo, path))
+    code, out = git(repo, "diff", "-U0", "--no-color", "--ignore-cr-at-eol", f"{since}..HEAD", "--",
+                    rel(repo, path))
     if code != 0:
         return None
     lines = set()

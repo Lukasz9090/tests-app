@@ -85,7 +85,7 @@ def main() -> int:
     directory.mkdir(parents=True)
     c.save_run(directory, {"schema_version": 1, "slug": args.target, "run_id": run_id,
                            "mode": "spec-driven", "interactive": False, "spec": None,
-                           "caps": {"impl_cap": 1, "plan_cap": 1}, "commit": False,
+                           "max_rounds": 1, "commit": False,
                            "started": "smoke", "resealed": False})
     print(f"smoke target: {target.fqcn} (tests: {', '.join(fq for fq, _ in classes)}), run {directory}")
 

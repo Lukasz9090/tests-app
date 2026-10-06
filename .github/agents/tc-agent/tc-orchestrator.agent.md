@@ -32,17 +32,17 @@ Read `.github/agents/tc-agent/references/tc-contracts.md` first. `$C` =
   user names one ("examples are in docs/test-data.md"). Works in every mode:
   with `interactive` it spares the planner the questions, without it the file is
   simply the only data source the user offered. Repeat the flag per path.
-- `impl_cap` (default 3), `plan_cap` (default 2).
+- `max_rounds` — optional; only when the user asks for a different limit than the profile's (default 3).
 - `commit` — boolean, default false: commit the run's test files at the end.
 
 ## Per target
 
 **1. Start the run.** This is the ONLY place `mode`, `interactive`, `spec`,
-`test_data`, the caps and `commit` are given — they are stored in the run's `run.json` and every
+`test_data`, `max_rounds` and `commit` are given — they are stored in the run's `run.json` and every
 role reads them from there.
 
 ```
-python $C/tc_orchestrate.py start <slug> --repo . --mode <mode> [--interactive] [--spec <path>] [--test-data <path>] --impl-cap <n> --plan-cap <n> [--commit]
+python $C/tc_orchestrate.py start <slug> --repo . --mode <mode> [--interactive] [--spec <path>] [--test-data <path>] [--max-rounds <n>] [--commit]
 ```
 
 Remember the printed `run_id`. `start` runs derive-state, which may build the
@@ -104,7 +104,7 @@ it to finish, then run `state` again. Each role's own profile selects its model.
   reviewer's `decision`; you route on it and never form it.
 - Confirm a safety stop on the user's behalf: a BLOCKED freshness guard,
   NEEDS_TRIAGE and NEEDS_CLARIFICATION belong to a human. `finish` reports them.
-- Raise a cap to keep the loop going, or start a new run to get around a stop.
+- Raise `max_rounds` to keep the loop going, or start a new run to get around a stop.
 - Edit, delete or commit any file yourself. The only commit is the one `finish`
   makes when the run was started with `--commit`.
 - Run two roles at once for the same target. Independent targets may run in

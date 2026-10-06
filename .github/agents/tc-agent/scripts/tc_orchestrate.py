@@ -16,9 +16,9 @@ Two kinds of state, never mixed:
 Subcommands
 -----------
   start  <slug> --repo . --mode legacy|spec-driven [--interactive] [--spec P]
-                [--impl-cap 3] [--plan-cap 2] [--commit]
+                [--max-rounds 3] [--commit]
       Create the run directory and run.json (the ONLY place mode, interactive,
-      spec, caps and commit are given), then run derive-state. Prints run_id.
+      spec, max_rounds and commit are given), then run derive-state. Prints run_id.
 
   state  <slug> --repo . --run <id|latest>
       Print the in-run `next_action`: PLAN | GENERATE | REVIEW | RESEAL | FINISH,
@@ -168,19 +168,19 @@ def run_results(d: Path) -> tuple:
 def review_history(d: Path) -> list:
     """Every review of the run, oldest first: `v1-r1 REPAIR_PLAN`, ...
 
-    A plan version that follows a REPAIR_IMPLEMENTATION is the caps fallback, not
-    something the reviewer asked for; say so, or the history reads like a bug.
+    One review closes one round, so the length of this list is the number of
+    rounds the run has spent.
     """
-    out, versions = [], plan_versions(d)
-    for n in versions:
-        last = None
+    out = []
+    for n in plan_versions(d):
         for m in review_iterations(d, n):
             rv = _safe(review_path(d, n, m))
-            last = rv.get("decision", "?") if "__error__" not in rv else "unreadable"
-            out.append(f"v{n}-r{m} {last}")
-        if n + 1 in versions and last == "REPAIR_IMPLEMENTATION":
-            out.append(f"repair rounds spent -> replanned as v{n + 1}")
+            out.append(f"v{n}-r{m} " + (rv.get("decision", "?") if "__error__" not in rv else "unreadable"))
     return out
+
+
+def rounds_spent(d: Path) -> int:
+    return sum(len(review_iterations(d, n)) for n in plan_versions(d))
 
 
 def known_test_data(d: Path) -> list:
@@ -233,8 +233,10 @@ def new_run_id(root: Path) -> str:
 def cmd_start(args) -> int:
     repo = Path(args.repo).resolve()
     if args.mode not in MODES:
-        print(f"--mode must be one of {', '.join(MODES)} (tdd is reserved, not implemented)",
-              file=sys.stderr)
+        print(f"--mode must be one of {', '.join(MODES)}", file=sys.stderr)
+        return 2
+    if args.max_rounds is not None and args.max_rounds < 1:
+        print("--max-rounds must be at least 1", file=sys.stderr)
         return 2
     if args.spec and not (repo / args.spec).is_file() and not Path(args.spec).is_file():
         print(f"--spec {args.spec}: file not found", file=sys.stderr)
@@ -251,7 +253,7 @@ def cmd_start(args) -> int:
         "interactive": bool(args.interactive),
         "spec": args.spec,
         "test_data_paths": list(args.test_data or []),
-        "caps": {"impl_cap": args.impl_cap, "plan_cap": args.plan_cap},
+        "max_rounds": args.max_rounds or c.max_rounds(repo),
         "commit": bool(args.commit),
         "started": _now(),
         "resealed": False,
@@ -308,8 +310,8 @@ def cmd_start(args) -> int:
 
 def compute_state(repo: Path, directory: Path) -> dict:
     run = c.load_run(directory)
-    caps = run.get("caps", {})
-    impl_cap, plan_cap = int(caps.get("impl_cap", 3)), int(caps.get("plan_cap", 2))
+    max_rounds = int(run.get("max_rounds") or c.DEFAULT_MAX_ROUNDS)
+    rounds = rounds_spent(directory)
     out = {
         "slug": run["slug"],
         "run_id": run["run_id"],
@@ -431,54 +433,25 @@ def compute_state(repo: Path, directory: Path) -> dict:
         return finish("DONE_PARTIAL", f"reviewer decided ACCEPT_PARTIAL at v{n}-r{rev_m}")
     if decision in ("NEEDS_TRIAGE", "BLOCKED"):
         return finish("ESCALATED", f"reviewer decided {decision} at v{n}-r{rev_m}; a human decides")
+    if decision in ("REPAIR_IMPLEMENTATION", "REPAIR_PLAN") and rounds >= max_rounds:
+        return finish("ESCALATED", f"round limit reached: {rounds} of {max_rounds} rounds spent and "
+                                   f"the reviewer still asks for {decision} at v{n}-r{rev_m}")
     if decision == "REPAIR_IMPLEMENTATION":
-        if gen_m >= impl_cap:
-            # Three failed repairs of the SAME plan mean the plan is the problem,
-            # not the assertions: what a repair cannot reach (an unplanned branch,
-            # a missing case) only a new plan can add. Spend the plan budget
-            # before giving up - the tests already written stay in the code and
-            # the next planner sees them.
-            #
-            # ONLY when the tests themselves are green. A run whose tests still
-            # fail has a broken test or broken code, and no new plan fixes that:
-            # the planner would look at a red suite, find every scenario already
-            # written, return COMPLETE and the run would end "DONE" on a red tree.
-            t = (review.get("checks") or {}).get("tests") or {}
-            tests_green = t.get("status") == "PASSED" and not t.get("failed") and not t.get("flaky")
-            if not tests_green:
-                return finish("ESCALATED",
-                              f"tests still fail after {gen_m} repair round(s) at v{n}; a new plan "
-                              f"cannot fix a failing test - a human decides")
-            if n < plan_cap:
-                out["next_action"] = "PLAN"
-                out["reason"] = (f"impl_cap {impl_cap} reached at v{n} and the reviewer still asks "
-                                 f"for a repair; replanning as v{n + 1} ({n + 1} of {plan_cap})")
-                out["dispatch"] = {"agent": "tc-planner", "run_dir": out["run_dir"],
-                                   "plan_path": rel(plan_path(directory, n + 1), repo),
-                                   "review_path": rel(r_path, repo),
-                                   # The planner is given ONLY this object, so the
-                                   # reason it is replanning has to travel in it.
-                                   "replan_cause": "impl_cap_exhausted",
-                                   "known_test_data": known_test_data(directory)}
-                return out
-            return finish("ESCALATED", f"REPAIR_IMPLEMENTATION but impl_cap {impl_cap} reached "
-                                       f"at v{n} (rounds={gen_m}) and plan_cap {plan_cap} is spent")
         out["next_action"] = "GENERATE"
-        out["reason"] = f"reviewer asked to repair the implementation; round {gen_m + 1} of {impl_cap}"
+        out["reason"] = (f"reviewer asked to repair the implementation; "
+                         f"round {rounds + 1} of {max_rounds}")
         out["dispatch"] = {"agent": "tc-generator", "run_dir": out["run_dir"],
                            "plan_path": rel(plan_path(directory, n), repo),
                            "report_path": rel(gen_path(directory, n, gen_m + 1), repo),
                            "review_path": rel(r_path, repo)}
         return out
     if decision == "REPAIR_PLAN":
-        if n >= plan_cap:
-            return finish("ESCALATED", f"REPAIR_PLAN but plan_cap {plan_cap} reached (plan versions={n})")
         out["next_action"] = "PLAN"
-        out["reason"] = f"reviewer asked to repair the plan; writing plan v{n + 1}"
+        out["reason"] = (f"reviewer asked to repair the plan; writing plan v{n + 1} "
+                         f"for round {rounds + 1} of {max_rounds}")
         out["dispatch"] = {"agent": "tc-planner", "run_dir": out["run_dir"],
                            "plan_path": rel(plan_path(directory, n + 1), repo),
                            "review_path": rel(r_path, repo),
-                           "replan_cause": "reviewer_repair_plan",
                            "known_test_data": known_test_data(directory)}
         return out
     return finish("ESCALATED", f"unrecognized review decision {decision!r}")
@@ -785,7 +758,8 @@ def render_report(info: dict, state: dict, outcome: str, summary: str, commit: d
     lines.append(f"- mode: {run['mode']}{' (interactive)' if run.get('interactive') else ''}; "
                  f"target {info['target_class']}@{info['sha'] or '?'}")
     if info.get("history"):
-        lines.append("- rounds: " + " -> ".join(info["history"]))
+        lines.append(f"- rounds ({len(info['history'])} of {run.get('max_rounds', c.DEFAULT_MAX_ROUNDS)}): "
+                     + " -> ".join(info["history"]))
     lines.append(f"- tests written: {len(info['written'])}; placeholders written: "
                  f"{len(info['placeholders_written'])}; resealed: {len(info['resealed'])}; "
                  f"placeholders now in the code: {len(info['placeholders_in_code'])}")
@@ -941,8 +915,8 @@ def main() -> int:
     s.add_argument("--test-data", action="append", default=None, dest="test_data",
                    help="file of example business values (repeatable); adds to the profile's "
                         "test_data_paths for this run")
-    s.add_argument("--impl-cap", type=int, default=3)
-    s.add_argument("--plan-cap", type=int, default=2)
+    s.add_argument("--max-rounds", type=int, default=None, dest="max_rounds",
+                   help="generate+review rounds this run may spend (default: profile max_rounds, else 3)")
     s.add_argument("--commit", action="store_true",
                    help="commit the run's test files on DONE / DONE_PARTIAL (never on a protected branch)")
 

@@ -4,7 +4,7 @@
 Covered:
 
   * the in-run state machine (derive verdicts,
-    RESEAL, plan statuses, generation/review loop, both caps),
+    RESEAL, plan statuses, generation/review loop, the round limit),
   * that a run only ever reads its own directory (an older run's artifacts do
     not leak into a new one),
   * reseal through the orchestrator (one line per test, recorded in run.json),
@@ -51,13 +51,13 @@ class Run:
     """One run directory inside a FixtureRepo, with helpers to drop artifacts."""
 
     def __init__(self, repo: FixtureRepo, run_id: str = "20260101-000000", commit: bool = False,
-                 impl_cap: int = 3, plan_cap: int = 2, mode: str = "legacy"):
+                 max_rounds: int = 3, mode: str = "legacy"):
         self.repo = repo
         self.dir = c.runs_root(repo.root, SLUG) / run_id
         self.dir.mkdir(parents=True)
         self.run = {"schema_version": 1, "slug": SLUG, "run_id": run_id, "mode": mode,
                     "interactive": False, "spec": None,
-                    "caps": {"impl_cap": impl_cap, "plan_cap": plan_cap},
+                    "max_rounds": max_rounds,
                     "commit": commit, "started": "x", "resealed": False}
         c.save_run(self.dir, self.run)
 
@@ -189,29 +189,73 @@ def test_plan_statuses():
         expect("unparseable plan", step(run.state()), ("FINISH", "ESCALATED"))
 
 
-def test_caps():
+def test_round_limit():
+    """One review closes one round; plan versions do not buy extra rounds."""
     with FixtureRepo() as repo:
-        run = Run(repo, impl_cap=2, plan_cap=1)
+        run = Run(repo)                                     # default: 3 rounds
         run.derive_raw("PLAN")
         run.plan(1)
         run.report(1)
         run.review(1, 1, "REPAIR_IMPLEMENTATION")
-        expect("below impl_cap", step(run.state()), ("GENERATE", None))
-        run.report(1, 2)
-        run.review(1, 2, "REPAIR_IMPLEMENTATION", checks=GREEN_TESTS)
         s = run.state()
-        expect("impl_cap reached and no plan budget left", step(s), ("FINISH", "ESCALATED"))
-        expect_true("says why", "impl_cap 2" in s["reason"] and "plan_cap 1" in s["reason"])
+        expect("round 1 -> repair", step(s), ("GENERATE", None))
+        expect_true("says which round", "round 2 of 3" in s["reason"])
+        run.report(1, 2)
         run.review(1, 2, "REPAIR_PLAN")
         s = run.state()
-        expect("plan_cap reached", step(s), ("FINISH", "ESCALATED"))
-        expect_true("says why", "plan_cap 1" in s["reason"])
+        expect("round 2 -> new plan", step(s), ("PLAN", None))
+        expect("no replan_cause any more", "replan_cause" in s["dispatch"], False)
+        run.plan(2)
+        run.report(2)
+        run.review(2, 1, "REPAIR_IMPLEMENTATION", checks=GREEN_TESTS)
+        s = run.state()
+        expect("3 of 3 spent -> finish", step(s), ("FINISH", "ESCALATED"))
+        expect_true("says why", "3 of 3 rounds" in s["reason"])
+        run.review(2, 1, "REPAIR_PLAN")
+        expect("REPAIR_PLAN is capped as well", step(run.state()), ("FINISH", "ESCALATED"))
+        run.review(2, 1, "ACCEPT", commit_summary="x.")
+        expect("ACCEPT on the last round still finishes DONE", step(run.state()), ("FINISH", "DONE"))
+
+
+def test_round_limit_is_per_run_setting():
+    with FixtureRepo() as repo:
+        run = Run(repo, max_rounds=1)
+        run.derive_raw("PLAN")
+        run.plan(1)
+        run.report(1)
+        run.review(1, 1, "REPAIR_IMPLEMENTATION")
+        expect("max_rounds 1 stops after the first review", step(run.state()), ("FINISH", "ESCALATED"))
+
+
+def test_no_sequence_exceeds_three_reviews():
+    """Whatever the reviewer decides, a run never reaches a 4th review."""
+    import itertools
+    for decisions in itertools.product(("REPAIR_IMPLEMENTATION", "REPAIR_PLAN"), repeat=3):
+        with FixtureRepo() as repo:
+            run = Run(repo)
+            run.derive_raw("PLAN")
+            n, m, reviews = 1, 1, 0
+            run.plan(1)
+            for decision in decisions:
+                run.report(n, m)
+                run.review(n, m, decision)
+                reviews += 1
+                s = run.state()
+                if s["next_action"] == "FINISH":
+                    break
+                if s["next_action"] == "PLAN":
+                    n, m = n + 1, 1
+                    run.plan(n)
+                else:
+                    m += 1
+            expect(f"{'/'.join(d[7:11] for d in decisions)}: at most 3 reviews, then FINISH",
+                   (reviews <= 3, run.state()["next_action"]), (True, "FINISH"))
 
 
 def test_known_test_data_travels_between_plan_versions():
     """A human answers once per run; the next planner is handed the answer."""
     with FixtureRepo() as repo:
-        run = Run(repo, impl_cap=1, plan_cap=3)
+        run = Run(repo)
         run.derive_raw("PLAN")
         expect("nothing known yet", run.state()["dispatch"]["known_test_data"], [])
         run.plan(1, context={"test_data": [
@@ -231,43 +275,6 @@ def test_known_test_data_travels_between_plan_versions():
         expect("merged, first answer wins, no duplicates",
                [(e["concept"], e["examples"][0]) for e in dispatch["known_test_data"]],
                [("customerId", "123456789"), ("productCode", "AGD"), ("dictKey", "AML-1")])
-
-
-def test_spent_impl_cap_replans_while_plan_budget_lasts():
-    """Three failed repairs of one plan are a plan problem, not an assertion problem."""
-    with FixtureRepo() as repo:
-        run = Run(repo, impl_cap=2, plan_cap=2)
-        run.derive_raw("PLAN")
-        run.plan(1)
-        run.report(1)
-        run.review(1, 1, "REPAIR_IMPLEMENTATION")
-        run.report(1, 2)
-        run.review(1, 2, "REPAIR_IMPLEMENTATION", checks=GREEN_TESTS)
-        s = run.state()
-        expect("replans instead of escalating", step(s), ("PLAN", None))
-        expect("writes plan v2", s["dispatch"]["plan_path"].endswith("plan-v2.md"), True)
-        expect("the planner is told why", s["dispatch"]["replan_cause"], "impl_cap_exhausted")
-        expect_true("says why", "impl_cap 2 reached" in s["reason"])
-        run.plan(2)
-        run.report(2)
-        run.review(2, 1, "REPAIR_IMPLEMENTATION")
-        run.report(2, 2)
-        run.review(2, 2, "REPAIR_IMPLEMENTATION", checks=GREEN_TESTS)
-        expect("now both budgets are spent", step(run.state()), ("FINISH", "ESCALATED"))
-
-
-def test_failing_tests_never_replan():
-    """A red suite is not a plan gap: no new plan, a human decides."""
-    with FixtureRepo() as repo:
-        run = Run(repo, impl_cap=1, plan_cap=3)
-        run.derive_raw("PLAN")
-        run.plan(1)
-        run.report(1)
-        run.review(1, 1, "REPAIR_IMPLEMENTATION",
-                   checks={"tests": {"status": "FAILED", "total": 14, "failed": 2}})
-        s = run.state()
-        expect("escalates", step(s), ("FINISH", "ESCALATED"))
-        expect_true("says the tests fail", "tests still fail" in s["reason"])
 
 
 def test_runs_are_isolated():
@@ -360,7 +367,7 @@ def test_interrupted_start_leaves_a_readable_state():
     with FixtureRepo() as repo:
         args = argparse.Namespace(slug=SLUG, repo=str(repo.root), mode="legacy",
                                   interactive=False, spec=None, test_data=None,
-                                  impl_cap=3, plan_cap=2, commit=False)
+                                  max_rounds=None, commit=False)
         original = ds.derive
         ds.derive = lambda *a, **k: (_ for _ in ()).throw(KeyboardInterrupt())
         try:
@@ -502,14 +509,9 @@ def test_counts_span_every_round_of_the_run():
         expect("all six tests of the run", sorted(info["written"]), [f"shouldT{i}" for i in range(1, 7)])
         expect("one placeholder", info["placeholders_written"], ["shouldT7"])
         expect("history", info["history"], ["v1-r1 REPAIR_PLAN", "v2-r1 ACCEPT_PARTIAL"])
-        run.review(1, 1, "REPAIR_IMPLEMENTATION")   # same run, but the caps fallback made v2
-        expect("history marks the fallback", o.review_history(run.dir),
-               ["v1-r1 REPAIR_IMPLEMENTATION", "repair rounds spent -> replanned as v2",
-                "v2-r1 ACCEPT_PARTIAL"])
-        run.review(1, 1, "REPAIR_PLAN")
         expect("CONFIRM from both plans", len(info["confirm"]), 2)
         code, prose = run.finish()
-        expect_true("rounds line", "rounds: v1-r1 REPAIR_PLAN -> v2-r1 ACCEPT_PARTIAL" in prose)
+        expect_true("rounds line", "rounds (2 of 3): v1-r1 REPAIR_PLAN -> v2-r1 ACCEPT_PARTIAL" in prose)
         expect_true("count line", "tests written: 6;" in prose)
 
 
@@ -619,14 +621,14 @@ def test_start_cli_writes_run_json():
     with FixtureRepo() as repo:
         script = TC / "scripts" / "tc_orchestrate.py"
         proc = subprocess.run([sys.executable, str(script), "start", SLUG, "--repo", str(repo.root),
-                               "--mode", "spec-driven", "--interactive", "--commit", "--impl-cap", "4",
+                               "--mode", "spec-driven", "--interactive", "--commit", "--max-rounds", "4",
                                "--test-data", "docs/test-data.md"],
                               capture_output=True, text=True)
         expect("start exits 0", proc.returncode, 0)
         out = json.loads(proc.stdout)
         run = c.load_run(repo.root / out["run_dir"])
-        expect("run.json holds mode/interactive/commit/caps",
-               (run["mode"], run["interactive"], run["commit"], run["caps"]["impl_cap"]),
+        expect("run.json holds mode/interactive/commit/max_rounds",
+               (run["mode"], run["interactive"], run["commit"], run["max_rounds"]),
                ("spec-driven", True, True, 4))
         expect("derive-state ran (no tests -> PLAN)", out["derive_state"]["next_action"], "PLAN")
         expect("--test-data is stored for the pack", run["test_data_paths"], ["docs/test-data.md"])

@@ -53,9 +53,8 @@ or, for characterization, the method's own lines (`OrderService.java:31-38`).
 ## Input
 
 From the orchestrator: the slug and `dispatch` with `run_dir`, `plan_path`,
-`review_path` (null on the first plan of the run), `replan_cause` (when there is
-a review) and `known_test_data` — the business values a human already supplied
-earlier in this run.
+`review_path` (null on the first plan of the run) and `known_test_data` — the
+business values a human already supplied earlier in this run.
 
 From the run directory:
 - `run.json` — `mode` (`legacy` | `spec-driven`), `interactive`, `spec`;
@@ -76,21 +75,11 @@ pipeline already wrote — do not rediscover it by grepping.
 
 When `review_path` is set, this is a REPAIR_PLAN: the review's `feedback.plan`
 and its findings with `attributed_to: plan` name the gaps your previous plan
-left. Plan those; keep everything else the previous plan already delivered.
-
-`dispatch.replan_cause` says why you are replanning. `reviewer_repair_plan` is
-the case above. `impl_cap_exhausted` means the repair rounds ran out while a
-GATE was still failing and every test was green (a red suite never lands here —
-it goes to a human). The review blames the implementation, but the repairs could
-not close the gap, so read it as a PLAN gap instead. Take
-`checks.coverage.uncovered` and `checks.mutation` from that review and plan ONE
-scenario per uncovered branch or surviving mutant that no existing scenario
-reaches: the other side of a guard, a null, an empty collection, a thrown
-exception. `COMPLETE` is the wrong answer here: you were called BECAUSE the gate
-is not met, so a plan with no scenarios means you found no uncovered branch —
-say that in `reason` and use status `BLOCKED` instead, so a human sees it. Do not re-plan what the code already
-tests; the tests written in the earlier rounds are in the file and listed in
-derive-state.
+left. Plan those — for a failed gate, one scenario per uncovered branch or
+surviving mutant in the review's `checks` that no existing scenario reaches.
+Do not re-plan what the tests written in earlier rounds already cover (they are
+in the file). `COMPLETE` is wrong here: you were called because something is
+missing, so finding nothing to plan is status `BLOCKED` with the reason.
 
 ## Steps — in this order
 

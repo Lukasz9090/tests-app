@@ -980,6 +980,18 @@ def gate_value(repo: Path, key: str, override=None) -> float:
 DEFAULT_FRESHNESS_DAYS = 7
 
 
+DEFAULT_MAX_ROUNDS = 3
+
+
+def max_rounds(repo: Path) -> int:
+    """Generate+review rounds one run may spend (profile `max_rounds`, default 3)."""
+    try:
+        value = int(profile(repo).get("max_rounds", DEFAULT_MAX_ROUNDS))
+    except (TypeError, ValueError):
+        return DEFAULT_MAX_ROUNDS
+    return value if value > 0 else DEFAULT_MAX_ROUNDS
+
+
 def freshness_days(repo: Path) -> float:
     """Legacy mode refuses to freeze code younger than this (tc-project-profile.md)."""
     value = profile(repo).get("freshness_days", DEFAULT_FRESHNESS_DAYS)

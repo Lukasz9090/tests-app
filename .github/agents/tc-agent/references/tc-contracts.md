@@ -32,7 +32,7 @@ Markdown because org policy blocks .json and .yaml files for Copilot.)
 
 | artifact (in the run directory) | written by | schema |
 |---|---|---|
-| `run.json` | `tc_orchestrate.py start` | — (mode, interactive, spec, caps, commit) |
+| `run.json` | `tc_orchestrate.py start` | — (mode, interactive, spec, max_rounds, commit) |
 | `derive-state.md` | `tc_derive_state.py` | — (read it, never edit it) |
 | `context-pack.md` | `tc_build_context.py` | — |
 | `plan-v<N>.md` | tc-planner | `$SCH/tc-test-plan.schema.json` |
@@ -58,8 +58,9 @@ to make the check pass, because that hides the defect instead of fixing it.
 
 ## 2. Numbering inside a run
 
-The orchestrator's `state` tells you the exact path to write (`dispatch`). The
-numbers exist only to count rounds against the caps:
+The orchestrator's `state` tells you the exact path to write (`dispatch`). One
+review closes one round; a run has at most `max_rounds` of them (default 3), a
+new plan version included:
 
 | file | when the number grows |
 |---|---|

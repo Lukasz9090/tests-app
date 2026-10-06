@@ -43,6 +43,11 @@
         }
       }
     },
+    "max_rounds": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Generate+review rounds one run may spend before it ends ESCALATED. A new plan version does not add rounds. Default 3; --max-rounds overrides it for one run."
+    },
     "freshness_days": {
       "type": "number",
       "minimum": 0,

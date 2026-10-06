@@ -37,8 +37,7 @@ The orchestrator turns this into `tc_orchestrate.py start` with these options:
 | `--spec <path>` | The specification file for spec-driven mode. |
 | `--interactive` | The planner may ask questions (what to freeze, example data). Also turns off the freshness guard. |
 | `--test-data <path>` | A file of example business values, used in any mode (repeatable). Say it in the prompt: "examples are in docs/test-data.md". Without it, only `--interactive` makes the planner ask. |
-| `--impl-cap <n>` (3) | Max repair rounds of the test code per plan. |
-| `--plan-cap <n>` (2) | Max new plan versions. |
+| `--max-rounds <n>` (3) | Max generate + review rounds in the whole run; a new plan version uses up a round too. Default from the profile's `max_rounds`. |
 | `--commit` | Commit the new test files at the end — see **Commit**. |
 
 ## Flow
@@ -48,18 +47,18 @@ The orchestrator turns this into `tc_orchestrate.py start` with these options:
    - `PLAN` — something is missing (no tests, coverage/mutation gap, untested or changed methods, stale tests);
    - `RED` — existing tests fail → a human must look;
    - `BLOCKED` — target has uncommitted changes, is not committed, or is too fresh (legacy only).
-2. **PLAN → GENERATE → REVIEW**, repeated until the reviewer accepts or both caps are spent.
-   The reviewer's decision picks the next step: repair the code, repair the plan, or accept. When
-   `--impl-cap` runs out and a gate still fails, the run replans instead of stopping, if `--plan-cap` allows.
+2. **PLAN → GENERATE → REVIEW**, repeated until the reviewer accepts or `--max-rounds` (3) review
+   rounds are spent. The reviewer's decision picks the next step: repair the code, repair the plan, or accept.
 3. **RESEAL** — still-green tests get the new sha after a code change.
 4. **FINISH** — writes `run-report.md`, prints it, and commits if `--commit` was given.
 
-Outcomes: `DONE`, `DONE_PARTIAL` (placeholders left), `BLOCKED`, `RED`, `ESCALATED` (caps spent or a human decision is needed). Commit your production code first — a dirty target is always BLOCKED.
+Outcomes: `DONE`, `DONE_PARTIAL` (placeholders left), `BLOCKED`, `RED`, `ESCALATED` (round limit reached or a human decision is needed). Commit your production code first — a dirty target is always BLOCKED.
 
 ## Configuration
 
 - **`.github/agents/tc-agent/references/tc-project-profile.md`** (json block):
   - `branch_coverage_target_scope` (0.80), `mutation_score_target_scope` (0.70) — the gates;
+  - `max_rounds` (3) — generate + review rounds per run;
   - `freshness_days` (7) — legacy refuses code committed less than N days ago (use `--interactive` to override);
   - `instruction_paths` — extra style files for the agents;
   - `test_data_paths` — files with example business values (a customer id is 9 digits, …), used in every run;
