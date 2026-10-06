@@ -4,7 +4,21 @@
 > **Baza:** `docs/MODEL-B-SPEC.md` oraz decyzje z sesji planistycznej. Jeśli ten plik mówi coś innego niż spec, obowiązuje ten plik, a spec zaktualizuję w etapie 1.
 > **Punkt powrotu:** tag Modelu A już istnieje. Pracujemy na gałęzi `model-b`, bo pipeline między etapami 2 a 7 nie będzie działał.
 
-Wszystkie pozycje w §1 są zaakceptowanymi decyzjami.
+> **Dziennik decyzji (historyczny).** Stan obecny opisuje `docs/MODEL-B-SPEC.md`, kontynuacja decyzji: `docs/MODEL-B2-PLAN.md` (D69–D83). Szkice w §6.1, §6.4 i §10.5 są historyczne.
+
+**Zastąpione decyzje:**
+
+| decyzja | zastąpiona przez | co się zmieniło |
+|---|---|---|
+| D16 (caps w `run.json`), D38, D41 (replan po wyczerpaniu `impl_cap`) | D71 | jeden limit `max_rounds` (3) na cały przebieg; bez automatycznego replanu |
+| D17, D26 (chronione branche w `AGENTS.md`) | D69 | `protected_branches` w `profile.md` katalogu projektu |
+| D18, D35 (`tc-test-conventions.md`, `tc-contracts.md`, profil w `references/`) | D69, D72 | `references/{contracts,conventions,junit4}.md` + `modes/*.md`; profil w katalogu projektu |
+| D28 (stary format nadal czytany), D34 (osobne linie nadal czytane) | D82 | bez wstecznej zgodności: jedyny zapis to `tc-agent-mode: <tryb>, interactive: …` |
+| tryb `legacy` (cały dokument) | D81 | `characterization` |
+| D43 (timeout 900 s) | D45 | 600 s |
+| D55 (`maven_goals_only` domyślnie false) | D63 | domyślnie true |
+
+Wszystkie pozycje w §1 są zaakceptowanymi decyzjami (stan na 2026-09-21).
 
 ---
 
