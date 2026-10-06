@@ -188,6 +188,9 @@ def repo_instructions(repo: Path, relevant_paths: list) -> list:
         seen.add(key)
         found.append((path, reason))
 
+    conventions = c.project_file(repo, "conventions.md")
+    if conventions:
+        take(conventions, "project conventions")
     take(repo / ".github" / "copilot-instructions.md", "repository-wide")
     idir = repo / ".github" / "instructions"
     if idir.is_dir():
@@ -201,16 +204,17 @@ def repo_instructions(repo: Path, relevant_paths: list) -> list:
         if path.is_file():
             ok, why = instruction_applies(path.read_text(encoding="utf-8", errors="replace"), relevant_paths)
             if ok:
-                take(path, f"tc-project-profile.md instruction_paths ({why})")
+                take(path, f"profile.md instruction_paths ({why})")
     return found
 
 
 def test_data_files(repo: Path, run: dict) -> list:
     """(path, source) for every file of example business values.
 
-    Only files somebody named: the profile's `test_data_paths` and this run's
-    `--test-data`. Nothing is guessed from file names - a file the agent found by
-    itself would be data nobody vouched for.
+    Only files somebody put there on purpose: the project's `test-data.md`, the
+    profile's `test_data_paths` and this run's `--test-data`. Nothing is guessed
+    from file names - a file the agent found by itself would be data nobody
+    vouched for.
     """
     seen, out = set(), []
 
@@ -221,8 +225,11 @@ def test_data_files(repo: Path, run: dict) -> list:
         seen.add(key)
         out.append((path, source))
 
+    project_data = c.project_file(repo, "test-data.md")
+    if project_data:
+        take(project_data, "project test-data.md")
     for rel in c.test_data_paths(repo):
-        take(repo / rel, "tc-project-profile.md test_data_paths")
+        take(repo / rel, "profile.md test_data_paths")
     for rel in run.get("test_data_paths") or []:
         take(repo / rel, "--test-data on this run")
     return out

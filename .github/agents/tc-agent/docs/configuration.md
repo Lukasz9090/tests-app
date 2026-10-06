@@ -1,11 +1,30 @@
-# Project Profile
+# tc-agent — project configuration
 
-Per-repository configuration for the test pipeline. The Reviewer's check scripts
-read the single ```json fence below; nothing else in this file is parsed.
+Everything that belongs to ONE repository lives in its project directory, outside
+the shared agent package:
 
-This file lives in the repository on purpose. It used to be looked for under
-`.test-agent/`, which is gitignored, so every run silently fell back to the
-built-in defaults and no one could see or review the gates.
+    .github/tc-agent/                 target location
+    .github/agents/tc-agent-project/  current location (moves with one `git mv`)
+
+The first one that exists is used. Files, all optional:
+
+| file | what it holds | read by |
+|---|---|---|
+| `profile.md` | one ```json fence: gates, freshness, maven, junit, `max_rounds`, `protected_branches`, extra paths | the scripts |
+| `conventions.md` | this repo's test style (overrides the agent's §B defaults, never §A) | the context pack → REPO CONVENTIONS, first source |
+| `test-data.md` | example business values of this system | the context pack → TEST DATA |
+
+Without a project directory the agent runs on its built-in defaults.
+
+## profile.md keys
+
+**Max rounds** (`max_rounds`, default 3): generate + review rounds one run may
+spend. A new plan version does not add rounds. `--max-rounds` overrides it for one run.
+
+**Protected branches** (`protected_branches`, default `["master"]`): branches
+`finish --commit` never commits to; globs allowed (`release/*`). On such a branch,
+or a detached HEAD, it creates `tc-agent/<slug>/<run-id>` instead. An empty list
+still protects `master`.
 
 **Quality gates** are the thresholds `tc_coverage.py` and `tc_mutation.py` must reach
 for the target scope — the class, or the single method when the plan names one.
@@ -179,14 +198,3 @@ value here OVERRIDES the pom. This repo's pom pins jacoco 0.8.15 and pitest
 pinning a different one here would make the report reject the exec file. Add a
 `tooling` block only when the pom declares no version, or when the pom's version
 cannot read the class files of the JDK in use.
-
-```json
-{
-  "schema_version": 1,
-  "quality_gates": {
-    "branch_coverage_target_scope": 0.80,
-    "mutation_score_target_scope": 0.70
-  },
-  "freshness_days": 7
-}
-```

@@ -6,8 +6,8 @@ and an agent follows an example far more literally than a schema. When a schema
 changes and the example does not, every agent is then instructed to produce an
 artifact that will be rejected — and the first thing to notice is a live run.
 
-This also validates `tc-project-profile.md`, which the Reviewer reads for its
-quality gates. A malformed profile silently reverts to the built-in defaults, so
+This also validates the project's `profile.md` (when the repo has a project
+directory), which the checks read for their quality gates. A malformed profile silently reverts to the built-in defaults, so
 "it parses" is not something to find out during a review.
 
 Usage:
@@ -32,6 +32,7 @@ TC = HERE.parents[1]
 sys.path.insert(0, str(TC / "scripts"))
 
 try:
+    import tc_common as c
     import tc_validate_plan as vp
 except ImportError as exc:  # pragma: no cover - environment problem
     print(f"CANNOT_RUN: {exc}", file=sys.stderr)
@@ -44,7 +45,6 @@ EXPECTED = {
     "tc-planner.agent.md": TC / "schemas" / "tc-test-plan.schema.json",
     "tc-generator.agent.md": TC / "schemas" / "tc-generation-report.schema.json",
     "tc-reviewer.agent.md": TC / "schemas" / "tc-review.schema.json",
-    "references/tc-project-profile.md": TC / "schemas" / "tc-project-profile.schema.json",
 }
 
 
@@ -57,14 +57,21 @@ def load_schema(path: Path):
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--repo", default=".")
-    parser.parse_args()
+    parser.add_argument("--repo", default=None,
+                        help="repository whose project profile.md to validate (default: the one holding this agent)")
+    repo = Path(parser.parse_args().repo or TC.parents[2]).resolve()
+    sources = {TC / relative: schema for relative, schema in EXPECTED.items()}
+    profile_file = c.project_file(repo, c.PROFILE_FILE)
+    if profile_file:
+        sources[profile_file] = TC / "schemas" / "tc-project-profile.schema.json"
+    else:
+        print(f"  --   no project profile.md under {repo} (defaults apply)")
 
     failures = 0
     checked = 0
 
-    for relative, schema_path in sorted(EXPECTED.items()):
-        source = TC / relative
+    for source, schema_path in sorted(sources.items()):
+        relative = source.relative_to(repo).as_posix() if repo in source.parents else source.name
         if not source.is_file():
             print(f"CANNOT_RUN: {source} is missing", file=sys.stderr)
             return 2

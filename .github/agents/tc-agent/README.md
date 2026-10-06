@@ -56,16 +56,20 @@ Outcomes: `DONE`, `DONE_PARTIAL` (placeholders left), `BLOCKED`, `RED`, `ESCALAT
 
 ## Configuration
 
-- **`.github/agents/tc-agent/references/tc-project-profile.md`** (json block):
-  - `branch_coverage_target_scope` (0.80), `mutation_score_target_scope` (0.70) — the gates;
-  - `max_rounds` (3) — generate + review rounds per run;
-  - `freshness_days` (7) — legacy refuses code committed less than N days ago (use `--interactive` to override);
-  - `instruction_paths` — extra style files for the agents;
-  - `test_data_paths` — files with example business values (a customer id is 9 digits, …), used in every run;
-  - `tooling` — only if the pom has no JaCoCo/PIT versions;
-  - `maven_timeout_seconds` (600), `maven_also_make` (`"auto"`), `maven_skip_main_compile` (`"auto"`: reuse `target/classes` unless the class under test is newer; `"strict"`: unless any source is), `maven_goals_only` (default on: run the goals instead of the `test` phase, so no generator or node build runs — `false` to force the phase) and `maven_args` (`-nsu` is always there; `maven_snapshot_updates: true` takes it off).
-- **Style rules** — the agents read `.github/copilot-instructions.md`, `.github/instructions/*.instructions.md` (by `applyTo`) and `AGENTS.md`. Repo rules override the default style in `tc-test-conventions.md` §B, never §A.
-- **`AGENTS.md`** — `tc-agent-protected-branches: master, main, release/*` (default: `master`).
+Per-repository settings live in the **project directory** — `.github/tc-agent/`
+(target) or `.github/agents/tc-agent-project/` (current), first one found — never
+inside this package. All files are optional; all keys: `docs/configuration.md`.
+
+- **`profile.md`** (json block): gates (`branch_coverage_target_scope` 0.80,
+  `mutation_score_target_scope` 0.70), `max_rounds` (3), `freshness_days` (7),
+  `protected_branches` (default `["master"]`), `instruction_paths`, `test_data_paths`,
+  `junit`, `tooling`, and the maven keys (`maven_timeout_seconds`, `maven_also_make`,
+  `maven_skip_main_compile`, `maven_goals_only`, `maven_args`, `maven_snapshot_updates`).
+- **`conventions.md`** — this repo's test style; read first among the style rules.
+- **`test-data.md`** — example business values; always in the context pack.
+- **Other style rules** — `.github/copilot-instructions.md`, `.github/instructions/*.instructions.md`
+  (by `applyTo`) and `AGENTS.md`. Repo rules override the default style in
+  `tc-test-conventions.md` §B, never §A.
 
 Default style: `shouldXxxWhenYyy`, `// given / // when / // then`, AssertJ, Mockito for repositories, class under test as a field, class `<Target>Test`.
 
@@ -82,7 +86,7 @@ Default style: `shouldXxxWhenYyy`, `// given / // when / // then`, AssertJ, Mock
 Every run has its own folder `.test-agent/runs/<target>/<run-id>/`:
 `run.json`, `derive-state.md`, `context-pack.md`, `plan-vN.md`,
 `generation-report-vN[-rM].md`, `review-vN-rM.md`, `checks/`, `run-report.md`. Old runs are never read again and never deleted.
-Agent's own files: role prompts and this README at the top; what they read (contracts, conventions, profile, requirements) under `references/`; plus `schemas/`, `scripts/`, `tools/`.
+Agent's own files: role prompts and this README at the top; what they read (contracts, conventions, requirements) under `references/`; plus `schemas/`, `scripts/`, `tools/`, and `docs/` for people.
 Each generated test method has a Javadoc with plain-text metadata:
 
     tc-agent-mode: legacy, interactive: false

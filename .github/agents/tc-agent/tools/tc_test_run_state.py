@@ -11,7 +11,7 @@ Covered:
   * finish: outcome DONE vs DONE_PARTIAL, red tree first, report contents,
     template vs reviewer summary, idempotence,
   * --commit: only DONE/DONE_PARTIAL, only the run's test files, never a
-    dirty index, protected branches (default master, AGENTS.md list with globs,
+    dirty index, protected branches (default master, profile list with globs,
     detached HEAD) get a new tc-agent/<slug>/<run-id> branch, commit message
     shape (title, summary, facts).
 
@@ -563,8 +563,9 @@ def test_commit_on_master_creates_a_branch():
 
 def test_commit_on_unprotected_branch_stays():
     with FixtureRepo() as repo:
-        repo.write("AGENTS.md", "tc-agent-protected-branches: master, develop\n")
-        repo.commit("agents", days_ago=25)
+        repo.write(".github/agents/tc-agent-project/profile.md", '# p\n\n```json\n{"schema_version": 1, "protected_branches": ["master", "develop"]}\n```\n')
+        c._PROFILE_CACHE.clear()
+        repo.commit("profile", days_ago=25)
         repo.git("switch", "-q", "-c", "feature/x")
         run, _ = generated_run(repo)
         run.finish()
@@ -575,8 +576,9 @@ def test_commit_on_unprotected_branch_stays():
 
 def test_commit_protected_glob_and_detached():
     with FixtureRepo() as repo:
-        repo.write("AGENTS.md", "tc-agent-protected-branches: release/*\n")
-        repo.commit("agents", days_ago=25)
+        repo.write(".github/agents/tc-agent-project/profile.md", '# p\n\n```json\n{"schema_version": 1, "protected_branches": ["release/*"]}\n```\n')
+        c._PROFILE_CACHE.clear()
+        repo.commit("profile", days_ago=25)
         repo.git("switch", "-q", "-c", "release/1.0")
         run, _ = generated_run(repo)
         run.finish()

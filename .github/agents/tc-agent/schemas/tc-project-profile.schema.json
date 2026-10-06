@@ -43,6 +43,11 @@
         }
       }
     },
+    "protected_branches": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "description": "Branches finish --commit never commits to (globs allowed). Absent or empty: only master."
+    },
     "max_rounds": {
       "type": "integer",
       "minimum": 1,

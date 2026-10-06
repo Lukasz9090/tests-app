@@ -43,7 +43,7 @@
         characterization.md       ## Planner / ## Generator / ## Reviewer + przykład planu
         spec-driven.md            j.w.
         interactive.md            pytania, budżety, CONFIRM
-    docs/maven.md                 proza o mavenie wyjęta z profilu (dla ludzi)
+    docs/configuration.md         opis katalogu projektu i kluczy profilu (dla ludzi)
     schemas/  scripts/  tools/    bez nowych plików
 
   tc-agent-project/               PROJEKTOWE — tymczasowo tutaj; docelowo <repo>/.github/tc-agent/
@@ -150,7 +150,7 @@ Gdy istnieją oba katalogi, używany jest `.github/tc-agent`. Stare położenia 
 3. `conventions.md` projektu = pierwsze źródło w REPO CONVENTIONS; `test-data.md` projektu = automatycznie w TEST DATA.
 4. Migracja `tests-app` ręcznie: utworzyć `.github/agents/tc-agent-project/`, przenieść JSON profilu do `profile.md`,
    linię branchy z `AGENTS.md` do `protected_branches`; usunąć `references/tc-project-profile.md`.
-5. Proza o mavenie z profilu → `tc-agent/docs/maven.md`. Profil = fence JSON + kilka linii opisu kluczy.
+5. Opis kluczy profilu (w tym proza o mavenie) → `tc-agent/docs/configuration.md`. Profil = fence JSON + kilka linii.
 6. Dev-testy (w istniejących `tc_test_build_context.py` / `tc_test_run_state.py`): oba katalogi, brak katalogu (domyślne bramki),
    `conventions.md` w packu, chronione branche z profilu, `git mv` do `.github/tc-agent` → ten sam wynik.
 
@@ -396,4 +396,5 @@ Poniższe punkty są następne w kolejce — każdy jako osobny plan.
 - 2026-10-06 (E1.1): `tc_git.is_dirty` = `git diff --quiet --ignore-cr-at-eol HEAD` + nieśledzony plik; `changed_lines` z `--ignore-cr-at-eol`. Dev-testy: CRLF-only nie jest dirty, zmiana w indeksie i nowy plik są.
 - 2026-10-06 (E1.2): `max_rounds` (run.json, profil, `--max-rounds`); `impl_cap`, `plan_cap`, `replan_cause` i replan po wyczerpaniu napraw usunięte ze skryptów, promptów, README, contracts i schematów. Raport: `rounds (k of N)`. Usunięty też test „czerwone testy nie przeplanowują” — reguła zniknęła razem z automatycznym replanem; czerwony suite po 3 rundach kończy `ESCALATED`, a strażnik `RED` w `finish` zostaje. Dev-testy 408/408 (`run_state` 131, w tym „żadna sekwencja decyzji nie daje 4. review”).
 - 2026-10-06 (E1.3): przeniesione jako etap 8 (ostatni) — użytkownik bada zachowanie `tools` w Copilocie; listy zostają zakomentowane.
+- 2026-10-06 (E2): `PROJECT_DIRS` + `project_dir()` / `project_file()` w `tc_common`; profil, `protected_branches` (nowy klucz, bez `AGENTS.md`), `conventions.md` (pierwsze źródło REPO CONVENTIONS) i `test-data.md` (zawsze w TEST DATA) z katalogu projektu. Stare `references/tc-project-profile.md` usunięte bez fallbacku. Odchylenie: opis kluczy trafił do `tc-agent/docs/configuration.md` (cały profil, nie tylko maven), a w `tests-app` katalog projektu ma `profile.md` + `README.md` — `conventions.md` i `test-data.md` nie powstały, bo puste pliki tylko dodawałyby szum do packa (opcjonalne, wykrywane gdy są). `tc_check_examples` waliduje profil projektu. Dev-testy 416/416.
 - 2026-10-06: planer jako subagent zadaje pytania na żywo (potwierdzone przez użytkownika na obecnym rozwiązaniu) → etap 6 usunięty, D77 rozstrzygnięte.

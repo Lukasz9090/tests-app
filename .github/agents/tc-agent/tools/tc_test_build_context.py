@@ -66,13 +66,46 @@ def test_test_data_files_are_included():
     with FixtureRepo() as repo:
         repo.write("docs/test-data.md",
                    "customer id: 9 digits, e.g. 123456789\ntransfer type: ELIXIR | SORBNET\n")
-        repo.write(".github/agents/tc-agent/references/tc-project-profile.md",
+        repo.write(".github/agents/tc-agent-project/profile.md",
                    '# p\n\n```json\n{"schema_version": 1, "test_data_paths": ["docs/test-data.md"]}\n```\n')
         c._PROFILE_CACHE.clear()
         pack = build(repo)
         expect_true("section is there", "## TEST DATA (repo-provided example business values)" in pack)
         expect_true("file content is included", "9 digits, e.g. 123456789" in pack)
         expect_true("says how to use it", "take the SHAPE" in pack)
+        c._PROFILE_CACHE.clear()
+
+
+def test_project_test_data_is_included_without_listing_it():
+    with FixtureRepo() as repo:
+        repo.write(".github/agents/tc-agent-project/test-data.md", "account number: PL + 26 digits\n")
+        c._PROFILE_CACHE.clear()
+        pack = build(repo)
+        expect_true("project test-data.md is in TEST DATA", "PL + 26 digits" in pack)
+        expect_true("labelled as the project's file", "(project test-data.md)" in pack)
+
+
+def test_project_directory_resolution():
+    with FixtureRepo() as repo:
+        expect("no project directory", (c.project_dir(repo.root), c.profile(repo.root)), (None, {}))
+        repo.write(".github/agents/tc-agent-project/profile.md",
+                   '# p\n\n```json\n{"schema_version": 1, "freshness_days": 3}\n```\n')
+        c._PROFILE_CACHE.clear()
+        expect("current location", c.freshness_days(repo.root), 3.0)
+        repo.git("add", ".github")
+        repo.commit("project directory")
+        repo.git("mv", ".github/agents/tc-agent-project", ".github/tc-agent")
+        c._PROFILE_CACHE.clear()
+        expect("after git mv to the target location", (c.project_dir(repo.root).as_posix().endswith(".github/tc-agent"),
+               c.freshness_days(repo.root)), (True, 3.0))
+        repo.write(".github/agents/tc-agent-project/profile.md",
+                   '# p\n\n```json\n{"schema_version": 1, "freshness_days": 9}\n```\n')
+        c._PROFILE_CACHE.clear()
+        expect("both present: .github/tc-agent wins", c.freshness_days(repo.root), 3.0)
+        repo.write(".github/agents/tc-agent/references/tc-project-profile.md",
+                   '# p\n\n```json\n{"schema_version": 1, "freshness_days": 1}\n```\n')
+        c._PROFILE_CACHE.clear()
+        expect("the old profile location is not read", c.freshness_days(repo.root), 3.0)
         c._PROFILE_CACHE.clear()
 
 
@@ -123,9 +156,10 @@ def test_pickup_and_applyto():
         repo.write(".github/instructions/frontend.instructions.md",
                    '---\napplyTo: "web/**/*.ts"\n---\nFRONTEND ONLY')
         repo.write(".github/instructions/general.instructions.md", "No front-matter: always.")
-        repo.write("AGENTS.md", "tc-agent-protected-branches: master\n")
+        repo.write("AGENTS.md", "Agent notes for humans.\n")
+        repo.write(".github/agents/tc-agent-project/conventions.md", "Project style: BDDMockito.")
         repo.write("docs/code-conventions.instruction.md", "Outside .github.")
-        repo.write(".github/agents/tc-agent/references/tc-project-profile.md",
+        repo.write(".github/agents/tc-agent-project/profile.md",
                    '# p\n\n```json\n{"schema_version": 1, "instruction_paths": ["docs/code-conventions.instruction.md"]}\n```\n')
         c._PROFILE_CACHE.clear()
         pack = build(repo)
@@ -134,9 +168,11 @@ def test_pickup_and_applyto():
         expect_true("applyTo matching the planned test file", "method_expected_condition" in sec)
         expect_true("no front-matter applies", "No front-matter: always." in sec)
         expect("applyTo not matching is left out", "FRONTEND ONLY" in pack, False)
-        expect_true("AGENTS.md", "tc-agent-protected-branches" in sec)
+        expect_true("AGENTS.md", "Agent notes for humans." in sec)
+        expect_true("project conventions.md", "Project style: BDDMockito." in sec)
         expect_true("profile instruction_paths outside .github", "Outside .github." in sec)
-        order = [sec.index(x) for x in ("copilot-instructions.md (", "general.instructions.md (",
+        order = [sec.index(x) for x in ("conventions.md (project conventions)", "copilot-instructions.md (",
+                                        "general.instructions.md (",
                                         "testing.instructions.md (", "AGENTS.md (", "code-conventions")]
         expect("documented order", order, sorted(order))
 

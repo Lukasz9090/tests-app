@@ -11,7 +11,7 @@ attaches a Javadoc to the wrong method, loses a tag, or rewrites more than the
   * placeholders (@Disabled + @deferred + empty body),
   * reseal: one line changes, CRLF preserved, nothing else touched,
   * sha prefix matching, dirty / age / branch helpers on a real git repo,
-  * protected branches parsed from AGENTS.md.
+  * protected branches read from the project profile.
 
 Usage:
     python .github/agents/tc-agent/tools/tc_test_javadoc.py [--verbose]
@@ -262,16 +262,23 @@ def test_git_facts():
 
 
 def test_protected_branches():
+    def profile_with(repo, value):
+        repo.write(".github/agents/tc-agent-project/profile.md", '# p\n\n```json\n{"schema_version": 1%s}\n```\n'
+                   % ("" if value is None else ', "protected_branches": ' + value))
+        c._PROFILE_CACHE.clear()
+
     with FixtureRepo() as repo:
-        expect("no AGENTS.md -> master only", c.protected_branches(repo.root), (["master"], "default"))
-        repo.write("AGENTS.md", "# Notes\n\nNothing about branches.\n")
-        expect("no line -> master only", c.protected_branches(repo.root)[0], ["master"])
-        repo.write("AGENTS.md", "x\ntc-agent-protected-branches: master, main, release/*\n")
-        expect("list with glob", c.protected_branches(repo.root), (["master", "main", "release/*"], "AGENTS.md"))
-        repo.write("AGENTS.md", "- `tc-agent-protected-branches: develop`\n")
-        expect("bullet and backticks tolerated", c.protected_branches(repo.root)[0], ["develop"])
-        repo.write("AGENTS.md", "tc-agent-protected-branches:\n")
+        c._PROFILE_CACHE.clear()
+        expect("no profile -> master only", c.protected_branches(repo.root), (["master"], "default"))
+        profile_with(repo, None)
+        expect("no key -> master only", c.protected_branches(repo.root)[0], ["master"])
+        profile_with(repo, '["master", "main", "release/*"]')
+        expect("list with glob", c.protected_branches(repo.root), (["master", "main", "release/*"], "profile.md"))
+        profile_with(repo, "[]")
         expect("empty list -> master, never nothing", c.protected_branches(repo.root)[0], ["master"])
+        repo.write("AGENTS.md", "tc-agent-protected-branches: develop\n")
+        expect("AGENTS.md is not read any more", c.protected_branches(repo.root)[0], ["master"])
+        c._PROFILE_CACHE.clear()
 
 
 def test_discovery_and_target():

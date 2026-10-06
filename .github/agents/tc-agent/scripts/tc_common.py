@@ -37,7 +37,7 @@ DEFAULT_GATES = {
 # Both tools must be able to READ the class files the project was compiled with.
 # JaCoCo 0.8.15 is the first release with official Java 26 (class file major 70)
 # support; older ones fail the report goal outright. Override per repo under
-# `tooling` in tc-project-profile.md when the build targets an older JDK.
+# `tooling` in the project profile.md when the build targets an older JDK.
 DEFAULT_VERSIONS = {"jacoco": "0.8.15", "pit": "1.25.9"}
 
 
@@ -723,7 +723,7 @@ def run(cmd: list, cwd: Path, timeout: float | None = None, log_path: Path | Non
             raise CheckError(
                 f"{Path(cmd[0]).name} did not finish within {timeout:g}s and was stopped. "
                 f"In a big multi-module repo the build alone can take longer: raise "
-                f"maven_timeout_seconds in tc-project-profile.md, add maven_args such as "
+                f"maven_timeout_seconds in the project profile.md, add maven_args such as "
                 f'["-T", "1C"] or ["-o"], or narrow the run to one module\'s class. '
                 f"Last output: {partial.strip()[-600:]}") from None
         handle.seek(header)
@@ -736,12 +736,12 @@ JDK_HINTS = (
     (
         "unsupported class file major version",
         "the plugin is older than the JDK that compiled these classes - pin a newer version "
-        "under tooling in tc-project-profile.md (or build with an older --release)",
+        "under tooling in the project profile.md (or build with an older --release)",
     ),
     (
         "incompatible version",
         "the exec file was written by a different JaCoCo version than the report goal - pin one "
-        "version under tooling in tc-project-profile.md and delete target/jacoco.exec",
+        "version under tooling in the project profile.md and delete target/jacoco.exec",
     ),
     (
         "invalid execution data",
@@ -928,13 +928,34 @@ def module_for_target(repo: Path, target_file: Path) -> str | None:
 # ---------------------------------------------------------------- profile ---
 
 
-PROFILE_PATHS = (
-    Path(".github") / "agents" / "tc-agent" / "references" / "tc-project-profile.md",  # committed config
-    Path(".github") / "agents" / "tc-agent" / "tc-project-profile.md",  # pre-references layout
+# The project's own configuration lives OUTSIDE the shared agent package, so the
+# package can be the same in every repository. The first existing directory wins:
+# the target layout first, then where it lives while the package is in this repo.
+PROJECT_DIRS = (
+    Path(".github") / "tc-agent",
+    Path(".github") / "agents" / "tc-agent-project",
 )
-
+PROFILE_FILE = "profile.md"
 
 _PROFILE_CACHE = {}
+_WARNED_TWO_DIRS = set()
+
+
+def project_dir(repo: Path) -> Path | None:
+    """The project's tc-agent directory (profile.md, conventions.md, test-data.md)."""
+    found = [Path(repo) / d for d in PROJECT_DIRS if (Path(repo) / d).is_dir()]
+    if len(found) > 1 and str(repo) not in _WARNED_TWO_DIRS:
+        _WARNED_TWO_DIRS.add(str(repo))
+        print(f"WARNING: both {PROJECT_DIRS[0].as_posix()} and {PROJECT_DIRS[1].as_posix()} exist; "
+              f"using {PROJECT_DIRS[0].as_posix()}", file=sys.stderr)
+    return found[0] if found else None
+
+
+def project_file(repo: Path, name: str) -> Path | None:
+    """A file of the project directory, or None when it (or the directory) is absent."""
+    directory = project_dir(repo)
+    path = directory / name if directory else None
+    return path if path and path.is_file() else None
 
 
 def profile(repo: Path) -> dict:
@@ -953,10 +974,8 @@ def profile(repo: Path) -> dict:
         return _PROFILE_CACHE[key]
 
     found = {}
-    for relative in PROFILE_PATHS:
-        path = repo / relative
-        if not path.exists():
-            continue
+    path = project_file(repo, PROFILE_FILE)
+    if path:
         try:
             found = payload(path)
         except CheckError as exc:
@@ -964,7 +983,6 @@ def profile(repo: Path) -> dict:
                   f"gates {DEFAULT_GATES} and tool versions {DEFAULT_VERSIONS}.",
                   file=sys.stderr)
             found = {}
-        break
 
     _PROFILE_CACHE[key] = found
     return found
@@ -993,7 +1011,7 @@ def max_rounds(repo: Path) -> int:
 
 
 def freshness_days(repo: Path) -> float:
-    """Legacy mode refuses to freeze code younger than this (tc-project-profile.md)."""
+    """Legacy mode refuses to freeze code younger than this (the project profile.md)."""
     value = profile(repo).get("freshness_days", DEFAULT_FRESHNESS_DAYS)
     try:
         return float(value)
@@ -1011,26 +1029,18 @@ def test_data_paths(repo: Path) -> list:
     return [str(p) for p in profile(repo).get("test_data_paths", []) or []]
 
 
-PROTECTED_LINE = re.compile(r"^\s*[-*]?\s*`?tc-agent-protected-branches:\s*(.*?)`?\s*$", re.M)
 DEFAULT_PROTECTED = ["master"]
 
 
 def protected_branches(repo: Path) -> tuple[list, str]:
     """Branches the agent never commits to, and where that list came from.
 
-    Read from ONE line in the repo's AGENTS.md:
-        tc-agent-protected-branches: master, main, release/*
-    No file, no line, or an empty list -> only `master`. `master` cannot be
-    un-protected by accident: an empty value falls back to the default.
+    The profile's `protected_branches` (globs allowed: `release/*`). Absent or
+    empty -> only `master`: it cannot be un-protected by accident.
     """
-    agents = Path(repo) / "AGENTS.md"
-    if agents.is_file():
-        found = PROTECTED_LINE.search(agents.read_text(encoding="utf-8", errors="replace"))
-        if found:
-            names = [n.strip() for n in found.group(1).split(",") if n.strip()]
-            if names:
-                return names, "AGENTS.md"
-    return list(DEFAULT_PROTECTED), "default"
+    value = profile(repo).get("protected_branches") or []
+    names = [str(n).strip() for n in value if str(n).strip()] if isinstance(value, list) else []
+    return (names, PROFILE_FILE) if names else (list(DEFAULT_PROTECTED), "default")
 
 
 PLUGIN_ARTIFACT = {"jacoco": "jacoco-maven-plugin", "pit": "pitest-maven"}
@@ -1189,7 +1199,7 @@ def pom_plugin_version(repo: Path, module: str | None, artifact_id: str) -> str 
 
 
 def tool_version(repo: Path, tool: str, override=None, module: str | None = None) -> str:
-    """CLI flag > tc-project-profile.md > version declared in the pom > agent default.
+    """CLI flag > the project profile.md > version declared in the pom > agent default.
 
     The pom wins over the default on purpose: prepare-agent and report must run
     the same JaCoCo version, otherwise the report goal rejects the exec file.

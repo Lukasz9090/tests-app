@@ -17,7 +17,5 @@ Reading a generated test:
   deliberately left untested; delete it (or fix the seam it names) to let the
   agent try again.
 
-Branches the agent must never commit to (read by `tc_orchestrate.py finish
---commit`; without this line only `master` is protected):
-
-tc-agent-protected-branches: master
+Project configuration for the agent (gates, protected branches, test style,
+example data): `.github/agents/tc-agent-project/`.
