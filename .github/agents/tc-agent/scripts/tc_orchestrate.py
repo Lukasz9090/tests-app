@@ -15,7 +15,7 @@ Two kinds of state, never mixed:
 
 Subcommands
 -----------
-  start  <slug> --repo . --mode legacy|spec-driven [--interactive] [--spec P]
+  start  <slug> --repo . --mode characterization|spec-driven [--interactive] [--spec P]
                 [--max-rounds 3] [--commit]
       Create the run directory and run.json (the ONLY place mode, interactive,
       spec, max_rounds and commit are given), then run derive-state. Prints run_id.
@@ -55,7 +55,7 @@ import tc_git as g  # noqa: E402
 import tc_javadoc as j  # noqa: E402
 from tc_md_payload import load_payload  # noqa: E402
 
-MODES = ("legacy", "spec-driven")
+MODES = ("characterization", "spec-driven")
 PLAN_STOP = {"BLOCKED": "BLOCKED", "NEEDS_CLARIFICATION": "ESCALATED",
              "UNSUPPORTED_REPOSITORY": "ESCALATED"}
 PLAN_GO = {"READY", "READY_PARTIAL"}
@@ -181,6 +181,24 @@ def review_history(d: Path) -> list:
 
 def rounds_spent(d: Path) -> int:
     return sum(len(review_iterations(d, n)) for n in plan_versions(d))
+
+
+REFERENCES = Path(__file__).resolve().parent.parent / "references"
+
+
+def references_for(role: str, run: dict, derive: dict, repo: Path) -> list:
+    """The instruction files THIS role reads in THIS run, in order (contracts.md §1).
+
+    Only what applies: the mode file of the run's mode, junit4.md on a JUnit 4
+    module, the interactive rules for the planner when a human can answer.
+    """
+    names = ["contracts.md", "conventions.md"]
+    if str(((derive or {}).get("repo") or {}).get("junit")) == "4":
+        names.append("junit4.md")
+    names.append(f"modes/{run.get('mode', 'characterization')}.md")
+    if role == "tc-planner" and run.get("interactive"):
+        names.append("modes/interactive.md")
+    return [rel(REFERENCES / n, repo) for n in names]
 
 
 def known_test_data(d: Path) -> list:
@@ -377,6 +395,7 @@ def compute_state(repo: Path, directory: Path) -> dict:
         out["next_action"] = "PLAN"
         out["reason"] = f"derive-state: {', '.join(derive.get('reasons', []))}"
         out["dispatch"] = {"agent": "tc-planner", "run_dir": out["run_dir"],
+                           "references": references_for("tc-planner", run, derive, repo),
                            "plan_path": rel(plan_path(directory, 1), repo),
                            "review_path": None,
                            "known_test_data": known_test_data(directory)}
@@ -405,6 +424,7 @@ def compute_state(repo: Path, directory: Path) -> dict:
         out["next_action"] = "GENERATE"
         out["reason"] = f"plan v{n} is {status} and has no generation yet"
         out["dispatch"] = {"agent": "tc-generator", "run_dir": out["run_dir"],
+                           "references": references_for("tc-generator", run, derive, repo),
                            "plan_path": rel(plan_path(directory, n), repo),
                            "report_path": rel(gen_path(directory, n, 1), repo),
                            "review_path": rel(latest_review, repo) if latest_review else None}
@@ -414,6 +434,7 @@ def compute_state(repo: Path, directory: Path) -> dict:
         out["next_action"] = "REVIEW"
         out["reason"] = f"generation v{n}-r{gen_m} awaits review"
         out["dispatch"] = {"agent": "tc-reviewer", "run_dir": out["run_dir"],
+                           "references": references_for("tc-reviewer", run, derive, repo),
                            "plan_path": rel(plan_path(directory, n), repo),
                            "report_path": rel(gen_path(directory, n, gen_m), repo),
                            "previous_review_path": rel(latest_review, repo) if latest_review else None,
@@ -441,6 +462,7 @@ def compute_state(repo: Path, directory: Path) -> dict:
         out["reason"] = (f"reviewer asked to repair the implementation; "
                          f"round {rounds + 1} of {max_rounds}")
         out["dispatch"] = {"agent": "tc-generator", "run_dir": out["run_dir"],
+                           "references": references_for("tc-generator", run, derive, repo),
                            "plan_path": rel(plan_path(directory, n), repo),
                            "report_path": rel(gen_path(directory, n, gen_m + 1), repo),
                            "review_path": rel(r_path, repo)}
@@ -450,6 +472,7 @@ def compute_state(repo: Path, directory: Path) -> dict:
         out["reason"] = (f"reviewer asked to repair the plan; writing plan v{n + 1} "
                          f"for round {rounds + 1} of {max_rounds}")
         out["dispatch"] = {"agent": "tc-planner", "run_dir": out["run_dir"],
+                           "references": references_for("tc-planner", run, derive, repo),
                            "plan_path": rel(plan_path(directory, n + 1), repo),
                            "review_path": rel(r_path, repo),
                            "known_test_data": known_test_data(directory)}
@@ -803,7 +826,7 @@ def render_report(info: dict, state: dict, outcome: str, summary: str, commit: d
     steps = []
     reasons = (info["derive"].get("reasons") or [])
     if "TARGET_TOO_FRESH" in reasons:
-        steps.append("the target's last commit is too recent for legacy mode: re-run with "
+        steps.append("the target's last commit is too recent for characterization mode: re-run with "
                      "--interactive, or in spec-driven mode, or wait until it has been validated")
     if "TARGET_DIRTY" in reasons or "TARGET_NOT_COMMITTED" in reasons:
         steps.append("commit the change to the target first, then re-run")
@@ -909,7 +932,7 @@ def main() -> int:
     s = sub.add_parser("start")
     s.add_argument("slug")
     s.add_argument("--repo", default=".")
-    s.add_argument("--mode", default="legacy")
+    s.add_argument("--mode", default="characterization")
     s.add_argument("--interactive", action="store_true")
     s.add_argument("--spec", default=None)
     s.add_argument("--test-data", action="append", default=None, dest="test_data",

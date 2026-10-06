@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Tests for the context pack's REPO CONVENTIONS section — DEV TOOL, not runtime.
 
-The agent's own conventions travel with the agent (tc-test-conventions.md); the
+The agent's own conventions travel with the agent (references/conventions.md); the
 repository can only tune style, and it does so through instruction files the
 pack injects. Covered: which files are picked up and in what order, `applyTo`
 filtering (match, no match, no front-matter, brace globs, `**`), extra paths
@@ -58,7 +58,7 @@ def test_none_found():
         pack = build(repo)
         expect_true("names the test framework from the pom",
                     "TEST FRAMEWORK: JUnit" in pack or "TEST FRAMEWORK: unknown" in pack)
-        expect_true("says agent defaults apply", "none found — agent defaults (tc-test-conventions.md §B) apply" in pack)
+        expect_true("says agent defaults apply", "none found — agent defaults (conventions.md §B) apply" in pack)
         expect_true("precedence header always present", "pipeline integrity" in section(pack))
 
 

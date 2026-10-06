@@ -1,24 +1,20 @@
 """Read and rewrite the per-test metadata the pipeline keeps in the code.
 
 The committed test suite IS the pipeline's database. Every test the
-agent writes carries a Javadoc with metadata lines (tc-test-conventions.md §A1):
+agent writes carries a Javadoc with metadata lines (conventions §A1):
 
     /**
      * AI-generated test. Characterizes current behavior of OrderService (a freeze, not a spec).
      *
-     * tc-agent-mode: legacy, interactive: false
+     * tc-agent-mode: characterization, interactive: false
      * tc-agent-characterizes: OrderService@29aeef6a
      */
-
-`tc-agent-mode` is the marker: a method that has one was written by the agent.
-The earlier separate `tc-agent: generated` and `tc-agent-interactive: true`
-lines are still read (they cost nothing and keep older tests intact).
-
-The lines are plain text, not Javadoc `@tags`, so no IDE or doclint flags them.
-The earlier `@aiGenerated` / `@mode` draft format is still read (and reported as
-a metadata defect) so tests written with it are not lost.
     @Test
     void shouldCreateOrderWhenCustomerActive() { ... }
+
+`tc-agent-mode` is the marker: a method that has one was written by the agent.
+The lines are plain text, not Javadoc `@tags`, so no IDE or doclint flags them.
+Any other `tc-agent...:` key is a defect.
 
 This module finds test methods in a Java source file, attaches the Javadoc that
 belongs to each one and parses its tags. It is a small character scanner, not a
@@ -38,9 +34,8 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-AI_TAGS = ("aiGenerated", "mode", "interactive", "characterizes", "deferred", "note")
-MODES = ("legacy", "spec-driven")
-MODE_LINE = re.compile(r"^(legacy|spec-driven)(?:\s*,\s*interactive\s*:\s*(true|false))?$")
+MODES = ("characterization", "spec-driven")
+MODE_LINE = re.compile(r"^(characterization|spec-driven)\s*,\s*interactive\s*:\s*(true|false)$")
 TEST_ANNOTATIONS = {"Test", "ParameterizedTest", "RepeatedTest", "TestFactory", "TestTemplate"}
 PLACEHOLDER_PREFIX = "AI deferred:"
 CHARACTERIZES = re.compile(r"^([A-Za-z_$][\w$]*)@([0-9a-fA-F]{7,40})$")
@@ -201,108 +196,78 @@ def _enclosing(spans: list, pos: int) -> str:
 
 # Line keys as written in the code -> internal tag names.
 KEYS = {
-    "tc-agent": "aiGenerated",
     "tc-agent-mode": "mode",
-    "tc-agent-interactive": "interactive",
     "tc-agent-characterizes": "characterizes",
     "tc-agent-deferred": "deferred",
     "tc-agent-note": "note",
 }
 LABEL = {v: k for k, v in KEYS.items()}
 KEY_LINE = re.compile(r"^(tc-agent(?:-[a-z]+)*)\s*:\s*(.*)$")
-AT_TAG = re.compile(r"^@(\w+)\b\s*(.*)$")
-OLD_FORMAT = ("uses the old @-tag format (@aiGenerated, @mode ...); rewrite it as "
-              "`tc-agent:` lines (tc-test-conventions.md §A1)")
 
 
 def parse_javadoc(raw: str) -> tuple[str, list, list]:
-    """(first prose line, [[tag, value, form], ...], unknown keys).
+    """(first prose line, [[tag, value], ...], unknown keys).
 
-    `form` is "line" for the `tc-agent-<key>: value` format and "at" for the
-    old `@tag value` draft format, which is still read so no test is lost.
     A non-key line right after a metadata line continues its value.
     """
     body = raw[3:-2] if raw.endswith("*/") else raw[3:]
     prose, tags, unknown = [], [], []
+    closed = False
     for line in body.splitlines():
         s = re.sub(r"^\s*\*?\s?", "", line).strip()
         if not s:
-            if tags:
-                tags[-1].append("closed")
+            closed = bool(tags)
             continue
         k = KEY_LINE.match(s)
-        a = AT_TAG.match(s)
         if k:
             key = k.group(1)
-            if key in KEYS:
-                tags.append([KEYS[key], k.group(2).strip(), "line"])
-            else:
+            if key not in KEYS:
                 unknown.append(key)
-                tags.append(["?", k.group(2).strip(), "line"])
-        elif a:
-            tags.append([a.group(1), a.group(2).strip(), "at"])
-        elif tags and len(tags[-1]) == 3:
+            tags.append([KEYS.get(key, "?"), k.group(2).strip()])
+            closed = False
+        elif s.startswith("@"):                      # a Javadoc block tag (@see ...) ends a value
+            closed = bool(tags)
+        elif tags and not closed:
             tags[-1][1] = (tags[-1][1] + " " + s).strip()
         elif not tags:
             prose.append(s)
-    return (prose[0] if prose else ""), [t[:3] for t in tags], unknown
+    return (prose[0] if prose else ""), tags, unknown
 
 
 def build_meta(tags: list, unknown: list | None = None) -> Meta:
     meta = Meta()
-    seen = [t for t, _, _ in tags if t in AI_TAGS]
-    meta.has_ai_tags = bool(seen) or bool(unknown)
+    meta.has_ai_tags = bool(tags) or bool(unknown)
     if not meta.has_ai_tags:
         return meta
-    old = any(form == "at" for t, _, form in tags if t in AI_TAGS)
-    if old:
-        meta.defects.append(OLD_FORMAT)
     for key in unknown or []:
         meta.defects.append(f"unknown metadata key '{key}:' (allowed: {', '.join(KEYS)})")
-    for name, value, form in tags:
-        if name not in AI_TAGS:
-            continue
-        label = f"@{name}" if form == "at" else f"{LABEL[name]}:"
-        if name == "aiGenerated":
-            # Older format: a separate marker line. Harmless, still read.
-            if form == "at" and value:
-                meta.defects.append(f"{label} is followed by '{value}' - write one key per line")
-        elif name == "mode":
+    for name, value in tags:
+        if name == "mode":
             m = MODE_LINE.match(value)
             if m:
-                meta.mode = m.group(1)
-                if m.group(2) == "true":
-                    meta.interactive = True
+                meta.mode, meta.interactive = m.group(1), m.group(2) == "true"
             else:
-                meta.defects.append(
-                    f"{label} '{value}' is not '<mode>, interactive: true|false' "
-                    f"with a mode in {', '.join(MODES)}")
-        elif name == "interactive":
-            # Older format: the flag on its own line.
-            meta.interactive = value != "false"
-            if form == "line" and value not in ("true", "false"):
-                meta.defects.append(f"'tc-agent-interactive: {value}' - write 'true' or 'false'")
-            elif form == "at" and value:
-                meta.defects.append(f"{label} is followed by '{value}' - write one key per line")
+                meta.defects.append(f"tc-agent-mode: '{value}' is not '<mode>, interactive: true|false' "
+                                    f"with a mode in {', '.join(MODES)}")
         elif name == "characterizes":
             m = CHARACTERIZES.match(value)
             if m:
                 meta.characterizes_class, meta.characterizes_sha = m.group(1), m.group(2).lower()
             else:
-                meta.defects.append(f"{label} '{value}' is not <Class>@<sha>")
+                meta.defects.append(f"tc-agent-characterizes: '{value}' is not <Class>@<sha>")
         elif name == "deferred":
             meta.deferred = value
             if not value:
-                meta.defects.append(f"{label} has no reason")
+                meta.defects.append("tc-agent-deferred: has no reason")
         elif name == "note":
             if value:
                 meta.notes.append(value)
     meta.ai = True
-    if meta.mode is None and not any("mode" in d for d in meta.defects):
+    if meta.mode is None and not any("tc-agent-mode" in d for d in meta.defects):
         meta.defects.append("tc-agent metadata without tc-agent-mode")
-    if meta.mode == "legacy" and meta.characterizes_class is None \
+    if meta.mode == "characterization" and meta.characterizes_class is None \
             and not any("characterizes" in d for d in meta.defects):
-        meta.defects.append("tc-agent-mode legacy without tc-agent-characterizes")
+        meta.defects.append("tc-agent-mode characterization without tc-agent-characterizes")
     if meta.mode == "spec-driven" and meta.characterizes_class is not None:
         meta.defects.append("tc-agent-mode spec-driven must not carry tc-agent-characterizes")
     return meta
@@ -376,7 +341,7 @@ def parse_text(text: str, file: str = "") -> tuple[list, list]:
         if idx in used:
             continue
         _, tags, unknown = parse_javadoc(text[start:end])
-        if unknown or any(t in AI_TAGS for t, _, _ in tags):
+        if unknown or tags:
             line = text.count("\n", 0, start) + 1
             defects.append(f"{file}:{line}: tc-agent metadata outside a test method's Javadoc "
                            f"(it belongs on test METHODS only, never on the class)")
@@ -407,7 +372,7 @@ def reseal(path: Path, method_key: str, target_class: str, new_sha: str) -> tupl
         return False, f"{method_key} has no Javadoc"
     start, end = hit.javadoc_span
     doc = text[start:end]
-    pattern = re.compile(rf"((?:tc-agent-characterizes[ \t]*:|@characterizes)[ \t]*"
+    pattern = re.compile(rf"(tc-agent-characterizes[ \t]*:[ \t]*"
                          rf"{re.escape(target_class)}@)([0-9a-fA-F]{{7,40}})")
     found = pattern.search(doc)
     if not found:

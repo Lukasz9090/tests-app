@@ -115,9 +115,9 @@ def local_deps(text, all_by_name, own_pkg_files):
 
 
 FRONTMATTER = re.compile(r"\A---\s*\n(.*?)\n---\s*\n", re.S)
-PRECEDENCE = ("Precedence, rule by rule: pipeline integrity (tc-contracts.md, "
-              "tc-test-conventions.md §A) > these files > agent defaults "
-              "(tc-test-conventions.md §B). A rule here that contradicts §A is void.")
+PRECEDENCE = ("Precedence, rule by rule: pipeline integrity (contracts.md, conventions.md §A, "
+              "junit4.md, the mode files) > these files > agent defaults (conventions.md §B). "
+              "A rule here that contradicts §A is void.")
 
 
 def glob_regex(pattern: str) -> re.Pattern:
@@ -353,7 +353,7 @@ def main():
         framework += "; the module's tests use BOTH versions - match the class you extend"
     out = [f"# Context Pack: {slug}", "",
            f"Repo: {repo}", f"TEST FRAMEWORK: {framework} "
-           f"(tc-test-conventions.md A0: write the annotations of THIS version)",
+           f"(conventions.md A0: write the annotations of THIS version)",
            f"Target file: {rel_target}",
            f"Method focus: {method or '(whole class)'}",
            f"Source roots: {[str(r.relative_to(repo)) for r in src_roots]}",
@@ -401,7 +401,7 @@ def main():
         header.append("Sources: " + "; ".join(f"{p.relative_to(repo).as_posix()} ({why})"
                                               for p, why in instructions))
     else:
-        header.append("none found — agent defaults (tc-test-conventions.md §B) apply.")
+        header.append("none found — agent defaults (conventions.md §B) apply.")
     block = "\n".join(header) + "\n"
     out.append(block)
     budget -= len(block)

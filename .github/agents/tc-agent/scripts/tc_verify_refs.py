@@ -164,7 +164,7 @@ def main() -> int:
     if collisions:
         print(f"\nNAME_COLLISION: {len(collisions)} planned test method name(s) already exist "
               f"or repeat inside the plan. Choose names that are unique in the test class "
-              f"(tc-test-conventions.md §B1: the outcome names the operation, e.g. "
+              f"(conventions.md §B1: the outcome names the operation, e.g. "
               f"shouldReportOddWhenNumberIsOdd vs shouldReportEvenWhenNumberIsEven), or set "
               f"`replaces` when you really mean to rewrite that method.")
     if failures or collisions:

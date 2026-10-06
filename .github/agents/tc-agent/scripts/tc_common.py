@@ -465,7 +465,7 @@ def maven_also_make(repo: Path) -> str | bool:
 def maven_skip_main_compile(repo: Path) -> str | bool:
     """When a check may skip compiling src/main. Default "auto".
 
-    During a run the production code never changes - legacy mode requires it
+    During a run the production code never changes - characterization mode requires it
     committed, and the agent only ever writes test files - so recompiling it
     before every check is pure cost, and in a module with annotation processors
     or generated sources it is a FULL rebuild every time (6500 files, minutes).
@@ -1011,7 +1011,7 @@ def max_rounds(repo: Path) -> int:
 
 
 def freshness_days(repo: Path) -> float:
-    """Legacy mode refuses to freeze code younger than this (the project profile.md)."""
+    """Characterization mode refuses to freeze code younger than this (the project profile.md)."""
     value = profile(repo).get("freshness_days", DEFAULT_FRESHNESS_DAYS)
     try:
         return float(value)

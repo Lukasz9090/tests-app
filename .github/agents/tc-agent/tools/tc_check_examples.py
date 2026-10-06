@@ -42,7 +42,7 @@ FENCE = re.compile(r"^```json\s*\n(.*?)\n```", re.S | re.M)
 
 # Which schema the example in each file must satisfy.
 EXPECTED = {
-    "tc-planner.agent.md": TC / "schemas" / "tc-test-plan.schema.json",
+    "references/modes/characterization.md": TC / "schemas" / "tc-test-plan.schema.json",
     "tc-generator.agent.md": TC / "schemas" / "tc-generation-report.schema.json",
     "tc-reviewer.agent.md": TC / "schemas" / "tc-review.schema.json",
 }

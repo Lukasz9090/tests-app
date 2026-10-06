@@ -30,7 +30,7 @@ still protects `master`.
 for the target scope — the class, or the single method when the plan names one.
 Raise them deliberately; the Reviewer may never lower one to reach ACCEPT.
 
-**Freshness** (`freshness_days`): legacy mode without `--interactive` refuses to
+**Freshness** (`freshness_days`): characterization mode without `--interactive` refuses to
 freeze a target whose last commit is younger than this many days — nobody has
 validated that behavior yet, so a green characterization test would certify a
 possible bug. derive-state reports such a run as BLOCKED. Default 7.
@@ -47,7 +47,7 @@ context pack puts into REPO CONVENTIONS, relative to the repo root and allowed
 outside `.github` (e.g. `docs/code-conventions.instruction.md`). Files under
 `.github/copilot-instructions.md`, `.github/instructions/*.instructions.md` and
 `AGENTS.md` are picked up without being listed. Repo instructions tune style
-only; they never override `tc-test-conventions.md` §A.
+only; they never override `conventions.md` §A.
 
 **Test data** (`test_data_paths`, optional): files that list the example business
 values of this system - a customer id is 9 digits, an account number looks like
@@ -148,7 +148,7 @@ and says so in the log. A repo that must always run the phase:
     "maven_goals_only": false
 
 The other half of the cost is compiling `src/main` before every check. During a
-run the production code never changes - legacy mode requires it committed, and
+run the production code never changes - characterization mode requires it committed, and
 the agent only writes test files - so in a module with annotation processors or
 generated sources you would pay for a full rebuild each time for nothing.
 

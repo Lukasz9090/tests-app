@@ -48,7 +48,7 @@
     },
     "mode": {
       "enum": [
-        "legacy",
+        "characterization",
         "spec-driven"
       ]
     },

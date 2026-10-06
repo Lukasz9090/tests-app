@@ -48,7 +48,7 @@ def start(repo: FixtureRepo, env: dict | None = None, *extra) -> dict:
     full_env = {**os.environ, "PATH": f"{FAKE}{os.pathsep}{os.environ['PATH']}",
                 "FAKE_MVN_LOG": str(log), **(env or {})}
     proc = subprocess.run([sys.executable, str(ORCH), "start", "OrderService", "--repo", str(repo.root),
-                           "--mode", "legacy", *extra], capture_output=True, text=True, env=full_env)
+                           "--mode", "characterization", *extra], capture_output=True, text=True, env=full_env)
     if proc.returncode != 0:
         raise RuntimeError(proc.stderr)
     out = json.loads(proc.stdout)

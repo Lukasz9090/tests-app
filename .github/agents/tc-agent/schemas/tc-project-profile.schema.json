@@ -56,7 +56,7 @@
     "freshness_days": {
       "type": "number",
       "minimum": 0,
-      "description": "Legacy mode (without --interactive) refuses to freeze a target whose last commit is younger than this many days. Default 7."
+      "description": "Characterization mode (without --interactive) refuses to freeze a target whose last commit is younger than this many days. Default 7."
     },
     "flaky_repeat": {
       "type": "integer",

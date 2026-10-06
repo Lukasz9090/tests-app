@@ -10,7 +10,7 @@ never from an artifact an earlier run left behind:
               characterization tests whose frozen behavior changed (stale AND red)
     DONE      gates met on the CURRENT code and nothing stale is red
     RED       a test that is not a stale characterization fails: stop, a human acts
-    BLOCKED   legacy mode would freeze code that is dirty or too fresh
+    BLOCKED   characterization mode would freeze code that is dirty or too fresh
     ESCALATE  the target cannot be resolved, or a check could not run (exit 2)
 
 It works in tiers, cheapest first, and stops at the first tier that decides:
@@ -133,7 +133,7 @@ def tier1(repo: Path, target: c.Target) -> dict:
     for m in ai:
         if m.is_placeholder:
             placeholders.append(m)
-        if m.meta.mode == "legacy" and m.meta.characterizes_class == target.cls:
+        if m.meta.mode == "characterization" and m.meta.characterizes_class == target.cls:
             if dirty or not g.sha_matches(m.meta.characterizes_sha, current):
                 stale.append(m)
     return {
@@ -167,7 +167,7 @@ def derive(repo: Path, target_slug: str, run: dict, runner=None,
            freshness_days: float | None = None) -> dict:
     """The whole derivation. `run` is the run.json payload; `runner` runs the checks."""
     repo = Path(repo).resolve()
-    mode = run.get("mode", "legacy")
+    mode = run.get("mode", "characterization")
     interactive = bool(run.get("interactive"))
     out = {
         "schema_version": 1,
@@ -222,13 +222,13 @@ def derive(repo: Path, target_slug: str, run: dict, runner=None,
 
     def conclude(action: str, reasons: list, detail: str | None = None) -> dict:
         out["next_action"], out["reasons"], out["detail"] = action, reasons, detail
-        if action == "PLAN" and mode == "legacy":
+        if action == "PLAN" and mode == "characterization":
             fresh_limit = freshness_days if freshness_days is not None else c.freshness_days(repo)
             age = t1["git"]["age_days"]
             if t1["git"]["dirty"]:
                 out["next_action"] = "BLOCKED"
                 out["reasons"] = ["TARGET_DIRTY"] + reasons
-                out["detail"] = (f"{target.rel_file} has uncommitted changes. Legacy mode freezes "
+                out["detail"] = (f"{target.rel_file} has uncommitted changes. Characterization mode freezes "
                                  f"committed behavior and records its sha; commit the change first, "
                                  f"or run in spec-driven mode.")
             elif age is None:
@@ -239,7 +239,7 @@ def derive(repo: Path, target_slug: str, run: dict, runner=None,
                 out["next_action"] = "BLOCKED"
                 out["reasons"] = ["TARGET_TOO_FRESH"] + reasons
                 out["detail"] = (f"{target.rel_file} was last committed {age:.1f} days ago "
-                                 f"(limit {fresh_limit:g}). Legacy mode would freeze behavior nobody "
+                                 f"(limit {fresh_limit:g}). Characterization mode would freeze behavior nobody "
                                  f"has validated yet. Re-run with --interactive, or in spec-driven mode.")
         return out
 

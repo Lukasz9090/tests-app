@@ -14,25 +14,25 @@ It trusts only the committed code, the tests and git — no memory between runs.
 
 ## Setup (once per repo)
 
-1. Maven project with JUnit 5 or JUnit 4 — taken from what the module's tests import, from the poms only if it has none (`junit` in the profile overrides both). On JUnit 4: `@Ignore`, no `@DisplayName`, no parameterized tests.
+1. Maven project with JUnit 5 or JUnit 4 — taken from what the module's tests import, from the poms only if it has none (`junit` in the profile overrides both).
 2. **JaCoCo and PIT need no pom entry.** The checks call their goals by full coordinates, so an untouched pom works; a version declared in the pom is used, otherwise the agent's default. One exception: on **JUnit 5**, PIT needs `pitest-junit5-plugin` as a plugin dependency in the pom — that cannot be added from the CLI, and without it mutation testing is reported as unavailable.
-3. Git, and Python 3 with `pip install -r .github/agents/tc-agent/references/tc-requirements.txt`.
+3. Git, and Python 3 with `pip install -r .github/agents/tc-agent/requirements.txt`.
 4. Copilot custom agents enabled; `.test-agent/` in `.gitignore` (run files live there).
 
 ## How to run
 
 In Copilot Chat choose **tc-orchestrator** and say what you want, for example:
 
-    Generate tests for SimpleCalculatorService, mode legacy, commit
+    Generate tests for SimpleCalculatorService, mode characterization, commit
     Generate tests for OrderService.create, mode spec-driven, spec docs/order-spec.md, interactive
-    Generate tests for TransferService, legacy, data examples in docs/test-data.md
+    Generate tests for TransferService, data examples in docs/test-data.md
 
 The orchestrator turns this into `tc_orchestrate.py start` with these options:
 
 | option | meaning |
 |---|---|
 | target | `ClassName` or `ClassName.methodName`. One or a list. |
-| `--mode legacy` (default) | Freeze the CURRENT behavior, bugs included. Tests describe what the code does now. |
+| `--mode characterization` (default) | Freeze the CURRENT behavior, bugs included. Tests describe what the code does now. |
 | `--mode spec-driven` | Tests follow a specification. A failing test may mean the code is wrong → NEEDS_TRIAGE, not a fix. |
 | `--spec <path>` | The specification file for spec-driven mode. |
 | `--interactive` | The planner may ask questions (what to freeze, example data). Also turns off the freshness guard. |
@@ -46,7 +46,7 @@ The orchestrator turns this into `tc_orchestrate.py start` with these options:
    - `DONE` — tests exist, green, gates met, code unchanged → nothing to do;
    - `PLAN` — something is missing (no tests, coverage/mutation gap, untested or changed methods, stale tests);
    - `RED` — existing tests fail → a human must look;
-   - `BLOCKED` — target has uncommitted changes, is not committed, or is too fresh (legacy only).
+   - `BLOCKED` — target has uncommitted changes, is not committed, or is too fresh (characterization only).
 2. **PLAN → GENERATE → REVIEW**, repeated until the reviewer accepts or `--max-rounds` (3) review
    rounds are spent. The reviewer's decision picks the next step: repair the code, repair the plan, or accept.
 3. **RESEAL** — still-green tests get the new sha after a code change.
@@ -69,7 +69,7 @@ inside this package. All files are optional; all keys: `docs/configuration.md`.
 - **`test-data.md`** — example business values; always in the context pack.
 - **Other style rules** — `.github/copilot-instructions.md`, `.github/instructions/*.instructions.md`
   (by `applyTo`) and `AGENTS.md`. Repo rules override the default style in
-  `tc-test-conventions.md` §B, never §A.
+  `references/conventions.md` §B, never §A.
 
 Default style: `shouldXxxWhenYyy`, `// given / // when / // then`, AssertJ, Mockito for repositories, class under test as a field, class `<Target>Test`.
 
@@ -86,10 +86,10 @@ Default style: `shouldXxxWhenYyy`, `// given / // when / // then`, AssertJ, Mock
 Every run has its own folder `.test-agent/runs/<target>/<run-id>/`:
 `run.json`, `derive-state.md`, `context-pack.md`, `plan-vN.md`,
 `generation-report-vN[-rM].md`, `review-vN-rM.md`, `checks/`, `run-report.md`. Old runs are never read again and never deleted.
-Agent's own files: role prompts and this README at the top; what they read (contracts, conventions, requirements) under `references/`; plus `schemas/`, `scripts/`, `tools/`, and `docs/` for people.
+Agent's own files: role prompts, this README and `requirements.txt` at the top; what the roles read under `references/` (`contracts.md`, `conventions.md`, `junit4.md`, `modes/*.md` — each role gets the list that applies to the run in `dispatch.references`); plus `schemas/`, `scripts/`, `tools/`, and `docs/` for people.
 Each generated test method has a Javadoc with plain-text metadata:
 
-    tc-agent-mode: legacy, interactive: false
+    tc-agent-mode: characterization, interactive: false
     tc-agent-characterizes: SimpleCalculatorService@29aeef6a
 
 A scenario that cannot be tested (e.g. code reads `LocalDateTime.now()`) becomes an empty

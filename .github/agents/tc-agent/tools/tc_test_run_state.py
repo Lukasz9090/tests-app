@@ -51,7 +51,7 @@ class Run:
     """One run directory inside a FixtureRepo, with helpers to drop artifacts."""
 
     def __init__(self, repo: FixtureRepo, run_id: str = "20260101-000000", commit: bool = False,
-                 max_rounds: int = 3, mode: str = "legacy"):
+                 max_rounds: int = 3, mode: str = "characterization"):
         self.repo = repo
         self.dir = c.runs_root(repo.root, SLUG) / run_id
         self.dir.mkdir(parents=True)
@@ -78,7 +78,7 @@ class Run:
 
     def plan(self, n: int, status: str = "READY", **extra):
         self.put(f"plan-v{n}.md", {"schema_version": 1, "plan_version": n, "status": status,
-                                    "target": {"class": SLUG}, "mode": "legacy", **extra})
+                                    "target": {"class": SLUG}, "mode": "characterization", **extra})
 
     def report(self, n: int, m: int = 1, results=None, test_files=None, suggestions=None):
         name = f"generation-report-v{n}.md" if m == 1 else f"generation-report-v{n}-r{m}.md"
@@ -252,6 +252,48 @@ def test_no_sequence_exceeds_three_reviews():
                    (reviews <= 3, run.state()["next_action"]), (True, "FINISH"))
 
 
+def test_dispatch_references():
+    """Each role reads only the instruction files that apply to THIS run."""
+    def names(state):
+        return [Path(r).as_posix().split("references/")[-1] for r in state["dispatch"]["references"]]
+
+    with FixtureRepo() as repo:
+        run = Run(repo)
+        run.derive_raw("PLAN", repo={"junit": "5"})
+        s = run.state()
+        expect("planner, characterization", names(s), ["contracts.md", "conventions.md", "modes/characterization.md"])
+        for r in s["dispatch"]["references"]:
+            expect_true(f"{r} exists", (repo.root / r).is_file() or Path(r).is_file())
+        run.run["interactive"] = True
+        c.save_run(run.dir, run.run)
+        expect("planner, interactive", names(run.state())[-1], "modes/interactive.md")
+        run.plan(1)
+        expect("generator never gets the interactive rules", names(run.state()),
+               ["contracts.md", "conventions.md", "modes/characterization.md"])
+        run.report(1)
+        expect("reviewer", (run.state()["next_action"], names(run.state())),
+               ("REVIEW", ["contracts.md", "conventions.md", "modes/characterization.md"]))
+    with FixtureRepo() as repo:
+        run = Run(repo, mode="spec-driven")
+        run.derive_raw("PLAN", repo={"junit": "4"})
+        expect("JUnit 4 + spec-driven", names(run.state()),
+               ["contracts.md", "conventions.md", "junit4.md", "modes/spec-driven.md"])
+
+
+def test_each_rule_has_one_owner():
+    """D83: a rule lives in one file; prompts point to it instead of repeating it."""
+    owners = {"Relational values": "references/conventions.md", "Object shapes": "references/conventions.md",
+              "RELATIVE to now": "references/conventions.md", "isEven": "references/conventions.md",
+              "AI-generated placeholder": "references/conventions.md", "black box": "references/contracts.md",
+              "Never delete a field": "references/contracts.md", "TYPES FROM DEPENDENCIES": "references/contracts.md",
+              "@Ignore": "references/junit4.md", "MockitoJUnitRunner": "references/junit4.md"}
+    files = list(TC.glob("*.agent.md")) + list((TC / "references").rglob("*.md"))
+    for phrase, owner in owners.items():
+        found = sorted(f.relative_to(TC).as_posix() for f in files
+                       if phrase.lower() in f.read_text(encoding="utf-8").lower())
+        expect(f"'{phrase}' only in {owner}", found, [owner])
+
+
 def test_known_test_data_travels_between_plan_versions():
     """A human answers once per run; the next planner is handed the answer."""
     with FixtureRepo() as repo:
@@ -365,7 +407,7 @@ def test_interrupted_start_leaves_a_readable_state():
     """
     import argparse
     with FixtureRepo() as repo:
-        args = argparse.Namespace(slug=SLUG, repo=str(repo.root), mode="legacy",
+        args = argparse.Namespace(slug=SLUG, repo=str(repo.root), mode="characterization",
                                   interactive=False, spec=None, test_data=None,
                                   max_rounds=None, commit=False)
         original = ds.derive

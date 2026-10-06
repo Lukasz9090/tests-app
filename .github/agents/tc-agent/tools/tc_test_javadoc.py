@@ -8,7 +8,7 @@ attaches a Javadoc to the wrong method, loses a tag, or rewrites more than the
   * attaching Javadoc to test methods (annotations with strings and parens,
     braces inside string literals, javadoc after annotations, nested classes),
   * every metadata defect the parser reports,
-  * placeholders (@Disabled + @deferred + empty body),
+  * placeholders (@Disabled + tc-agent-deferred + empty body),
   * reseal: one line changes, CRLF preserved, nothing else touched,
   * sha prefix matching, dirty / age / branch helpers on a real git repo,
   * protected branches read from the project profile.
@@ -49,7 +49,7 @@ class OrderServiceTest {
     /**
      * AI-generated test. Characterizes current behavior of OrderService (a freeze, not a spec).
      *
-     * tc-agent-mode: legacy, interactive: true
+     * tc-agent-mode: characterization, interactive: true
      * tc-agent-characterizes: OrderService@29aeef6a
      * tc-agent-note: business-hours guard rejects 17:00 exactly — reported
      *       as a defect
@@ -94,7 +94,7 @@ def test_attaches_javadoc_to_the_right_methods():
            keys, ["OrderServiceTest#shouldCreateOrderWhenCustomerActive", "OrderServiceTest#humanTest",
                   "OrderServiceTest#paramTest", "OrderServiceTest$Inner#innerHuman"])
     first = methods[0]
-    expect("legacy mode", first.meta.mode, "legacy")
+    expect("characterization mode", first.meta.mode, "characterization")
     expect("characterizes class", first.meta.characterizes_class, "OrderService")
     expect("characterizes sha", first.meta.characterizes_sha, "29aeef6a")
     expect("continuation line joins the note",
@@ -122,26 +122,33 @@ def doc(*lines: str) -> str:
     return "/**\n" + "".join(f" * {l}\n" for l in lines) + " */\n"
 
 
-G, L, SD = "tc-agent: generated", "tc-agent-mode: legacy, interactive: false", \
-    "tc-agent-mode: spec-driven, interactive: false"
+L, SD = "tc-agent-mode: characterization, interactive: false", "tc-agent-mode: spec-driven, interactive: false"
 
 
 def test_defects():
     cases = {
-        "legacy without sha": (doc(L) + "@Test void a() {}", "tc-agent-mode legacy without tc-agent-characterizes"),
+        "characterization without sha": (doc(L) + "@Test void a() {}", "tc-agent-mode characterization without tc-agent-characterizes"),
         "no mode": (doc("tc-agent-note: x") + "@Test void a() {}", "tc-agent metadata without tc-agent-mode"),
         "bad mode": (doc("tc-agent-mode: tdd") + "@Test void a() {}",
                      "tc-agent-mode: 'tdd' is not '<mode>, interactive: true|false' "
-                     "with a mode in legacy, spec-driven"),
-        "mode without interactive is still read": (doc("tc-agent-mode: legacy") + "@Test void a() {}",
-                                                   "tc-agent-mode legacy without tc-agent-characterizes"),
+                     "with a mode in characterization, spec-driven"),
+        "old mode name": (doc("tc-agent-mode: legacy, interactive: false") + "@Test void a() {}",
+                          "tc-agent-mode: 'legacy, interactive: false' is not '<mode>, interactive: true|false' "
+                          "with a mode in characterization, spec-driven"),
+        "mode without interactive": (doc("tc-agent-mode: characterization") + "@Test void a() {}",
+                                     "tc-agent-mode: 'characterization' is not '<mode>, interactive: true|false' "
+                                     "with a mode in characterization, spec-driven"),
         "bad sha": (doc(L, "tc-agent-characterizes: OrderService") + "@Test void a() {}",
                     "tc-agent-characterizes: 'OrderService' is not <Class>@<sha>"),
         "unknown key": (doc(SD, "tc-agent-foo: x") + "@Test void a() {}",
-                        "unknown metadata key 'tc-agent-foo:' (allowed: tc-agent, tc-agent-mode, "
-                        "tc-agent-interactive, tc-agent-characterizes, tc-agent-deferred, tc-agent-note)"),
-        "interactive not boolean": (doc(SD, "tc-agent-interactive: maybe") + "@Test void a() {}",
-                                    "'tc-agent-interactive: maybe' - write 'true' or 'false'"),
+                        "unknown metadata key 'tc-agent-foo:' (allowed: tc-agent-mode, "
+                        "tc-agent-characterizes, tc-agent-deferred, tc-agent-note)"),
+        "old marker line": (doc("tc-agent: generated", SD) + "@Test void a() {}",
+                            "unknown metadata key 'tc-agent:' (allowed: tc-agent-mode, "
+                            "tc-agent-characterizes, tc-agent-deferred, tc-agent-note)"),
+        "old interactive line": (doc(SD, "tc-agent-interactive: true") + "@Test void a() {}",
+                                 "unknown metadata key 'tc-agent-interactive:' (allowed: tc-agent-mode, "
+                                 "tc-agent-characterizes, tc-agent-deferred, tc-agent-note)"),
         "spec-driven with sha": (doc(SD, "tc-agent-characterizes: X@1234567") + "@Test void a() {}",
                                  "tc-agent-mode spec-driven must not carry tc-agent-characterizes"),
         "deferred without Disabled": (doc(SD, "tc-agent-deferred: why") + "@Test void a() {}",
@@ -164,32 +171,22 @@ def test_junit4_ignore_is_a_placeholder():
     expect("no defects", m.meta.defects, [])
 
 
-def test_older_line_format_is_read_without_complaint():
-    """The first shape: a separate marker line and a separate interactive line."""
-    body = doc(G, "tc-agent-mode: legacy", "tc-agent-interactive: true",
-               "tc-agent-characterizes: OrderService@29aeef6a") + "@Test void a() {}"
+def test_old_at_format_is_not_metadata():
+    """No backward compatibility: the @-tag draft is just Javadoc, the method reads as human."""
+    body = doc("@aiGenerated", "@mode characterization", "@characterizes OrderService@29aeef6a") + "@Test void a() {}"
     (m,), _ = parse("class T {\n" + body + "\n}\n")
-    expect("read as AI", (m.meta.ai, m.meta.mode, m.meta.interactive), (True, "legacy", True))
-    expect("no defects", m.meta.defects, [])
-
-
-def test_old_at_format_is_read_and_flagged():
-    body = doc("@aiGenerated", "@mode legacy", "@characterizes OrderService@29aeef6a", "@note old") + "@Test void a() {}"
-    (m,), _ = parse("class T {\n" + body + "\n}\n")
-    expect("still recognized as AI", (m.meta.ai, m.meta.mode, m.meta.characterizes_sha, m.meta.notes),
-           (True, "legacy", "29aeef6a", ["old"]))
-    expect_true("flagged for migration", any("old @-tag format" in d for d in m.meta.defects))
+    expect("not AI, no defects", (m.meta.ai, m.meta.defects), (False, []))
 
 
 def test_continuation_stops_at_blank_line():
-    body = doc("AI-generated test.", "", G, SD, "tc-agent-note: first part", "second part", "", "Trailing prose.") \
+    body = doc("AI-generated test.", "", SD, "tc-agent-note: first part", "second part", "", "Trailing prose.") \
         + "@Test void a() {}"
     (m,), _ = parse("class T {\n" + body + "\n}\n")
     expect("continuation joined, trailing prose not", m.meta.notes, ["first part second part"])
 
 
 def test_class_level_tags_are_a_defect():
-    text = doc(G, L) + "class T {\n" + human_test("a") + "}\n"
+    text = doc(L) + "class T {\n" + human_test("a") + "}\n"
     methods, defects = parse(text)
     expect("the method stays human", methods[0].meta.ai, False)
     expect("one file-level defect", len(defects), 1)
@@ -219,12 +216,6 @@ def test_reseal_changes_one_line_and_keeps_crlf():
         expect("resealing to the same sha is a no-op", again, False)
         missing, _ = j.reseal(path, "OrderServiceTest#nope", "OrderService", "4b1c2aa9")
         expect("unknown method is reported, not guessed", missing, False)
-        old = repo.root / "Old.java"
-        old.write_text("class OrderServiceTest {\n" + doc("@aiGenerated", "@mode legacy",
-                       "@characterizes OrderService@29aeef6a") + "@Test void c() {}\n}\n", encoding="utf-8")
-        moved, _ = j.reseal(old, "OrderServiceTest#c", "OrderService", "4b1c2aa9")
-        expect("old @-format is resealed too", (moved, "@characterizes OrderService@4b1c2aa9" in old.read_text()),
-               (True, True))
 
 
 def test_sha_matches():

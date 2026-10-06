@@ -8,7 +8,7 @@ replaced by a fake runner with canned reports.
 
 Covered: every verdict (PLAN / DONE / RED / BLOCKED / ESCALATE) and reason,
 tier short-circuits (which checks ran), staleness with prefix-matched shas,
-reseal vs recharacterize, stale placeholders, the freshness guard for legacy
+reseal vs recharacterize, stale placeholders, the freshness guard for characterization
 (dirty, too fresh, interactive, spec-driven, custom freshness_days), and the
 written derive-state.md.
 
@@ -34,7 +34,7 @@ except ImportError as exc:  # pragma: no cover
     sys.exit(2)
 
 
-def run(mode="legacy", interactive=False) -> dict:
+def run(mode="characterization", interactive=False) -> dict:
     return {"run_id": "r1", "mode": mode, "interactive": interactive}
 
 
@@ -274,7 +274,7 @@ def test_freshness_guard():
         repo.change_target()
         repo.commit("fresh change", days_ago=2)
         state = derive(repo)
-        expect("legacy + fresh -> BLOCKED", (state["next_action"], state["reasons"]),
+        expect("characterization + fresh -> BLOCKED", (state["next_action"], state["reasons"]),
                ("BLOCKED", ["TARGET_TOO_FRESH", "NO_TESTS"]))
         expect_true("the detail tells the user what to do", "--interactive" in state["detail"])
         expect("interactive lets the planner ask", derive(repo, interactive=True)["next_action"], "PLAN")
@@ -287,7 +287,7 @@ def test_dirty_blocks_even_interactive():
         repo.change_target("return amount - 0;")
         for interactive in (False, True):
             state = derive(repo, interactive=interactive)
-            expect(f"dirty legacy blocks (interactive={interactive})",
+            expect(f"dirty characterization blocks (interactive={interactive})",
                    (state["next_action"], state["reasons"][0]), ("BLOCKED", "TARGET_DIRTY"))
         expect("spec-driven is not blocked", derive(repo, mode="spec-driven")["next_action"], "PLAN")
 
@@ -315,7 +315,8 @@ def test_dirty_stale_green_is_not_resealed():
 
 def test_metadata_defects_are_reported():
     with FixtureRepo() as repo:
-        bad = "    /**\n     * tc-agent: generated\n     * tc-agent-mode: legacy\n     */\n    @Test\n    void shouldA() { }\n"
+        bad = ("    /**\n     * tc-agent-mode: characterization, interactive: false\n     */\n"
+               "    @Test\n    void shouldA() { }\n")
         repo.write_test("OrderServiceTest", bad)
         repo.commit("tests", days_ago=20)
         state = derive(repo)
