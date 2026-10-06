@@ -106,6 +106,22 @@ def test_data_examples_come_from_the_whole_test_tree():
         expect("no tests -> no section", "## DATA EXAMPLES" in build(repo), False)
 
 
+def test_spec_is_in_the_pack_of_a_spec_driven_run():
+    with FixtureRepo() as repo:
+        repo.write("docs/order-spec.md", "# Orders\n\n## R1 Amount\nAn amount must be positive.\n")
+        directory = c.runs_root(repo.root, "OrderService") / "r1"
+        directory.mkdir(parents=True, exist_ok=True)
+        c.save_run(directory, {"run_id": "r1", "slug": "OrderService", "mode": "spec-driven",
+                               "spec": "docs/order-spec.md"})
+        subprocess.run([sys.executable, str(TC / "scripts" / "tc_build_context.py"), "OrderService",
+                        "--repo", str(repo.root), "--run", "r1"], capture_output=True, text=True, check=True)
+        pack = (directory / "context-pack.md").read_text(encoding="utf-8")
+        expect_true("SPEC section with the text", "## SPEC: docs/order-spec.md" in pack and "must be positive" in pack)
+        expect_true("before the target", pack.index("## SPEC:") < pack.index("## TARGET"))
+    with FixtureRepo() as repo:
+        expect("no spec -> no section", "## SPEC:" in build(repo), False)
+
+
 def test_project_test_data_is_included_without_listing_it():
     with FixtureRepo() as repo:
         repo.write(".github/agents/tc-agent-project/test-data.md", "account number: PL + 26 digits\n")

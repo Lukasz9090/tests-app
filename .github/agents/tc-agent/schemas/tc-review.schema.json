@@ -372,7 +372,8 @@
               "unreadable_setup",
               "metadata_defect",
               "missing_placeholder",
-              "convention"
+              "convention",
+            "spec_mismatch"
             ]
           },
           "location": {
@@ -451,9 +452,10 @@
                 "enum": [
                   "assertion",
                   "setup",
-                  "test"
+                  "test",
+                  "disable"
                 ],
-                "description": "What the Generator may rewrite. Narrow it on a test that already passes: `assertion` for a weak assertion, `setup` for unreadable arrangement, `test` only when the whole method must change. Absent means `test`."
+                "description": "What the Generator may rewrite. Narrow it on a test that already passes: `assertion` for a weak assertion, `setup` for unreadable arrangement, `test` only when the whole method must change, `disable` to keep a spec-driven test that fails on a spec mismatch as a disabled test with its body. Absent means `test`."
               }
             }
           }

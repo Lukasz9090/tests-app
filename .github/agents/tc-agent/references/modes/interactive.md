@@ -37,6 +37,8 @@ why no question was needed or that the human declined.
 ## Round 2 — evidence and what you freeze
 
 - **Short evidence:** ONE precise closed question; record the answer as `human_decision`.
+- **Spec-driven:** an ambiguous or self-contradicting requirement gets ONE closed
+  question quoting the passage; the answer is `human_decision` evidence.
 - **Characterization:** pick the FEW most consequential or non-obvious behaviors
   (an odd branch, a magic value, a suspect guard) and ask "the code does X here —
   freeze it as current behavior, or is X a defect to flag?" At most 3–5

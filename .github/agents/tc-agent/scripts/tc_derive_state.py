@@ -340,6 +340,12 @@ def derive(repo: Path, target_slug: str, run: dict, runner=None,
         return conclude("ESCALATE", ["CHECK_UNAVAILABLE"], f"mutation: {mut.get('reason')}")
     if mut.get("status") == "FAILED":
         return conclude("PLAN", ["MUTATION_GAP"])
+    if mode == "spec-driven":
+        # Gates say the CODE is exercised, not that the SPEC is: a spec-driven run
+        # always lets the planner compare the spec with the tests (it may answer
+        # COMPLETE).
+        return conclude("PLAN", ["SPEC_REVIEW"], "gates are met; the spec has not been "
+                        "compared with the tests yet")
     return conclude("DONE", ["GATES_MET"])
 
 

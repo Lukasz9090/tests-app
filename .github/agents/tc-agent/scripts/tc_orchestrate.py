@@ -201,6 +201,21 @@ def references_for(role: str, run: dict, derive: dict, repo: Path) -> list:
     return [rel(REFERENCES / n, repo) for n in names]
 
 
+def spec_mismatches(d: Path) -> list:
+    """`spec_mismatch` findings of every review of the run, one per method: the
+    places where the code does not do what the spec says."""
+    out, seen = [], set()
+    for n in plan_versions(d):
+        for m in review_iterations(d, n):
+            rv = _safe(review_path(d, n, m))
+            for f in (rv.get("findings") or []) if "__error__" not in rv else []:
+                key = f.get("test_method") or f.get("location") or f.get("message")
+                if f.get("type") == "spec_mismatch" and key not in seen:
+                    seen.add(key)
+                    out.append(f)
+    return out
+
+
 def known_test_data(d: Path) -> list:
     """Business values a human already supplied in THIS run.
 
@@ -611,6 +626,7 @@ def collect(repo: Path, directory: Path, state: dict) -> dict:
         "obsolete": (plan.get("obsolete") or []) if "__error__" not in plan else [],
         "confirm": confirm_lines(notes),
         "red": red,
+        "spec_mismatches": spec_mismatches(directory),
         "gates": gates,
         "history": history,
         "timings": timings,
@@ -774,6 +790,13 @@ def render_report(info: dict, state: dict, outcome: str, summary: str, commit: d
             lines.append(f"- COMPILE ERROR {e}")
         lines.append("Your choice: fix the production code, repair the test by hand, or delete it.")
         lines.append("")
+    if info.get("spec_mismatches"):
+        lines.append("**The code does not do what the spec says** (tests kept, disabled, with their body):")
+        for f in info["spec_mismatches"]:
+            where = f.get("test_method") or f.get("location") or "?"
+            lines.append(f"- {where}: {f.get('message') or f.get('description') or ''}".rstrip())
+        lines.append("Fix the code (then remove the @Disabled) or correct the spec.")
+        lines.append("")
     lines.append(f"**Outcome: {outcome}** — {state.get('reason')}")
     lines.append("")
     lines.append(summary)
@@ -861,6 +884,7 @@ def render_report(info: dict, state: dict, outcome: str, summary: str, commit: d
         "resealed": [x["method"] for x in info["resealed"]],
         "test_files": info["test_files"],
         "red": info["red"],
+        "spec_mismatches": info.get("spec_mismatches", []),
         "gates": info["gates"],
         "unimplementable": info["unimplementable"],
         "suggestions": info["suggestions"],

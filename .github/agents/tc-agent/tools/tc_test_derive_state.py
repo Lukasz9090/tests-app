@@ -88,6 +88,15 @@ def test_all_green_is_done():
         expect("nothing stale", state["tests"]["stale"], [])
 
 
+def test_spec_driven_never_done_on_gates_alone():
+    """Gates say the code is exercised, not that the spec is: the planner must look."""
+    with FixtureRepo() as repo:
+        repo.write_test("OrderServiceTest", ai_test("shouldA", repo.sha()), human_test("humanB"))
+        repo.commit("tests", days_ago=20)
+        state = derive(repo, mode="spec-driven")
+        expect("PLAN / SPEC_REVIEW", (state["next_action"], state["reasons"]), ("PLAN", ["SPEC_REVIEW"]))
+
+
 def test_human_tests_only_with_gap_plans():
     """Case 2: human tests are measured like any other; the gap drives the plan."""
     with FixtureRepo() as repo:

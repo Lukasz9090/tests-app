@@ -492,6 +492,11 @@
             "low"
           ]
         },
+        "requirement": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Spec-driven: the id or heading of the spec requirement this scenario comes from; it becomes tc-agent-spec: <spec file>#<requirement>."
+        },
         "replaces": {
           "allOf": [
             {
@@ -579,6 +584,11 @@
         "test_file": {
           "type": "string",
           "pattern": "\\.java$"
+        },
+        "requirement": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Spec-driven: the id or heading of the spec requirement this scenario comes from; it becomes tc-agent-spec: <spec file>#<requirement>."
         },
         "replaces": {
           "type": "string",

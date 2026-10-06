@@ -33,7 +33,7 @@ The orchestrator turns this into `tc_orchestrate.py start` with these options:
 |---|---|
 | target | `ClassName` or `ClassName.methodName`. One or a list. |
 | `--mode characterization` (default) | Freeze the CURRENT behavior, bugs included. Tests describe what the code does now. |
-| `--mode spec-driven` | Tests follow a specification. A failing test may mean the code is wrong → NEEDS_TRIAGE, not a fix. |
+| `--mode spec-driven` | Tests follow the specification (`--spec`), only its requirements. Runs even when the gates are met (`SPEC_REVIEW`). A test that fails because the code does not do what the spec says is kept disabled (`AI spec-mismatch`) and listed at the top of the report. |
 | `--spec <path>` | The specification file for spec-driven mode. |
 | `--interactive` | The planner may ask questions (what to freeze, example data). Also turns off the freshness guard. |
 | `--test-data <path>` | A file of example business values, used in any mode (repeatable). Say it in the prompt: "examples are in docs/test-data.md". Without it, only `--interactive` makes the planner ask. |
@@ -91,6 +91,8 @@ Each generated test method has a Javadoc with plain-text metadata:
 
     tc-agent-mode: characterization, interactive: false
     tc-agent-characterizes: SimpleCalculatorService@29aeef6a
+
+(spec-driven tests carry `tc-agent-spec: <spec file>#<requirement>` instead of `tc-agent-characterizes`.)
 
 A scenario that cannot be tested (e.g. code reads `LocalDateTime.now()`) becomes an empty
 `@Disabled("AI deferred: …")` method with `tc-agent-deferred: <reason>`. Do not delete

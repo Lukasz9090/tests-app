@@ -34,6 +34,7 @@ From the run directory: `run.json` and `derive-state.md`. Its `reasons` set the 
 | `UNTESTED_METHODS` | every method in `coverage.untested_methods` — no test executes it, even when the class gate passes |
 | `CHANGED_CODE_UNCOVERED` | the lines in `coverage.changed_uncovered`, changed since the last freeze (`coverage.changed_since`) |
 | `STALE` | every entry of `recharacterize` (your mode file) |
+| `SPEC_REVIEW` | spec-driven, gates met: compare the spec with the tests (your mode file) |
 
 `derive-state.md` also lists the test classes, AI tests, placeholders, human test
 count and `git.current_sha` — that is how you know what the pipeline already

@@ -37,6 +37,7 @@ on the test class.
 |---|---|
 | `tc-agent-mode: <mode>, interactive: <true\|false>` | always; both values from `run.json`, `interactive` written also when false |
 | `tc-agent-characterizes: <Class>@<sha>` | characterization mode only; `<sha>` = the plan's `context.target_sha` |
+| `tc-agent-spec: <spec file>#<requirement>` | spec-driven mode only; the requirement id or heading the test comes from |
 | `tc-agent-deferred: <reason>` | placeholders only (A2) |
 | `tc-agent-note: <text>` | optional, repeatable: a fact about THIS test (a frozen known bug, a human's answer) |
 

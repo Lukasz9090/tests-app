@@ -142,13 +142,13 @@ def test_defects():
                     "tc-agent-characterizes: 'OrderService' is not <Class>@<sha>"),
         "unknown key": (doc(SD, "tc-agent-foo: x") + "@Test void a() {}",
                         "unknown metadata key 'tc-agent-foo:' (allowed: tc-agent-mode, "
-                        "tc-agent-characterizes, tc-agent-deferred, tc-agent-note)"),
+                        "tc-agent-characterizes, tc-agent-deferred, tc-agent-spec, tc-agent-note)"),
         "old marker line": (doc("tc-agent: generated", SD) + "@Test void a() {}",
                             "unknown metadata key 'tc-agent:' (allowed: tc-agent-mode, "
-                            "tc-agent-characterizes, tc-agent-deferred, tc-agent-note)"),
+                            "tc-agent-characterizes, tc-agent-deferred, tc-agent-spec, tc-agent-note)"),
         "old interactive line": (doc(SD, "tc-agent-interactive: true") + "@Test void a() {}",
                                  "unknown metadata key 'tc-agent-interactive:' (allowed: tc-agent-mode, "
-                                 "tc-agent-characterizes, tc-agent-deferred, tc-agent-note)"),
+                                 "tc-agent-characterizes, tc-agent-deferred, tc-agent-spec, tc-agent-note)"),
         "spec-driven with sha": (doc(SD, "tc-agent-characterizes: X@1234567") + "@Test void a() {}",
                                  "tc-agent-mode spec-driven must not carry tc-agent-characterizes"),
         "deferred without Disabled": (doc(SD, "tc-agent-deferred: why") + "@Test void a() {}",
@@ -169,6 +169,17 @@ def test_junit4_ignore_is_a_placeholder():
     (m,), _ = parse("class T {\n" + body + "\n}\n")
     expect("JUnit 4 @Ignore counts as disabled", (m.disabled, m.is_placeholder), (True, True))
     expect("no defects", m.meta.defects, [])
+
+
+def test_spec_line():
+    ok = doc(SD, "tc-agent-spec: docs/order-spec.md#R3") + "@Test void a() {}"
+    (m,), _ = parse("class T {\n" + ok + "\n}\n")
+    expect("spec read, no defects", (m.meta.spec, m.meta.defects, m.as_dict()["spec"]),
+           ("docs/order-spec.md#R3", [], "docs/order-spec.md#R3"))
+    (m,), _ = parse("class T {\n" + doc(SD) + "@Test void a() {}\n}\n")
+    expect_true("spec-driven without tc-agent-spec", "tc-agent-mode spec-driven without tc-agent-spec" in m.meta.defects)
+    (m,), _ = parse("class T {\n" + doc(SD, "tc-agent-spec: R3") + "@Test void a() {}\n}\n")
+    expect_true("spec without a file", "tc-agent-spec: 'R3' is not <spec file>#<requirement>" in m.meta.defects)
 
 
 def test_old_at_format_is_not_metadata():

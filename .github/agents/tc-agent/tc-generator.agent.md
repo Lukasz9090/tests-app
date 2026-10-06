@@ -45,7 +45,7 @@ and note "renamed from X: name taken by Y" — never touch the existing method.
 **Repair round** (`review_path` set): re-implement every scenario named in
 `feedback.implementation`, at the line it names, and stay inside its `scope` —
 `assertion` changes only what the test asserts, `setup` only how it arranges,
-`test` (or absent) the whole method. A scoped request means the test passes
+`test` (or absent) the whole method; `disable` is in your mode file. A scoped request means the test passes
 today; when the fix needs more than the scope allows, turn the scenario into a
 placeholder naming the part you would have had to touch. Leave every other
 method of this run untouched and report it `SKIPPED` with a note naming the

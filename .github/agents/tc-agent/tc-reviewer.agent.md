@@ -41,8 +41,8 @@ quote the compiler lines, decide REPAIR_IMPLEMENTATION and stop.
 - every plan entry (`scenarios` and `deferred`) appears once in the report's
   `results` and exists in the code under its name — else `scenario_not_implemented`
   / `missing_placeholder`;
-- an `IMPLEMENTED` method is enabled and tests the branch its `evidence` points at,
-  with the scenario's `data`;
+- an `IMPLEMENTED` method is enabled (unless your mode file allows otherwise) and
+  tests the branch its `evidence` points at, with the scenario's `data`;
 - a `PLACEHOLDER` is an empty method shaped as in §A2 (`junit4.md` on JUnit 4);
 - every method this run wrote or repaired carries the §A1 Javadoc with mode and
   interactive equal to `run.json`, the lines your mode file requires, and the

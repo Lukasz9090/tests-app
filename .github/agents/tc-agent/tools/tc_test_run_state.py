@@ -511,6 +511,23 @@ def test_reviewer_summary_is_used():
                     "Added one characterization test for OrderService.create." in prose)
 
 
+def test_spec_mismatches_lead_the_report():
+    with FixtureRepo() as repo:
+        run = Run(repo, mode="spec-driven")
+        run.derive_raw("PLAN", reasons=["SPEC_REVIEW"])
+        run.plan(1)
+        run.report(1)
+        mismatch = {"type": "spec_mismatch", "severity": "major", "stage": 1,
+                    "test_method": "shouldRejectZeroAmount",
+                    "message": "spec R1 says 0 is rejected; the code accepts it"}
+        run.review(1, 1, "REPAIR_IMPLEMENTATION", findings=[mismatch])
+        run.report(1, 2)
+        run.review(1, 2, "ACCEPT_PARTIAL", commit_summary="x.", findings=[mismatch])
+        code, prose = run.finish()
+        expect("listed once", prose.count("shouldRejectZeroAmount: spec R1 says 0 is rejected"), 1)
+        expect_true("ahead of the outcome", prose.index("does not do what the spec says") < prose.index("**Outcome"))
+
+
 def test_reviewer_dispatch_carries_the_run_digest():
     with FixtureRepo() as repo:
         run = Run(repo)

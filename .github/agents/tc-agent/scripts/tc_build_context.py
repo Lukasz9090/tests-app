@@ -32,6 +32,7 @@ import tc_javadoc as tj  # noqa: E402
 # the agent's own reasoning; the old 400k could not be read at all.
 MAX_TOTAL_CHARS = 150_000          # hard budget (~37k tokens)
 MAX_FILE_CHARS = 40_000            # per-file cap before truncation
+SPEC_BUDGET = 30_000               # the spec of a spec-driven run, before the sources
 SIG_RE = re.compile(
     r"^\s*(?:public|protected)\s+[\w<>\[\],\s?]+\s+\w+\s*\([^;{]*\)", re.M)
 IMPORT_RE = re.compile(r"^import\s+(?:static\s+)?([\w.]+)\s*;", re.M)
@@ -530,6 +531,16 @@ def main():
     # builders and enums come before the dependency dump: they are the EVIDENCE
     # that keeps a scenario out of `deferred`, so losing them to a class with
     # twelve dependencies is the worst trade this script can make.
+    spec_rel = run_json.get("spec")
+    spec_file = (repo / spec_rel) if spec_rel else None
+    if spec_file and spec_file.is_file():
+        text = spec_file.read_text(encoding="utf-8", errors="replace")
+        if len(text) > SPEC_BUDGET:
+            text = text[:SPEC_BUDGET] + f"\n... TRUNCATED at {SPEC_BUDGET} chars - read the rest of the file\n"
+        block = (f"\n## SPEC: {spec_rel} (the oracle of this spec-driven run)\n\n"
+                 f"Cite requirements as `tc-agent-spec: {spec_rel}#<id or heading>`.\n\n{text}\n")
+        out.append(block)
+        budget -= len(block)
     add("TARGET", target_file, target_text)
     for f in sorted(set(tests)):
         summary = test_summary(f)

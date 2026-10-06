@@ -69,6 +69,7 @@ class Meta:
     characterizes_class: str | None = None
     characterizes_sha: str | None = None
     deferred: str | None = None
+    spec: str | None = None
     notes: list = field(default_factory=list)
     has_ai_tags: bool = False
     defects: list = field(default_factory=list)
@@ -111,6 +112,8 @@ class TestMethod:
                 out["characterizes"] = f"{self.meta.characterizes_class}@{self.meta.characterizes_sha}"
             if self.meta.deferred is not None:
                 out["deferred"] = self.meta.deferred
+            if self.meta.spec:
+                out["spec"] = self.meta.spec
             if self.meta.notes:
                 out["notes"] = list(self.meta.notes)
         if self.disabled:
@@ -199,6 +202,7 @@ KEYS = {
     "tc-agent-mode": "mode",
     "tc-agent-characterizes": "characterizes",
     "tc-agent-deferred": "deferred",
+    "tc-agent-spec": "spec",
     "tc-agent-note": "note",
 }
 LABEL = {v: k for k, v in KEYS.items()}
@@ -259,6 +263,10 @@ def build_meta(tags: list, unknown: list | None = None) -> Meta:
             meta.deferred = value
             if not value:
                 meta.defects.append("tc-agent-deferred: has no reason")
+        elif name == "spec":
+            meta.spec = value
+            if "#" not in value:
+                meta.defects.append(f"tc-agent-spec: '{value}' is not <spec file>#<requirement>")
         elif name == "note":
             if value:
                 meta.notes.append(value)
@@ -270,6 +278,9 @@ def build_meta(tags: list, unknown: list | None = None) -> Meta:
         meta.defects.append("tc-agent-mode characterization without tc-agent-characterizes")
     if meta.mode == "spec-driven" and meta.characterizes_class is not None:
         meta.defects.append("tc-agent-mode spec-driven must not carry tc-agent-characterizes")
+    if meta.mode == "spec-driven" and meta.spec is None \
+            and not any("tc-agent-spec" in d for d in meta.defects):
+        meta.defects.append("tc-agent-mode spec-driven without tc-agent-spec")
     return meta
 
 
