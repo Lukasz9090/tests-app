@@ -122,6 +122,38 @@ def test_spec_is_in_the_pack_of_a_spec_driven_run():
         expect("no spec -> no section", "## SPEC:" in build(repo), False)
 
 
+def test_multi_module_repository():
+    """Project directory at the repo root, target in one module, the data shape in another."""
+    with FixtureRepo() as repo:
+        repo.write("pom.xml", "<project><modelVersion>4.0.0</modelVersion><groupId>x</groupId>"
+                              "<artifactId>root</artifactId><version>1</version><packaging>pom</packaging>"
+                              "<modules><module>payments</module><module>customers</module></modules></project>\n")
+        for module in ("payments", "customers"):
+            repo.write(f"{module}/pom.xml", f"<project><modelVersion>4.0.0</modelVersion><groupId>x</groupId>"
+                                            f"<artifactId>{module}</artifactId><version>1</version></project>\n")
+        repo.write("payments/src/main/java/com/acme/pay/PaymentService.java",
+                   "package com.acme.pay;\n\npublic class PaymentService {\n"
+                   "    public int pay(String customerId, int amount) { return amount; }\n}\n")
+        repo.write("customers/src/test/java/com/acme/cust/CustomerServiceTest.java",
+                   "class CustomerServiceTest {\n    String customerId = \"123456789\";\n}\n")
+        repo.write(".github/agents/tc-agent-project/profile.md",
+                   '# p\n\n```json\n{"schema_version": 1, "freshness_days": 2}\n```\n')
+        repo.commit("modules", days_ago=20)
+        c._PROFILE_CACHE.clear()
+        target = c.resolve_target(repo.root, "PaymentService")
+        expect("target resolved in its module", target.module, "payments")
+        expect("project profile read at the repo root", c.freshness_days(repo.root), 2.0)
+        directory = c.runs_root(repo.root, "PaymentService") / "r1"
+        directory.mkdir(parents=True, exist_ok=True)
+        c.save_run(directory, {"run_id": "r1", "slug": "PaymentService"})
+        subprocess.run([sys.executable, str(TC / "scripts" / "tc_build_context.py"), "PaymentService",
+                        "--repo", str(repo.root), "--run", "r1"], capture_output=True, text=True, check=True)
+        pack = (directory / "context-pack.md").read_text(encoding="utf-8")
+        expect_true("shape from the other module's test",
+                    "customers/src/test/java/com/acme/cust/CustomerServiceTest.java:2" in pack)
+        c._PROFILE_CACHE.clear()
+
+
 def test_project_test_data_is_included_without_listing_it():
     with FixtureRepo() as repo:
         repo.write(".github/agents/tc-agent-project/test-data.md", "account number: PL + 26 digits\n")
