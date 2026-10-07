@@ -135,16 +135,30 @@ changes the rule.
 
 **B2. `@DisplayName`:** the scenario description, in plain English.
 
-**B3. Structure:** `// given`, `// when`, `// then`, separated by a blank line;
-`// when & then` when act and assert are one statement (an exception assertion).
-An empty section is left out. Placeholders have no sections.
+**B3. Structure:** EVERY test has all three sections, each opened by its own
+comment line — `// given`, `// when`, `// then` — and separated by a blank line.
+No section is ever left out or merged:
+- inputs go into named local variables in `// given`, so the call in `// when`
+  reads by name, not by literal; with truly nothing to arrange, `// given` is
+  followed by `// nothing to arrange`;
+- `// when` holds only the call under test, its result in a variable;
+- an exception is CAUGHT in `// when` and asserted in `// then`.
 
 ```java
-// when & then
-assertThatThrownBy(() -> service.create(request))
+// given
+CreateAppointmentRequest request = validRequest();
+
+// when
+Throwable thrown = catchThrowable(() -> service.create(request));
+
+// then
+assertThat(thrown)
     .isInstanceOf(ApiException.class)
     .extracting("status").isEqualTo(HttpStatus.NOT_FOUND);
 ```
+
+Without AssertJ (JUnit 5): `ApiException thrown = assertThrows(ApiException.class, () -> service.create(request));`
+in `// when`, the property assertions in `// then`. Placeholders have no sections.
 
 **B4. Assertions:** AssertJ when it is on the classpath, otherwise the JUnit
 assertions. An exception assertion checks the type AND the property that tells

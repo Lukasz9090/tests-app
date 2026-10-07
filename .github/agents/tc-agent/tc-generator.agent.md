@@ -57,7 +57,8 @@ earlier report.
   scenario `notes` entry becomes one `tc-agent-note`. No scenario ids, no
   `// TC-nn`, nothing on the class.
 - **Style:** §B (or REPO CONVENTIONS): the planned name, `@DisplayName` = the
-  description, given / when / then, AssertJ.
+  description, AssertJ, and in EVERY test all three `// given`, `// when`,
+  `// then` sections (§B3) — never omitted, never merged.
 - **Data** comes from the plan's `data` and `evidence` (§A4): mirror the seeder
   rows, DTO records and builders exactly, changing only what the scenario
   demands. A type you cannot see in full is built the way the target builds it

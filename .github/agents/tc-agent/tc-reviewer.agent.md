@@ -74,8 +74,10 @@ only on methods this run wrote or repaired: does the assertion prove the
 `description` (for an exception, type AND distinguishing property)? Only
 `assertNotNull` or only `verify`? A duplicate of an existing test? Unreadable
 setup? A flakiness smell (`Thread.sleep`, `Random`, `now()` inside an assertion,
-order dependence)? Naming or structure off the rule in force is a `convention`
-finding: always `minor`, no feedback, never a repair on its own. Findings about
+order dependence)? A test without the `// given` / `// when` / `// then` sections
+in force (§B3, unless REPO CONVENTIONS replace it) is a blocking `convention`
+finding, `scope: "test"`; any other naming or style deviation is a `minor`
+`convention` finding with no feedback. Findings about
 what a test PROVES block, with feedback in the narrowest `scope`: `assertion`,
 `setup`, or `test` (whole method, e.g. a rename).
 

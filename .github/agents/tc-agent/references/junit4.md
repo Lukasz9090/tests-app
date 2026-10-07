@@ -9,7 +9,7 @@ of `conventions.md`:
 | A2 placeholder | `@Ignore("AI deferred: …")` instead of `@Disabled`; no `@DisplayName` |
 | A7 parameterized test | not allowed: `@RunWith(Parameterized)` takes over the whole class — one plain method per scenario |
 | B2 `@DisplayName` | does not exist; the method name carries the description |
-| B4 assertions without AssertJ | `org.junit.Assert`; for an exception there is no `assertThrows`: `@Test(expected = ...)` only when no property has to be checked, otherwise try / `fail()` / catch and assert on the caught exception |
+| B3 / B4 exceptions | AssertJ `catchThrowable` works as on JUnit 5. Without AssertJ (`org.junit.Assert`, no `assertThrows`): in `// when` catch it into a variable (`ApiException thrown = null; try { service.create(request); } catch (ApiException e) { thrown = e; }`), in `// then` assert it is not null and check its property. Never `@Test(expected = ...)`: it leaves no `// then` |
 | B5 Mockito wiring | `@RunWith(MockitoJUnitRunner.class)` |
 
 `import org.junit.Test` (not `org.junit.jupiter.api.Test`), public test methods

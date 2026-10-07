@@ -253,11 +253,16 @@ def main() -> int:
             # anything, so SILENCE counts as a failure too: no reports, or only
             # skipped ones, falls back to the real phase instead of reporting
             # the tests as unavailable.
+            #
+            # Only when the goals RAN NOTHING. Tests that ran and failed, or test
+            # sources that do not compile, are this run's result: the phase would
+            # end the same way, minutes later, after every generator bound to it.
             ran = any(r["status"] != "SKIPPED" for r in results)
-            if goals_only and (code != 0 or not ran):
+            test_compile_failed = bool(COMPILER_ERROR.search(output)) or "COMPILATION ERROR" in output
+            if goals_only and not ran and not test_compile_failed:
                 print("[tc-agent] the direct goals %s - falling back to the full `test` phase for "
                       "this run%s" % (
-                          "failed" if code != 0 else "ran no tests (maven exited 0)",
+                          "ran no tests (maven exited %s)" % code,
                           "" if code != 0 else "; surefire is probably configured in a pom "
                           "execution, so `maven_goals_only` buys nothing here"),
                       file=sys.stderr, flush=True)

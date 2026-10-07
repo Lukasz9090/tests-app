@@ -535,6 +535,29 @@ def test_silent_goals_fall_back_to_the_real_phase():
         expect("and the tests were measured", tests["total"], 3)
 
 
+def test_failing_or_broken_tests_never_fall_back_to_the_phase():
+    """A red test or a test that does not compile is the result, not a goals problem.
+
+    The phase would end the same way, minutes later, after every generator bound to it.
+    """
+    def lean_fixture(repo):
+        compiled = repo.root / "target" / "classes" / "com" / "acme"
+        compiled.mkdir(parents=True)
+        (compiled / "OrderService.class").write_bytes(b"\xca\xfe\xba\xbe")
+
+    with fixture() as repo:
+        lean_fixture(repo)
+        out = start(repo, {"FAKE_MVN_FAIL": "OrderServiceTest#humanB"})
+        tests_calls = [cmd for cmd in out["mvn"] if "mutationCoverage" not in cmd]
+        expect("failing test: goals + the confirmation run, both lean",
+               (len(tests_calls), all("surefire:test" in cmd for cmd in tests_calls)), (2, True))
+    with fixture() as repo:
+        lean_fixture(repo)
+        out = start(repo, {"FAKE_MVN_COMPILE": "cannot find symbol"})
+        expect("compile error: one lean call, no phase", [("surefire:test" in cmd) for cmd in out["mvn"]], [True])
+        expect("reported as a compile error", out["state"]["reasons"], ["COMPILE_ERROR"])
+
+
 def test_maven_args_from_the_profile_reach_the_command():
     import tc_common as tc
     with FixtureRepo() as repo:
