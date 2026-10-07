@@ -69,16 +69,27 @@ void shouldRejectAppointmentWhenOutsideBusinessHours() {
 - `tc-agent-deferred` carries the full reason; for a compile error, the compiler message;
 - a placeholder is ONLY for behavior that cannot be tested: no code seam (A5), a
   value whose meaning nothing backs (A4), a compile error that could not be fixed.
-  Never for a name clash, a relational value or object shape (A4), or a type
-  missing from the pack (`contracts.md` §5).
+  Never for a name clash, a relational value or object shape (A4), a value the
+  code under test defines itself (A4), or a type missing from the pack
+  (`contracts.md` §5).
 
 **A3. Mode semantics** — what a test asserts (current behavior or the spec) is
 defined by the run's mode file.
 
 **A4. Data.** An LLM is never the source of truth about business data: every
-value whose MEANING matters (an id, a code, a status the code switches on, a
-threshold, an amount) comes from evidence. Look for it in this order and take
-the first that answers:
+value whose MEANING matters comes from evidence.
+
+**Values the code under test defines** — a threshold or boundary it compares to
+(`fee == 0`, `amount > limit`), a constant, a status or enum value it switches
+on — are evidenced by that line (`implementation`). In characterization mode
+the line is enough: use the value itself and the values on both sides of the
+boundary (0, 1, -1 for `> 0`). Never defer such a scenario for lack of a second
+source. In spec-driven mode the spec decides which of them are valid.
+
+**Identity-like values** — an id, an account number, a product code, a name, a
+document number — need a source for their SHAPE. A literal in the production
+code shows what a guard compares, not what a real one looks like. Look for it
+in this order and take the first that answers:
 
 1. TEST DATA in the pack — files a human named for this repository or run;
 2. `known_test_data` — what a human answered earlier in this run;
@@ -89,8 +100,7 @@ the first that answers:
 5. a human — only in an `interactive` run (`modes/interactive.md`);
 6. nothing found: the scenario is deferred with a question.
 
-A literal in the production code shows what a guard compares, not what a real
-value looks like. A value from these sources comes with a SHAPE (`customer id:
+A value from these sources comes with a SHAPE (`customer id:
 9 digits, e.g. 123456789`): use the shape, not one literal — every field of that
 kind and every distinct entity gets its OWN value of that shape, never one id
 for two parties; the same value only when it means the same entity.

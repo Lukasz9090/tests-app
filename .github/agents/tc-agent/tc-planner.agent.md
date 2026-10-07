@@ -118,7 +118,9 @@ Write the draft at `dispatch.plan_path`, then run
 
 `strong` and `medium` stay in `scenarios`; `weak` moves to `deferred` with a
 `reason`, a `placeholder_method` (same naming rule) and, where it helps, a
-`question`. Never override the script — find an INDEPENDENT source instead.
+`question`. Never override the script — find an INDEPENDENT source instead. A
+`strong` or `medium` scenario goes to `deferred` only for a reason §A2 accepts
+(no seam, an identity value whose meaning nothing backs), never for "no second source".
 
 | status | when |
 |---|---|

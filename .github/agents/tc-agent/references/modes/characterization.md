@@ -10,8 +10,10 @@ carries `tc-agent-note: reported as defect: <what>`.
 - Set top-level `characterization: true` and copy `git.current_sha` from
   `derive-state.md` into `context.target_sha`.
 - The target's own lines are legitimate evidence (`type: implementation`): a
-  scenario that asserts what the code demonstrably does needs no second source.
-  What still defers is a business value with no origin (`conventions.md` §A4).
+  scenario that asserts what the code demonstrably does needs no second source,
+  and a value the code defines (a boundary, a constant, a status it switches on)
+  is taken from the code (`conventions.md` §A4). Only an identity-like value with
+  no known shape can defer a scenario — and only when its meaning decides the branch.
 - Never describe frozen behavior as correct business behavior.
 - **Stale entries** (`recharacterize` in `derive-state.md`):
   - a stale test that FAILS — the frozen behavior changed: plan a scenario that

@@ -49,8 +49,8 @@ quote the compiler lines, decide REPAIR_IMPLEMENTATION and stop.
   scenario's `notes` as `tc-agent-note` lines — else `metadata_defect` naming
   method and line. Defects `derive-state.md` already lists in older tests are not
   this generation's;
-- a placeholder whose reason is not untestable behavior (§A2: a name clash, a
-  relational value, an object shape, a type missing from the pack) is misused:
+- a placeholder whose reason §A2 does not accept (its "Never for" list — e.g. a
+  value the code itself defines, like a boundary it compares to) is misused:
   `scenario_not_implemented` against the implementation, or a plan gap when the
   plan deferred it. It never goes to `unimplementable` and never explains a gate;
 - a scenario with `replaces` rewrote THAT method instead of adding a second one;
