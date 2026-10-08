@@ -216,6 +216,11 @@ def spec_mismatches(d: Path) -> list:
     return out
 
 
+def production_snapshot(repo: Path) -> dict:
+    """Uncommitted state of every module's src/main - test sources and .test-agent are not in it."""
+    return g.changed_contents(repo, [root.parent for root in c.find_roots(repo)[0]])
+
+
 def known_test_data(d: Path) -> list:
     """Business values a human already supplied in THIS run.
 
@@ -327,6 +332,8 @@ def cmd_start(args) -> int:
         print(f"START_FAILED: {exc}", file=sys.stderr)
         return 2
     ds.write(directory, state)
+    run["production"] = production_snapshot(repo)
+    c.save_run(directory, run)
     print(json.dumps({
         "run_id": run_id,
         "run_dir": rel(directory, repo),
@@ -384,6 +391,13 @@ def compute_state(repo: Path, directory: Path) -> dict:
                       + str(derive.get("detail") or "interrupted") + " Start a new run")
     if "__error__" in derive:
         return finish("ESCALATED", f"derive-state.md is unreadable: {derive['__error__']}")
+    if "production" in run:
+        now, then = production_snapshot(repo), run["production"]
+        moved = sorted(f for f in set(now) | set(then) if now.get(f) != then.get(f))
+        if moved:
+            return finish("ESCALATED", "production code changed during the run: " + ", ".join(moved[:5])
+                          + (" ..." if len(moved) > 5 else "") + " - nothing is committed; restore it "
+                          "or start a new run")
     d_action = derive.get("next_action")
     out["derive"] = {"next_action": d_action, "reasons": derive.get("reasons", [])}
 
@@ -733,8 +747,8 @@ def do_commit(repo: Path, directory: Path, info: dict, outcome: str, message: st
     files = []
     for f in info["test_files"]:
         p = Path(f)
-        if p.is_absolute() or ".." in p.parts or "src/main" in p.as_posix() \
-                or ".test-agent" in p.parts or not (repo / p).exists():
+        # A changed src/main never gets here: compute_state ends such a run ESCALATED.
+        if p.is_absolute() or ".." in p.parts or ".test-agent" in p.parts or not (repo / p).exists():
             continue
         if g.changed(repo, repo / p):
             files.append(p.as_posix())

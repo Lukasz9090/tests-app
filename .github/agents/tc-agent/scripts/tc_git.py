@@ -13,6 +13,7 @@ when the directory is not a git checkout; callers decide what that means.
 
 from __future__ import annotations
 
+import hashlib
 import re
 import subprocess
 import time
@@ -112,6 +113,25 @@ def changed_lines(repo: Path, path: Path, since: str) -> set | None:
         start, count = int(m.group(1)), int(m.group(2) if m.group(2) is not None else 1)
         lines.update(range(start, start + count))
     return lines
+
+
+def changed_contents(repo: Path, paths: list) -> dict:
+    """{file: content hash} for files under `paths` that differ from HEAD or are untracked.
+
+    Line endings do not count. A file deleted since HEAD maps to "deleted".
+    """
+    targets = [rel(repo, p) for p in paths]
+    if not targets:
+        return {}
+    code, diff = git(repo, "diff", "--name-only", "--ignore-cr-at-eol", "HEAD", "--", *targets)
+    _, untracked = git(repo, "ls-files", "--others", "--exclude-standard", "--", *targets)
+    names = (diff.splitlines() if code == 0 else []) + untracked.splitlines()
+    out = {}
+    for name in sorted({n.strip() for n in names if n.strip()}):
+        f = Path(repo) / name
+        out[name] = (hashlib.sha1(f.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
+                     if f.is_file() else "deleted")
+    return out
 
 
 def current_branch(repo: Path) -> str | None:

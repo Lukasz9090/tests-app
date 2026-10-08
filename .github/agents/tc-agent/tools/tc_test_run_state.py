@@ -294,6 +294,23 @@ def test_each_rule_has_one_owner():
         expect(f"'{phrase}' only in {owner}", found, [owner])
 
 
+def test_a_change_to_production_code_during_the_run_stops_it():
+    with FixtureRepo() as repo:
+        repo.write("src/main/java/com/acme/Draft.java", "class Draft {}")     # dirty before the run
+        run = Run(repo)
+        run.run["production"] = o.production_snapshot(repo.root)
+        c.save_run(run.dir, run.run)
+        run.derive_raw("PLAN")
+        expect("unchanged since start", step(run.state()), ("PLAN", None))
+        repo.write_test("OrderServiceTest", ai_test("shouldA", repo.sha()))
+        (run.dir / "notes.md").write_text("x", encoding="utf-8")
+        expect("tests and .test-agent do not count", step(run.state()), ("PLAN", None))
+        repo.change_target()
+        s = run.state()
+        expect("a changed production file escalates", step(s), ("FINISH", "ESCALATED"))
+        expect_true("and names it", "src/main/java/com/acme/OrderService.java" in s["reason"])
+
+
 def test_known_test_data_travels_between_plan_versions():
     """A human answers once per run; the next planner is handed the answer."""
     with FixtureRepo() as repo:
@@ -671,11 +688,14 @@ def test_commit_refusals():
         expect("still on master", repo.git("branch", "--show-current"), "master")
     with FixtureRepo() as repo:
         run, rel = generated_run(repo)
+        run.run["production"] = o.production_snapshot(repo.root)
+        c.save_run(run.dir, run.run)
         repo.write("src/main/java/com/acme/Other.java", "package com.acme; class Other {}")
         run.report(1, test_files=[rel, "src/main/java/com/acme/Other.java"])
         run.finish()
-        files = run.reload()["finished"]["commit"]["files"]
-        expect("production files are never committed", files, [rel])
+        finished = run.reload()["finished"]
+        expect("production files are never committed: the run escalates instead",
+               (finished["outcome"], finished["commit"]["status"]), ("ESCALATED", "skipped"))
 
 
 def test_start_cli_writes_run_json():
