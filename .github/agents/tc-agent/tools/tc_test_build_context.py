@@ -154,6 +154,22 @@ def test_multi_module_repository():
         c._PROFILE_CACHE.clear()
 
 
+def test_source_blocks_carry_the_files_line_numbers():
+    """A ref copied from the pack must name the same line in the file."""
+    with FixtureRepo() as repo:
+        repo.write("docs/test-data.md", "customer id: 9 digits\n" * 30)    # pushes TARGET down the pack
+        repo.write(".github/agents/tc-agent-project/test-data.md", "x\n" * 30)
+        c._PROFILE_CACHE.clear()
+        pack = build(repo)
+        source = (repo.root / repo.target_path).read_text(encoding="utf-8").splitlines()
+        number = next(i for i, line in enumerate(source, 1) if "throw new IllegalArgumentException" in line)
+        block = pack[pack.index("## TARGET"):]
+        expect_true("the throw is shown with its line in the file",
+                    f"{number}  {source[number - 1]}" in block)
+        expect_true("and the pack says how to cite", "LINE NUMBERS:" in pack)
+        c._PROFILE_CACHE.clear()
+
+
 def test_project_test_data_is_included_without_listing_it():
     with FixtureRepo() as repo:
         repo.write(".github/agents/tc-agent-project/test-data.md", "account number: PL + 26 digits\n")

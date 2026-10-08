@@ -97,6 +97,20 @@ def mentions(text: str, *names) -> bool:
     return bool(pattern) and re.search(rf"\b(?:{pattern})\b", text) is not None
 
 
+def numbered(text: str) -> str:
+    """The text with each line prefixed by its line number in the FILE.
+
+    Roles cite evidence as `path:NN`. Without the file's own numbers they count
+    lines of the pack instead, and every ref lands as far off as the sections
+    above the block are long.
+    """
+    lines = text.split("\n")
+    if lines and lines[-1] == "":
+        lines.pop()
+    width = len(str(len(lines)))
+    return "\n".join(f"{i:>{width}}  {line}" for i, line in enumerate(lines, 1))
+
+
 def signatures_only(text):
     sigs = SIG_RE.findall(text)
     return "\n".join(s.strip() + ";" for s in sigs) or "// (no public signatures found)"
@@ -463,12 +477,16 @@ def main():
            f"Target file: {rel_target}",
            f"Method focus: {method or '(whole class)'}",
            f"Source roots: {[str(r.relative_to(repo)) for r in src_roots]}",
-           f"Test roots: {[str(r.relative_to(repo)) for r in test_roots]}", ""]
+           f"Test roots: {[str(r.relative_to(repo)) for r in test_roots]}",
+           "LINE NUMBERS: every source block below shows the FILE's own line number in its "
+           "left column - cite refs as `path:NN` from that column, never by counting lines "
+           "of this pack. Signature-only blocks have no numbers: open the file for a ref.", ""]
     budget = MAX_TOTAL_CHARS
     notes = []
 
-    def add(title, f, body):
+    def add(title, f, body, with_numbers=True):
         nonlocal budget
+        body = numbered(body) if with_numbers else body
         block = f"\n## {title}: {f.relative_to(repo)}\n\n```java\n{body}\n```\n"
         if len(block) > budget:
             notes.append(f"BUDGET: omitted {f.relative_to(repo)}")
@@ -538,7 +556,8 @@ def main():
         if len(text) > SPEC_BUDGET:
             text = text[:SPEC_BUDGET] + f"\n... TRUNCATED at {SPEC_BUDGET} chars - read the rest of the file\n"
         block = (f"\n## SPEC: {spec_rel} (the oracle of this spec-driven run)\n\n"
-                 f"Cite requirements as `tc-agent-spec: {spec_rel}#<id or heading>`.\n\n{text}\n")
+                 f"Cite requirements as `tc-agent-spec: {spec_rel}#<id or heading>`.\n\n"
+                 f"```text\n{numbered(text)}\n```\n")
         out.append(block)
         budget -= len(block)
     add("TARGET", target_file, target_text)
@@ -560,7 +579,7 @@ def main():
             label = "DEPENDENCY (level 2, signatures)"
             if name in generated_names:
                 label = "GENERATED SOURCE (build output, signatures)"
-            add(label, f, signatures_only(read(f)))
+            add(label, f, signatures_only(read(f)), with_numbers=False)
 
     if external:
         out.append("\n## TYPES FROM DEPENDENCIES (not in this pack)\n")

@@ -37,8 +37,9 @@ Precedence, rule by rule:
 Every artifact is a Markdown file: a title, a SHORT summary for a human, and
 EXACTLY ONE fenced ```json block. The JSON is the contract; when the prose
 disagrees, the prose is the defect. Write the file with your file-writing tool,
-as UTF-8 — never through shell redirection (`>`, `Out-File`, `Set-Content`),
-which on Windows mangles characters such as `—`. Strict JSON: double quotes, no
+as UTF-8, and change it only with your file-editing tool — never through a
+script or shell redirection (`>`, `Out-File`, `Set-Content`), which on Windows
+mangles characters such as `—`. Strict JSON: double quotes, no
 trailing commas, no comments, never a second fence.
 
 | artifact (in the run directory) | written by | schema (`$SCH` = `.github/agents/tc-agent/schemas`) |
@@ -93,7 +94,9 @@ placeholders in §A2.
 `<run_dir>/context-pack.md` (built by `tc_build_context.py`) is the main source
 about the repository: TEST FRAMEWORK, TEST DATA, DATA EXAMPLES (how tests
 anywhere in the repo fill the fields this target uses), REPO CONVENTIONS, the
-target, its existing tests, builders, enums and dependencies.
+target, its existing tests, builders, enums and dependencies. Every source block
+shows the FILE's own line numbers in its left column: a ref (`path:NN`) comes
+from that column, never from counting lines of the pack.
 
 A type the pack does not contain is never a reason to defer a scenario. Classes
 from a dependency jar are listed under TYPES FROM DEPENDENCIES, generated code
