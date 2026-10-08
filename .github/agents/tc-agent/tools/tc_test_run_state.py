@@ -629,11 +629,11 @@ def test_commit_on_master_creates_a_branch():
         expect("only the run's test file", repo.git("show", "--name-only", "--format=", "HEAD"), rel)
         message = log(repo)
         expect("title", message.split("\n")[0], "[TC-AGENT] Add tests for OrderService.")
-        expect_true("outcome and run in the footer", "Outcome: DONE | run: 20260101-000000" in message)
+        expect("nothing from .test-agent in the message", ("Outcome:" in message, "Report:" in message,
+                                                            ".test-agent" in message), (False, False, False))
         expect_true("reviewer summary in the body", "positive amount path." in message)
         expect_true("facts: gates", "Gates: branch coverage 84% (gate 80%), mutation 76% (gate 70%)" in message)
         expect_true("facts: suggestions", "Suggestions: Inject java.time.Clock" in message)
-        expect_true("facts: report path", "run-report.md" in message)
         expect_true("report says the branch was created", "went to a NEW branch tc-agent/OrderService" in prose)
 
 

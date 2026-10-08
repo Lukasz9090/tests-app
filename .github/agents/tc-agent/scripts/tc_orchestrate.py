@@ -709,7 +709,8 @@ def template_summary(info: dict, outcome: str) -> str:
     return " ".join(parts)
 
 
-def commit_message(info: dict, outcome: str, summary: str, report_rel: str) -> str:
+def commit_message(info: dict, summary: str) -> str:
+    """Only what the repository can show: .test-agent/ (run id, report) is not in it."""
     run = info["run"]
     lines = [f"[TC-AGENT] Add tests for {run['slug']}.", ""]
     lines += textwrap.wrap(summary, 72) or ["(no summary)"]
@@ -729,8 +730,6 @@ def commit_message(info: dict, outcome: str, summary: str, report_rel: str) -> s
         lines.append("Gates: " + ", ".join(gate_parts))
     if info["suggestions"]:
         lines.append("Suggestions: " + "; ".join(s.get("suggestion", "") for s in info["suggestions"][:3]))
-    lines.append(f"Outcome: {outcome} | run: {run['run_id']}")
-    lines.append(f"Report: {report_rel}")
     return "\n".join(lines) + "\n"
 
 
@@ -937,7 +936,7 @@ def do_finish(repo: Path, directory: Path) -> tuple[int, str]:
 
     commit = None
     if run.get("commit"):
-        message = commit_message(info, outcome, summary, report_rel)
+        message = commit_message(info, summary)
         commit = do_commit(repo, directory, info, outcome, message)
     prose, data = render_report(info, state, outcome, summary, commit, report_rel)
     report.write_text(prose + "\n```json\n" + json.dumps(data, indent=2, ensure_ascii=False)

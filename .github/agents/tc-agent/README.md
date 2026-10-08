@@ -78,7 +78,7 @@ Default style: `shouldXxxWhenYyy`, `// given / // when / // then`, AssertJ, Mock
 - Only on `DONE` or `DONE_PARTIAL`, and only the test files this run wrote.
 - On a protected branch it first creates a new branch `tc-agent/<target>/<run-id>`.
 - Message: title `[TC-AGENT] Add tests for <target>.`, a 2–5 sentence summary of the whole run
-  (written by the reviewer), then numbers (gates, counts, outcome, run id).
+  (written by the reviewer), then facts (mode, target sha, counts, gates, suggestions) — nothing from `.test-agent/`.
 - Never pushes.
 
 ## What you get
