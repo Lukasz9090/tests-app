@@ -39,8 +39,10 @@ EXACTLY ONE fenced ```json block. The JSON is the contract; when the prose
 disagrees, the prose is the defect. Write the file with your file-writing tool,
 as UTF-8, and change it only with your file-editing tool — never through a
 script or shell redirection (`>`, `Out-File`, `Set-Content`), which on Windows
-mangles characters such as `—`. Strict JSON: double quotes, no
-trailing commas, no comments, never a second fence.
+mangles characters such as `—`. Strict JSON: double quotes, no trailing commas,
+no comments, never a second ```json fence. Any fenced block holds valid content of
+its language: ```java only compilable Java, never with line numbers — quote
+numbered code as ```text.
 
 | artifact (in the run directory) | written by | schema (`$SCH` = `.github/agents/tc-agent/schemas`) |
 |---|---|---|

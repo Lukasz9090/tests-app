@@ -167,6 +167,7 @@ def test_source_blocks_carry_the_files_line_numbers():
         expect_true("the throw is shown with its line in the file",
                     f"{number}  {source[number - 1]}" in block)
         expect_true("and the pack says how to cite", "LINE NUMBERS:" in pack)
+        expect("numbered code is never fenced as java", "```java" in pack, False)
         c._PROFILE_CACHE.clear()
 
 

@@ -487,7 +487,9 @@ def main():
     def add(title, f, body, with_numbers=True):
         nonlocal budget
         body = numbered(body) if with_numbers else body
-        block = f"\n## {title}: {f.relative_to(repo)}\n\n```java\n{body}\n```\n"
+        # ```text, not ```java: with the line-number column the block is no longer
+        # valid Java, and a fence must hold what its language says.
+        block = f"\n## {title}: {f.relative_to(repo)}\n\n```text\n{body}\n```\n"
         if len(block) > budget:
             notes.append(f"BUDGET: omitted {f.relative_to(repo)}")
             return
