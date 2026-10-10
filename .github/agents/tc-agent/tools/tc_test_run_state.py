@@ -35,6 +35,7 @@ try:
     import tc_common as c  # noqa: E402
     from tc_md_payload import load_payload as load_container  # noqa: E402
     import tc_derive_state as ds  # noqa: E402
+    import tc_git as g  # noqa: E402
     import tc_orchestrate as o  # noqa: E402
 except ImportError as exc:  # pragma: no cover
     print(f"CANNOT_RUN: {exc}", file=sys.stderr)
@@ -187,6 +188,13 @@ def test_plan_statuses():
             expect(f"plan {status}", step(run.state()), ("FINISH", outcome))
         (run.dir / "plan-v1.md").write_text("no fence", encoding="utf-8")
         expect("unparseable plan", step(run.state()), ("FINISH", "ESCALATED"))
+        run.plan(1)
+        run.report(1)
+        run.review(1, 1, "REPAIR_PLAN")
+        run.plan(2, "COMPLETE")
+        s = run.state()
+        expect("COMPLETE after REPAIR_PLAN goes to a human", step(s), ("FINISH", "ESCALATED"))
+        expect_true("and says why", "found nothing to repair" in s["reason"])
 
 
 def test_round_limit():
@@ -294,21 +302,25 @@ def test_each_rule_has_one_owner():
         expect(f"'{phrase}' only in {owner}", found, [owner])
 
 
-def test_a_change_to_production_code_during_the_run_stops_it():
-    with FixtureRepo() as repo:
-        repo.write("src/main/java/com/acme/Draft.java", "class Draft {}")     # dirty before the run
-        run = Run(repo)
-        run.run["production"] = o.production_snapshot(repo.root)
-        c.save_run(run.dir, run.run)
-        run.derive_raw("PLAN")
-        expect("unchanged since start", step(run.state()), ("PLAN", None))
-        repo.write_test("OrderServiceTest", ai_test("shouldA", repo.sha()))
-        (run.dir / "notes.md").write_text("x", encoding="utf-8")
-        expect("tests and .test-agent do not count", step(run.state()), ("PLAN", None))
-        repo.change_target()
-        s = run.state()
-        expect("a changed production file escalates", step(s), ("FINISH", "ESCALATED"))
-        expect_true("and names it", "src/main/java/com/acme/OrderService.java" in s["reason"])
+def test_a_change_outside_src_test_during_the_run_stops_it():
+    for change, path in ((lambda r: r.change_target(), "src/main/java/com/acme/OrderService.java"),
+                         (lambda r: r.write("pom.xml", r.read("pom.xml") + "<!-- x -->"), "pom.xml"),
+                         (lambda r: r.write("docs/notes.md", "x"), "docs/notes.md")):
+        with FixtureRepo() as repo:
+            repo.write("src/main/java/com/acme/Draft.java", "class Draft {}")     # dirty before the run
+            run = Run(repo)
+            run.run["outside_tests"] = g.outside_tests_snapshot(repo.root)
+            c.save_run(run.dir, run.run)
+            run.derive_raw("PLAN")
+            expect("unchanged since start", step(run.state()), ("PLAN", None))
+            repo.write_test("OrderServiceTest", ai_test("shouldA", repo.sha()))
+            (run.dir / "notes.md").write_text("x", encoding="utf-8")       # .test-agent, not gitignored here
+            repo.write("target/classes/x.txt", "build output")
+            expect("tests, .test-agent and target/ do not count", step(run.state()), ("PLAN", None))
+            change(repo)
+            s = run.state()
+            expect(f"a change to {path} escalates", step(s), ("FINISH", "ESCALATED"))
+            expect_true(f"and names {path}", path in s["reason"])
 
 
 def test_known_test_data_travels_between_plan_versions():
@@ -688,7 +700,7 @@ def test_commit_refusals():
         expect("still on master", repo.git("branch", "--show-current"), "master")
     with FixtureRepo() as repo:
         run, rel = generated_run(repo)
-        run.run["production"] = o.production_snapshot(repo.root)
+        run.run["outside_tests"] = g.outside_tests_snapshot(repo.root)
         c.save_run(run.dir, run.run)
         repo.write("src/main/java/com/acme/Other.java", "package com.acme; class Other {}")
         run.report(1, test_files=[rel, "src/main/java/com/acme/Other.java"])
@@ -696,14 +708,27 @@ def test_commit_refusals():
         finished = run.reload()["finished"]
         expect("production files are never committed: the run escalates instead",
                (finished["outcome"], finished["commit"]["status"]), ("ESCALATED", "skipped"))
+    with FixtureRepo() as repo:
+        repo.write("pom.xml", repo.read("pom.xml") + "<!-- edited before the run -->")
+        run, rel = generated_run(repo)
+        run.run["outside_tests"] = g.outside_tests_snapshot(repo.root)
+        c.save_run(run.dir, run.run)
+        run.report(1, test_files=[rel, "pom.xml"])
+        run.finish()
+        commit = run.reload()["finished"]["commit"]
+        expect("a file outside src/test named by the generator is never committed",
+               (commit["status"], commit["files"]), ("committed", [rel]))
+        expect_true("and stays in the working tree", "pom.xml" in repo.git("status", "--porcelain"))
 
 
 def test_start_cli_writes_run_json():
     with FixtureRepo() as repo:
+        repo.write("docs/spec.md", "# spec")
+        repo.write("docs/test-data.md", "customer id: 9 digits")
         script = TC / "scripts" / "tc_orchestrate.py"
         proc = subprocess.run([sys.executable, str(script), "start", SLUG, "--repo", str(repo.root),
-                               "--mode", "spec-driven", "--interactive", "--commit", "--max-rounds", "4",
-                               "--test-data", "docs/test-data.md"],
+                               "--mode", "spec-driven", "--spec", "docs/spec.md", "--interactive", "--commit",
+                               "--max-rounds", "4", "--test-data", "docs/test-data.md"],
                               capture_output=True, text=True)
         expect("start exits 0", proc.returncode, 0)
         out = json.loads(proc.stdout)
@@ -716,6 +741,30 @@ def test_start_cli_writes_run_json():
         bad = subprocess.run([sys.executable, str(script), "start", SLUG, "--repo", str(repo.root),
                               "--mode", "tdd"], capture_output=True, text=True)
         expect("tdd is refused", bad.returncode, 2)
+
+
+def test_start_refuses_what_it_cannot_run():
+    script = TC / "scripts" / "tc_orchestrate.py"
+
+    def start(repo, *extra):
+        proc = subprocess.run([sys.executable, str(script), "start", SLUG, "--repo", str(repo.root), *extra],
+                              capture_output=True, text=True)
+        runs = c.runs_root(repo.root, SLUG)
+        return proc.returncode, proc.stderr, runs.is_dir() and any(runs.iterdir())
+
+    with FixtureRepo() as repo:
+        code, err, made = start(repo, "--mode", "spec-driven")
+        expect("spec-driven without a spec", (code, err.startswith("SPEC_REQUIRED"), made), (2, True, False))
+        code, err, _ = start(repo, "--mode", "spec-driven", "--spec", "docs/nope.md")
+        expect("missing spec file", (code, err.startswith("FILE_NOT_FOUND: --spec")), (2, True))
+        code, err, _ = start(repo, "--test-data", "docs/nope.md")
+        expect("missing --test-data file", (code, err.startswith("FILE_NOT_FOUND: --test-data")), (2, True))
+        repo.write(".github/agents/tc-agent-project/profile.md",
+                   '# p\n\n```json\n{"schema_version": 1, "max_round": 2}\n```\n')
+        c._PROFILE_CACHE.clear()
+        code, err, made = start(repo)
+        expect("a profile key the schema does not know",
+               (code, err.startswith("INVALID_PROFILE"), "max_round" in err, made), (2, True, True, False))
 
 
 def test_maven_time_is_recorded_per_check():

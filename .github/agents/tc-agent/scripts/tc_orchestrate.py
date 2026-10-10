@@ -216,11 +216,6 @@ def spec_mismatches(d: Path) -> list:
     return out
 
 
-def production_snapshot(repo: Path) -> dict:
-    """Uncommitted state of every module's src/main - test sources and .test-agent are not in it."""
-    return g.changed_contents(repo, [root.parent for root in c.find_roots(repo)[0]])
-
-
 def known_test_data(d: Path) -> list:
     """Business values a human already supplied in THIS run.
 
@@ -268,6 +263,32 @@ def new_run_id(root: Path) -> str:
     return run_id
 
 
+PROFILE_SCHEMA = Path(__file__).resolve().parent.parent / "schemas" / "tc-project-profile.schema.json"
+
+
+def start_refusal(repo: Path, args) -> str | None:
+    """Why `start` creates no run: a missing spec or file, or a profile.md the schema rejects."""
+    if args.mode == "spec-driven" and not args.spec:
+        return "SPEC_REQUIRED: spec-driven mode needs --spec <file> - ask the user for the specification"
+    named = [("--spec", args.spec)] + [("--test-data", p) for p in args.test_data or []] \
+        + [("profile.md test_data_paths", p) for p in c.test_data_paths(repo)]
+    for flag, path in named:
+        if path and not (repo / path).is_file():
+            return f"FILE_NOT_FOUND: {flag} {path}"
+    profile = c.project_file(repo, c.PROFILE_FILE)
+    if profile:
+        import tc_validate_plan as vp
+        try:
+            errors = vp.validate(load_payload(profile)[0], json.loads(PROFILE_SCHEMA.read_text(encoding="utf-8")))
+        except RuntimeError as exc:
+            return f"CHECK_UNAVAILABLE: {exc}"
+        except ValueError as exc:
+            errors = [str(exc)]
+        if errors:
+            return f"INVALID_PROFILE: {rel(profile, repo)}: " + "; ".join(errors)
+    return None
+
+
 def cmd_start(args) -> int:
     repo = Path(args.repo).resolve()
     if args.mode not in MODES:
@@ -276,8 +297,9 @@ def cmd_start(args) -> int:
     if args.max_rounds is not None and args.max_rounds < 1:
         print("--max-rounds must be at least 1", file=sys.stderr)
         return 2
-    if args.spec and not (repo / args.spec).is_file() and not Path(args.spec).is_file():
-        print(f"--spec {args.spec}: file not found", file=sys.stderr)
+    problem = start_refusal(repo, args)
+    if problem:
+        print(problem, file=sys.stderr)
         return 2
     root = c.runs_root(repo, args.slug)
     run_id = new_run_id(root)
@@ -296,6 +318,7 @@ def cmd_start(args) -> int:
         "started": _now(),
         "resealed": False,
     }
+    run["outside_tests"] = g.outside_tests_snapshot(repo)   # before the checks: they take minutes
     c.save_run(directory, run)
 
     def failed_state(detail: str, reason: str, pid: int | None = None) -> dict:
@@ -332,8 +355,6 @@ def cmd_start(args) -> int:
         print(f"START_FAILED: {exc}", file=sys.stderr)
         return 2
     ds.write(directory, state)
-    run["production"] = production_snapshot(repo)
-    c.save_run(directory, run)
     print(json.dumps({
         "run_id": run_id,
         "run_dir": rel(directory, repo),
@@ -391,12 +412,12 @@ def compute_state(repo: Path, directory: Path) -> dict:
                       + str(derive.get("detail") or "interrupted") + " Start a new run")
     if "__error__" in derive:
         return finish("ESCALATED", f"derive-state.md is unreadable: {derive['__error__']}")
-    if "production" in run:
-        now, then = production_snapshot(repo), run["production"]
+    if "outside_tests" in run:
+        now, then = g.outside_tests_snapshot(repo), run["outside_tests"]
         moved = sorted(f for f in set(now) | set(then) if now.get(f) != then.get(f))
         if moved:
-            return finish("ESCALATED", "production code changed during the run: " + ", ".join(moved[:5])
-                          + (" ..." if len(moved) > 5 else "") + " - nothing is committed; restore it "
+            return finish("ESCALATED", "files outside src/test changed during the run: " + ", ".join(moved[:5])
+                          + (" ..." if len(moved) > 5 else "") + " - nothing is committed; restore them "
                           "or start a new run")
     d_action = derive.get("next_action")
     out["derive"] = {"next_action": d_action, "reasons": derive.get("reasons", [])}
@@ -438,6 +459,9 @@ def compute_state(repo: Path, directory: Path) -> dict:
     if status in PLAN_STOP:
         return finish(PLAN_STOP[status], f"planner returned {status}"
                       + (f": {plan.get('reason')}" if plan.get("reason") else ""))
+    if status == "COMPLETE" and n > 1:
+        return finish("ESCALATED", f"plan v{n} is COMPLETE although the reviewer asked to repair the "
+                                   f"plan: the planner found nothing to repair - a human decides")
     if status == "COMPLETE":
         return finish("DONE", f"plan v{n} is COMPLETE: nothing left to generate")
     if status not in PLAN_GO:
@@ -746,10 +770,10 @@ def do_commit(repo: Path, directory: Path, info: dict, outcome: str, message: st
     files = []
     for f in info["test_files"]:
         p = Path(f)
-        # A changed src/main never gets here: compute_state ends such a run ESCALATED.
-        if p.is_absolute() or ".." in p.parts or ".test-agent" in p.parts or not (repo / p).exists():
+        if p.is_absolute() or ".." in p.parts or not g.is_test_path(p.as_posix()) \
+                or p.parts[0] == ".test-agent" or not (repo / p).exists():
             continue
-        if g.changed(repo, repo / p):
+        if g.is_dirty(repo, repo / p):
             files.append(p.as_posix())
     if not files:
         return {"status": "skipped", "reason": "nothing to commit: no test file of this run changed"}
@@ -844,8 +868,10 @@ def render_report(info: dict, state: dict, outcome: str, summary: str, commit: d
             parts.append("mutation not run (runs only after the coverage gate)")
         lines.append("- gates: " + ", ".join(parts))
         if any(" - NOT MET" in x for x in parts):
-            lines.append("- a gate is NOT MET: the reviewer accepted the gap as explained by the "
-                         "placeholders below. Check that each placeholder reason is really untestable.")
+            lines.append("- a gate is NOT MET: " + (
+                "the reviewer accepted the gap as explained by the placeholders below. Check that each "
+                "placeholder reason is really untestable." if info["review"].get("decision") == "ACCEPT_PARTIAL"
+                else "no reviewer accepted this gap."))
     for u in info["unimplementable"]:
         lines.append(f"- unimplementable {u.get('id')}: {u.get('reason')}"
                      + (f" -> {u['suggestion']}" if u.get("suggestion") else ""))

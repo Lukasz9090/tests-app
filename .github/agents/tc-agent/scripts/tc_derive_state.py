@@ -225,23 +225,23 @@ def derive(repo: Path, target_slug: str, run: dict, runner=None,
         if action == "PLAN" and mode == "characterization":
             fresh_limit = freshness_days if freshness_days is not None else c.freshness_days(repo)
             age = t1["git"]["age_days"]
-            if t1["git"]["dirty"]:
-                out["next_action"] = "BLOCKED"
-                out["reasons"] = ["TARGET_DIRTY"] + reasons
-                out["detail"] = (f"{target.rel_file} has uncommitted changes. Characterization mode freezes "
-                                 f"committed behavior and records its sha; commit the change first, "
-                                 f"or run in spec-driven mode.")
-            elif age is None:
-                out["next_action"] = "BLOCKED"
-                out["reasons"] = ["TARGET_NOT_COMMITTED"] + reasons
-                out["detail"] = f"{target.rel_file} has never been committed; there is no sha to freeze."
-            elif age < fresh_limit and not interactive:
+            if age < fresh_limit and not interactive:
                 out["next_action"] = "BLOCKED"
                 out["reasons"] = ["TARGET_TOO_FRESH"] + reasons
                 out["detail"] = (f"{target.rel_file} was last committed {age:.1f} days ago "
                                  f"(limit {fresh_limit:g}). Characterization mode would freeze behavior nobody "
                                  f"has validated yet. Re-run with --interactive, or in spec-driven mode.")
         return out
+
+    # Characterization freezes a commit: dirty or uncommitted code has no sha to freeze.
+    if mode == "characterization" and t1["git"]["dirty"]:
+        return conclude("BLOCKED", ["TARGET_DIRTY"],
+                        f"{target.rel_file} has uncommitted changes. Characterization mode freezes "
+                        f"committed behavior and records its sha; commit the change first, "
+                        f"or run in spec-driven mode.")
+    if mode == "characterization" and t1["git"]["age_days"] is None:
+        return conclude("BLOCKED", ["TARGET_NOT_COMMITTED"],
+                        f"{target.rel_file} has never been committed; there is no sha to freeze.")
 
     if not t1["classes"]:
         mocked = t1.get("mocked_only") or []

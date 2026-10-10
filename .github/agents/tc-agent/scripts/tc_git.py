@@ -115,19 +115,33 @@ def changed_lines(repo: Path, path: Path, since: str) -> set | None:
     return lines
 
 
-def changed_contents(repo: Path, paths: list) -> dict:
-    """{file: content hash} for files under `paths` that differ from HEAD or are untracked.
+def is_test_path(name: str) -> bool:
+    """A path under some module's src/test/, or the pipeline's own .test-agent/."""
+    name = name.replace("\\", "/")
+    return "/src/test/" in "/" + name or name.startswith(".test-agent/")
+
+
+def _names(repo: Path, *args: str) -> list | None:
+    try:
+        proc = subprocess.run(["git", *args, "-z"], cwd=str(repo), capture_output=True)
+    except FileNotFoundError:
+        return None
+    if proc.returncode != 0:
+        return None
+    return [n for n in proc.stdout.decode("utf-8", "replace").split("\0") if n]
+
+
+def outside_tests_snapshot(repo: Path) -> dict:
+    """{file: content hash} of files outside src/test, .test-agent and maven's target/ that differ from HEAD or are untracked.
 
     Line endings do not count. A file deleted since HEAD maps to "deleted".
     """
-    targets = [rel(repo, p) for p in paths]
-    if not targets:
-        return {}
-    code, diff = git(repo, "diff", "--name-only", "--ignore-cr-at-eol", "HEAD", "--", *targets)
-    _, untracked = git(repo, "ls-files", "--others", "--exclude-standard", "--", *targets)
-    names = (diff.splitlines() if code == 0 else []) + untracked.splitlines()
+    changed = _names(repo, "diff", "--name-only", "HEAD")
+    if changed is None:                              # no HEAD yet: every tracked file is new
+        changed = _names(repo, "ls-files") or []
+    names = changed + (_names(repo, "ls-files", "--others", "--exclude-standard") or [])
     out = {}
-    for name in sorted({n.strip() for n in names if n.strip()}):
+    for name in sorted({n for n in names if not is_test_path(n) and "/target/" not in "/" + n}):
         f = Path(repo) / name
         out[name] = (hashlib.sha1(f.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
                      if f.is_file() else "deleted")
@@ -152,8 +166,3 @@ def branch_exists(repo: Path, name: str) -> bool:
 def staged_files(repo: Path) -> list[str]:
     out = _out(repo, "diff", "--cached", "--name-only")
     return [line for line in (out or "").splitlines() if line.strip()]
-
-
-def changed(repo: Path, path: Path) -> bool:
-    """Same as is_dirty; named for the commit step, where it means 'has something to add'."""
-    return is_dirty(repo, path)

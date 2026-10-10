@@ -301,6 +301,20 @@ def test_dirty_blocks_even_interactive():
         expect("spec-driven is not blocked", derive(repo, mode="spec-driven")["next_action"], "PLAN")
 
 
+def test_dirty_target_blocks_before_any_check():
+    """Even with gates met: uncommitted code has no sha to freeze, and maven never runs."""
+    with FixtureRepo() as repo:
+        repo.write_test("OrderServiceTest", ai_test("shouldA", repo.sha()))
+        repo.commit("tests", days_ago=20)
+        repo.change_target("return amount - 0;")
+        runner = FakeRunner()
+        state = derive(repo, runner)
+        expect("BLOCKED / TARGET_DIRTY", (state["next_action"], state["reasons"]), ("BLOCKED", ["TARGET_DIRTY"]))
+        expect("no check ran", runner.calls, [])
+        runner = FakeRunner()
+        expect("spec-driven measures it", derive(repo, runner, mode="spec-driven")["next_action"], "PLAN")
+
+
 def test_guard_only_when_something_would_be_frozen():
     with FixtureRepo() as repo:
         repo.write_test("OrderServiceTest", human_test("humanB"))
@@ -319,7 +333,7 @@ def test_dirty_stale_green_is_not_resealed():
         state = derive(repo)
         expect("stale because dirty", state["tests"]["stale"], ["OrderServiceTest#shouldA"])
         expect("no sha to reseal to", state["reseal"], [])
-        expect("DONE (nothing would be frozen)", state["next_action"], "DONE")
+        expect("BLOCKED: uncommitted code has no sha (D87)", state["next_action"], "BLOCKED")
 
 
 def test_metadata_defects_are_reported():
