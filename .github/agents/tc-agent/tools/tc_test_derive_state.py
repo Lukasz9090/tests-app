@@ -301,6 +301,22 @@ def test_dirty_blocks_even_interactive():
         expect("spec-driven is not blocked", derive(repo, mode="spec-driven")["next_action"], "PLAN")
 
 
+def test_spec_driven_runs_only_the_tests():
+    with FixtureRepo() as repo:
+        old = repo.sha()
+        repo.write_test("OrderServiceTest", ai_test("shouldA", old), human_test("humanB"))
+        repo.commit("tests", days_ago=20)
+        runner = FakeRunner()
+        state = derive(repo, runner, mode="spec-driven")
+        expect("green: PLAN / SPEC_REVIEW", (state["next_action"], state["reasons"]), ("PLAN", ["SPEC_REVIEW"]))
+        expect("no coverage, no PIT", runner.calls, ["tests"])
+        repo.change_target("return amount + 1;")
+        repo.commit("behavior changed", days_ago=10)
+        state = derive(repo, FakeRunner(tests=failing("com.acme.OrderServiceTest#shouldA")), mode="spec-driven")
+        expect("a stale characterization test that fails blocks a spec-driven run",
+               (state["next_action"], state["reasons"], state["recharacterize"]), ("RED", ["TESTS_FAILING"], []))
+
+
 def test_dirty_target_blocks_before_any_check():
     """Even with gates met: uncommitted code has no sha to freeze, and maven never runs."""
     with FixtureRepo() as repo:

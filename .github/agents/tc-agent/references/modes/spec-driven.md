@@ -11,11 +11,9 @@ does not describe are left to a characterization run.
   from (`human_decision` / `api_schema` evidence pointing at the spec lines) and
   names it in `requirement` (the id, or the heading when the spec has no ids). The target's lines show
   how to call the code; they are not a substitute for the spec.
-- `SPEC_REVIEW` in `derive-state.md` means the gates are met: compare the spec
-  with the tests (their `spec` entries in derive-state) and plan only the
-  requirements no test covers — `COMPLETE` with `reason` when every one is.
-  `COVERAGE_GAP`, `MUTATION_GAP` and `STALE` are context here, not work: say in
-  `context.notes` that a characterization run closes them.
+- Scope (`SPEC_REVIEW`): compare the spec with the tests (their `spec` entries in
+  derive-state) and plan only the requirements no test covers — `COMPLETE` with
+  `reason` when every one is. Never plan a case the spec does not describe.
 - A test disabled as `AI spec-mismatch` is a known defect of the code: plan it
   again (`replaces`, to re-enable) only when the target changed since.
 - A requirement that is ambiguous, or that the spec contradicts elsewhere: in an
@@ -46,5 +44,7 @@ does not describe are left to a characterization run.
   with the code — that certifies the bug. When the expectation does not match the
   spec, it is an ordinary implementation (or plan) defect.
 - A failing test this run did NOT write is **NEEDS_TRIAGE**.
+- A FAILED gate on lines no scenario's evidence cites is outside the spec: a `minor`
+  finding, never REPAIR_PLAN. Lines an IMPLEMENTED scenario cites: Attribution as usual.
 - When every remaining failure is disabled as a mismatch: **ACCEPT_PARTIAL**;
   `finish` lists the mismatches at the top of the report.

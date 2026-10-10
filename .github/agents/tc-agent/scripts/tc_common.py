@@ -1022,14 +1022,14 @@ def test_data_paths(repo: Path) -> list:
     return [str(p) for p in profile(repo).get("test_data_paths", []) or []]
 
 
-DEFAULT_PROTECTED = ["master"]
+DEFAULT_PROTECTED = ["master", "main"]
 
 
 def protected_branches(repo: Path) -> tuple[list, str]:
     """Branches the agent never commits to, and where that list came from.
 
     The profile's `protected_branches` (globs allowed: `release/*`). Absent or
-    empty -> only `master`: it cannot be un-protected by accident.
+    empty -> `master` and `main`: they cannot be un-protected by accident.
     """
     value = profile(repo).get("protected_branches") or []
     names = [str(n).strip() for n in value if str(n).strip()] if isinstance(value, list) else []

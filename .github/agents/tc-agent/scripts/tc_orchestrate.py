@@ -480,13 +480,15 @@ def compute_state(repo: Path, directory: Path) -> dict:
     latest_review = newest_review(directory)
 
     if gen_m == 0:
+        # A new plan version already turned the review into scenarios: the generator
+        # implements it whole, so it gets no review (that is a repair round's input).
         out["next_action"] = "GENERATE"
         out["reason"] = f"plan v{n} is {status} and has no generation yet"
         out["dispatch"] = {"agent": "tc-generator", "run_dir": out["run_dir"],
                            "references": references_for("tc-generator", run, derive, repo),
                            "plan_path": rel(plan_path(directory, n), repo),
                            "report_path": rel(gen_path(directory, n, 1), repo),
-                           "review_path": rel(latest_review, repo) if latest_review else None}
+                           "review_path": None}
         return out
 
     if rev_m < gen_m:
@@ -884,6 +886,8 @@ def render_report(info: dict, state: dict, outcome: str, summary: str, commit: d
         lines.append("- gates: " + ", ".join(parts))
         if any(" - NOT MET" in x for x in parts):
             lines.append("- a gate is NOT MET: " + (
+                "the lines are outside the spec - a characterization run closes them."
+                if run["mode"] == "spec-driven" else
                 "the reviewer accepted the gap as explained by the placeholders below. Check that each "
                 "placeholder reason is really untestable." if info["review"].get("decision") == "ACCEPT_PARTIAL"
                 else "no reviewer accepted this gap."))

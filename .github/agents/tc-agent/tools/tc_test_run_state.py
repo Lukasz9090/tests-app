@@ -165,9 +165,8 @@ def test_plan_generate_review_loop():
                 s["dispatch"]["review_path"].endswith("review-v1-r2.md")), ("PLAN", True, True))
         run.plan(2, "READY_PARTIAL")
         s = run.state()
-        expect("generator of plan v2 still gets the newest review (no carry logic)",
-               (s["next_action"], s["dispatch"]["review_path"].endswith("review-v1-r2.md")),
-               ("GENERATE", True))
+        expect("generator of plan v2 implements it whole: no review (D98)",
+               (s["next_action"], s["dispatch"]["review_path"]), ("GENERATE", None))
         run.report(2)
         run.review(2, 1, "ACCEPT")
         expect("ACCEPT -> FINISH DONE", step(run.state()), ("FINISH", "DONE"))
@@ -704,6 +703,15 @@ def test_commit_on_master_creates_a_branch():
         expect_true("facts: gates", "Gates: branch coverage 84% (gate 80%), mutation 76% (gate 70%)" in message)
         expect_true("facts: suggestions", "Suggestions: Inject java.time.Clock" in message)
         expect_true("report says the branch was created", "went to a NEW branch tc-agent/OrderService" in prose)
+
+
+def test_commit_on_main_creates_a_branch():
+    with FixtureRepo() as repo:
+        repo.git("branch", "-m", "master", "main")
+        run, _ = generated_run(repo)
+        run.finish()
+        commit = run.reload()["finished"]["commit"]
+        expect("main is protected by default", (commit["created_branch"], commit["from_branch"]), (True, "main"))
 
 
 def test_commit_on_unprotected_branch_stays():

@@ -21,7 +21,7 @@ First read every file in `dispatch.references` (`contracts.md` §1) — all of
 ## Input
 
 `dispatch`: `run_dir`, `plan_path`, `report_path` (the file you write),
-`review_path` (null when there is no review yet) and `references`. Read
+`review_path` (set only in a repair round of the same plan) and `references`. Read
 `run.json` (mode and interactive go into every Javadoc), the plan, the review
 when there is one, and `<run_dir>/context-pack.md` — its REPO CONVENTIONS
 override §B, never §A. You cannot build a missing pack: then note "no context

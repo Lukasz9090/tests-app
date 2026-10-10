@@ -251,7 +251,7 @@ def derive(repo: Path, target_slug: str, run: dict, runner=None,
                             + (" ..." if len(mocked) > 5 else "")
                             + ". Mocking a class never runs its code, so there is nothing "
                               "to measure and nothing was run.")
-        return conclude("PLAN", ["NO_TESTS"])
+        return conclude("PLAN", ["NO_TESTS", "SPEC_REVIEW"] if mode == "spec-driven" else ["NO_TESTS"])
 
     runner = runner or ScriptRunner(repo, target_slug, run["run_id"])
 
@@ -287,6 +287,15 @@ def derive(repo: Path, target_slug: str, run: dict, runner=None,
         elif not t1["git"]["dirty"] and t1["git"]["current_sha"]:
             out["reseal"].append({"method": m.key, "file": m.file,
                                   "from": m.meta.characterizes_sha, "to": t1["git"]["current_sha"]})
+    if mode == "spec-driven":
+        # The spec is the whole scope: no gate decides anything, and a test this run
+        # may not touch (a stale characterization one included) that fails is a human's.
+        out["red"] += [{"test": r["method"], "message": r.get("message", "")}
+                       for r in out["recharacterize"] if r["reason"] == "stale and failing"]
+        out["recharacterize"] = []
+        if out["red"]:
+            return conclude("RED", ["TESTS_FAILING"])
+        return conclude("PLAN", ["SPEC_REVIEW"], "the spec has not been compared with the tests yet")
     if out["red"]:
         return conclude("RED", ["TESTS_FAILING"])
 
@@ -339,12 +348,6 @@ def derive(repo: Path, target_slug: str, run: dict, runner=None,
         return conclude("ESCALATE", ["CHECK_UNAVAILABLE"], f"mutation: {mut.get('reason')}")
     if mut.get("status") == "FAILED":
         return conclude("PLAN", ["MUTATION_GAP"])
-    if mode == "spec-driven":
-        # Gates say the CODE is exercised, not that the SPEC is: a spec-driven run
-        # always lets the planner compare the spec with the tests (it may answer
-        # COMPLETE).
-        return conclude("PLAN", ["SPEC_REVIEW"], "gates are met; the spec has not been "
-                        "compared with the tests yet")
     return conclude("DONE", ["GATES_MET"])
 
 

@@ -34,18 +34,17 @@ From the run directory: `run.json` and `derive-state.md`. Its `reasons` set the 
 | `UNTESTED_METHODS` | every method in `coverage.untested_methods` — no test executes it, even when the class gate passes |
 | `CHANGED_CODE_UNCOVERED` | the lines in `coverage.changed_uncovered`, changed since the last freeze (`coverage.changed_since`) |
 | `STALE` | every entry of `recharacterize` (your mode file) |
-| `SPEC_REVIEW` | spec-driven, gates met: compare the spec with the tests (your mode file) |
+| `SPEC_REVIEW` | spec-driven: compare the spec with the tests (your mode file) |
 
 `derive-state.md` also lists the test classes, AI tests, placeholders, human test
 count and `git.current_sha` — that is how you know what the pipeline already
 wrote; do not rediscover it by grepping.
 
-**When `review_path` is set** this is a REPAIR_PLAN: the review's `feedback.plan`
-and its findings with `attributed_to: plan` name the gaps your previous plan
-left — for a failed gate, plan one scenario per uncovered branch or surviving
-mutant in the `gate_checks` files that no existing scenario reaches. Keep what the
-previous plan delivered; the tests of earlier rounds are already in the file.
-`COMPLETE` is wrong here: finding nothing to plan is `BLOCKED` with the reason.
+**When `review_path` is set** this is a REPAIR_PLAN and the new plan holds ONLY the
+changes: a scenario per gap in `feedback.plan` and the findings `attributed_to: plan`
+(for a failed gate: per uncovered branch or surviving mutant in `gate_checks` that no
+scenario reaches) and a `replaces` scenario per method `feedback.implementation` names.
+Earlier tests stay as they are — never list them again. Nothing to plan is `BLOCKED`.
 
 ## Steps — in this order
 
