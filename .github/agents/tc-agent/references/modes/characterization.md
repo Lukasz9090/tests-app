@@ -7,8 +7,7 @@ carries `tc-agent-note: reported as defect: <what>`.
 
 ## Planner
 
-- Set top-level `characterization: true` and copy `git.current_sha` from
-  `derive-state.md` into `context.target_sha`.
+- Copy `git.current_sha` from `derive-state.md` into `context.target_sha`.
 - The target's own lines are legitimate evidence (`type: implementation`): a
   scenario that asserts what the code demonstrably does needs no second source,
   and a value the code defines (a boundary, a constant, a status it switches on)
@@ -34,10 +33,7 @@ Example (`context.test_data` shows the shape of a human answer):
 {
   "schema_version": 1,
   "plan_version": 1,
-  "target": { "class": "AppointmentService" },
   "mode": "characterization",
-  "interactive": false,
-  "characterization": true,
   "status": "READY_PARTIAL",
   "context": {
     "existing_tests": ["AppointmentServiceTest#shouldRejectPastStartTimeWhenCreating"],
@@ -52,7 +48,6 @@ Example (`context.test_data` shows the shape of a human answer):
     {
       "id": "TC01",
       "description": "a request for an inactive offer is rejected with 409",
-      "priority": "high",
       "evidence_strength": "medium",
       "data": { "offer": { "source": "seeder", "ref": "src/main/java/com/testsapp/bootstrap/DataSeeder.java:18" } },
       "implementation_hints": {
@@ -64,7 +59,6 @@ Example (`context.test_data` shows the shape of a human answer):
     {
       "id": "TC02",
       "description": "reschedule keeps the original duration (behavior changed at 4b1c2aa9)",
-      "priority": "high",
       "evidence_strength": "medium",
       "replaces": "AppointmentServiceTest#shouldKeepDurationWhenRescheduling",
       "notes": ["behavior changed at 4b1c2aa9: duration used to be recomputed from the offer"],

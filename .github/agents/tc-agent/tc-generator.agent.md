@@ -90,7 +90,6 @@ carries code-change recommendations (seams) to the user; never apply them.
 {
   "schema_version": 1,
   "plan_version": 1,
-  "target": { "class": "AppointmentService" },
   "test_files": ["src/test/java/com/testsapp/service/AppointmentServiceTest.java"],
   "results": [
     { "id": "TC01", "status": "IMPLEMENTED",

@@ -35,7 +35,7 @@ and `<run_dir>/context-pack.md`.
 
 **1. Run the tests:** `python $S/tc_run_tests.py …` — one call; the check repeats a
 failing suite by itself to tell a real failure from a flake. On `COMPILE_ERROR`
-quote the compiler lines, decide REPAIR_IMPLEMENTATION and stop.
+quote the compiler lines in a `compile_error` finding, decide REPAIR_IMPLEMENTATION and stop.
 
 **2. Stage 1 — conformance (§A).** Read the test files and the target, then check:
 - every plan entry (`scenarios` and `deferred`) appears once in the report's
@@ -102,7 +102,7 @@ decision: ACCEPT_PARTIAL.
 
 1. A script exited 2 → **BLOCKED**: `checks.tests.status: "UNAVAILABLE"` with the
    script's reason; checks that never ran: `coverage.status: "UNAVAILABLE"`,
-   `mutation.status: "SKIPPED_UNAVAILABLE"`, both stages `"SKIPPED"`.
+   `mutation.status: "SKIPPED_UNAVAILABLE"`.
 2. Compile error → **REPAIR_IMPLEMENTATION**.
 3. `failure_phase: setup` → **REPAIR_IMPLEMENTATION**.
 4. `failure_phase: assertion` → as your mode file says.
@@ -137,17 +137,8 @@ and a `scope`. End with one terminal line: decision, gate numbers, top action.
 {
   "schema_version": 1,
   "plan_version": 1,
-  "generation_report": ".test-agent/runs/AppointmentService/20260921-101500/generation-report-v1.md",
-  "review_iteration": 1,
-  "target": { "class": "AppointmentService" },
-  "mode": "characterization",
   "decision": "ACCEPT_PARTIAL",
-  "stages": { "stage1_conformance": "PASSED", "stage2_quality": "PASSED" },
-  "checks": {
-    "compile": { "status": "PASSED" }, "tests": { "status": "PASSED", "total": 14, "failed": 0, "flaky": [] },
-    "coverage": { "status": "PASSED", "branch_ratio": 0.84, "gate": 0.8, "uncovered": [ { "line": 112, "missed_branches": 1 } ] },
-    "mutation": { "status": "PASSED", "score": 0.76, "gate": 0.7 }
-  },
+  "checks": { "tests": { "status": "PASSED" }, "coverage": { "status": "PASSED" }, "mutation": { "status": "PASSED" } },
   "findings": [],
   "unimplementable": [ { "id": "TC03", "test_method": "shouldRejectAppointmentWhenOutsideBusinessHours",
       "reason": "line 112 reads LocalDateTime.now() directly", "suggestion": "inject java.time.Clock" } ],

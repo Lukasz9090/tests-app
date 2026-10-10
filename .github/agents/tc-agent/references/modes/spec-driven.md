@@ -13,15 +13,15 @@ does not describe are left to a characterization run.
   how to call the code; they are not a substitute for the spec.
 - `SPEC_REVIEW` in `derive-state.md` means the gates are met: compare the spec
   with the tests (their `spec` entries in derive-state) and plan only the
-  requirements no test covers — `COMPLETE` with `gap_explanation` when every one is.
+  requirements no test covers — `COMPLETE` with `reason` when every one is.
   `COVERAGE_GAP`, `MUTATION_GAP` and `STALE` are context here, not work: say in
   `context.notes` that a characterization run closes them.
 - A test disabled as `AI spec-mismatch` is a known defect of the code: plan it
   again (`replaces`, to re-enable) only when the target changed since.
 - A requirement that is ambiguous, or that the spec contradicts elsewhere: in an
   interactive run ask (`modes/interactive.md`); otherwise status
-  `NEEDS_CLARIFICATION` with a `conflict` block quoting both. Never pick a side.
-- No `characterization`, no `context.target_sha`.
+  `NEEDS_CLARIFICATION` with a `reason` quoting both. Never pick a side.
+- No `context.target_sha`.
 
 ## Generator
 

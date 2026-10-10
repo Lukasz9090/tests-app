@@ -75,6 +75,7 @@ class Run:
         (self.dir / "derive-state.md").write_text(container("derive", payload), encoding="utf-8")
 
     def put(self, name: str, payload: dict):
+        (self.dir / name).parent.mkdir(parents=True, exist_ok=True)
         (self.dir / name).write_text(container(name, payload), encoding="utf-8")
 
     def plan(self, n: int, status: str = "READY", **extra):
@@ -182,8 +183,7 @@ def test_plan_statuses():
         run = Run(repo)
         run.derive_raw("PLAN")
         for status, outcome in (("BLOCKED", "BLOCKED"), ("NEEDS_CLARIFICATION", "ESCALATED"),
-                                ("UNSUPPORTED_REPOSITORY", "ESCALATED"), ("COMPLETE", "DONE"),
-                                ("SOMETHING", "ESCALATED")):
+                                ("COMPLETE", "DONE"), ("SOMETHING", "ESCALATED")):
             run.plan(1, status)
             expect(f"plan {status}", step(run.state()), ("FINISH", outcome))
         (run.dir / "plan-v1.md").write_text("no fence", encoding="utf-8")
@@ -321,6 +321,61 @@ def test_a_change_outside_src_test_during_the_run_stops_it():
             s = run.state()
             expect(f"a change to {path} escalates", step(s), ("FINISH", "ESCALATED"))
             expect_true(f"and names {path}", path in s["reason"])
+
+
+def test_repair_plan_points_the_planner_at_the_check_files():
+    with FixtureRepo() as repo:
+        run = Run(repo)
+        run.derive_raw("PLAN")
+        run.plan(1)
+        run.report(1)
+        run.review(1, 1, "REPAIR_PLAN")
+        run.put("checks/coverage-v1-r1.md", {"status": "FAILED", "uncovered": [{"line": 5}]})
+        d = run.state()["dispatch"]
+        expect("gate_checks name the review's coverage file",
+               d["gate_checks"], [f".test-agent/runs/{SLUG}/20260101-000000/checks/coverage-v1-r1.md"])
+
+
+def test_the_report_shows_what_the_planner_told_the_human():
+    with FixtureRepo() as repo:
+        run = Run(repo)
+        run.derive_raw("PLAN")
+        run.plan(1, "COMPLETE", reason="lines 5-7 are the Clock placeholder's",
+                 deferred=[], context={"notes": []})
+        code, prose = run.finish()
+        expect_true("COMPLETE says why", "lines 5-7 are the Clock placeholder's" in prose)
+    with FixtureRepo() as repo:
+        run = Run(repo)
+        run.derive_raw("PLAN")
+        run.plan(1, "NEEDS_CLARIFICATION", reason='spec says "flag wins" (R2) and "list wins" (R5)')
+        code, prose = run.finish()
+        expect_true("NEEDS_CLARIFICATION quotes both passages", '"flag wins" (R2)' in prose)
+    with FixtureRepo() as repo:
+        run = Run(repo)
+        run.derive_raw("PLAN")
+        run.plan(1, "READY_PARTIAL", deferred=[{"id": "TC02", "placeholder_method": "shouldB",
+                                                 "question": "what does a broker account number look like?"}])
+        run.report(1)
+        run.review(1, 1, "ACCEPT_PARTIAL", commit_summary="Added one test and one placeholder for OrderService.")
+        code, prose = run.finish()
+        expect_true("a deferred scenario's question reaches the human",
+                    "CONFIRM: shouldB — what does a broker account number look like?" in prose)
+
+
+def test_plan_schema_rules():
+    import tc_validate_plan as vp
+    schema = json.loads((TC / "schemas" / "tc-test-plan.schema.json").read_text(encoding="utf-8"))
+    sc = {"id": "TC01", "description": "a positive amount is accepted", "evidence_strength": "medium",
+          "evidence": [{"type": "human_decision", "ref": "docs/spec.md:3"}],
+          "implementation_hints": {"test_method": "shouldA", "test_file": "src/test/java/ATest.java"}}
+    spec = {"schema_version": 1, "plan_version": 1, "mode": "spec-driven", "status": "READY", "scenarios": [sc]}
+    expect_true("spec-driven needs `requirement`", any("requirement" in e for e in vp.validate(spec, schema)))
+    expect("with it the plan is valid", vp.validate({**spec, "scenarios": [{**sc, "requirement": "R1"}]}, schema), [])
+    done = {"schema_version": 1, "plan_version": 1, "mode": "characterization", "status": "COMPLETE",
+            "context": {"target_sha": "abcdef1"}}
+    expect_true("COMPLETE needs `reason`", any("reason" in e for e in vp.validate(done, schema)))
+    expect_true("dead fields are gone", any("priority" in e for e in vp.validate(
+        {**spec, "scenarios": [{**sc, "requirement": "R1", "priority": "high"}]}, schema)))
 
 
 def test_known_test_data_travels_between_plan_versions():
@@ -619,8 +674,10 @@ def generated_run(repo: FixtureRepo, commit=True, run_id="20260101-000000") -> t
     run.review(1, 1, "ACCEPT",
                commit_summary="Added a characterization test for OrderService.create covering the "
                               "positive amount path.",
-               checks={"coverage": {"status": "PASSED", "branch_ratio": 0.84, "gate": 0.8},
-                       "mutation": {"status": "PASSED", "score": 0.76, "gate": 0.7}})
+               checks={"tests": {"status": "PASSED"}, "coverage": {"status": "PASSED"},
+                       "mutation": {"status": "PASSED"}})
+    run.put("checks/coverage-v1-r1.md", {"status": "PASSED", "branch_ratio": 0.84, "gate": 0.8})
+    run.put("checks/mutation-v1-r1.md", {"status": "PASSED", "score": 0.76, "gate": 0.7})
     return run, rel
 
 

@@ -21,8 +21,8 @@ value — when nothing backs one, the scenario is deferred with a question.
 
 ## Input
 
-`dispatch`: `run_dir`, `plan_path`, `review_path` (null on the first plan),
-`known_test_data` (what a human answered earlier in this run) and `references`.
+`dispatch`: `run_dir`, `plan_path`, `review_path` and `gate_checks` (null / empty on the
+first plan), `known_test_data` (what a human answered earlier in this run) and `references`.
 
 From the run directory: `run.json` and `derive-state.md`. Its `reasons` set the scope:
 
@@ -43,7 +43,7 @@ wrote; do not rediscover it by grepping.
 **When `review_path` is set** this is a REPAIR_PLAN: the review's `feedback.plan`
 and its findings with `attributed_to: plan` name the gaps your previous plan
 left — for a failed gate, plan one scenario per uncovered branch or surviving
-mutant in the review's `checks` that no existing scenario reaches. Keep what the
+mutant in the `gate_checks` files that no existing scenario reaches. Keep what the
 previous plan delivered; the tests of earlier rounds are already in the file.
 `COMPLETE` is wrong here: finding nothing to plan is `BLOCKED` with the reason.
 
@@ -55,10 +55,6 @@ Read `repo` in `derive-state.md`: `build` (Maven only), `junit` with
 `junit_source` / `junit_mixed`, `jacoco` / `pit` (`pom` or `cli` — both work),
 `pit_junit5_plugin`. Do not run `mvn` to check this. Only when `junit` is null,
 read the pom (and an in-repo `<parent>`) yourself and note each fact you rely on.
-
-When a check fails, write a plan whose JSON is only
-`{"schema_version":1,"plan_version":<N>,"status":"UNSUPPORTED_REPOSITORY","missing":[...]}`
-and STOP.
 
 ### Phase 1 — the target
 
@@ -101,7 +97,7 @@ data from discovered builders and fixtures (`source: existing_builder`,
 cover; list them under `context.existing_tests`. Your mode file adds what the
 mode changes (stale entries, placeholders, spec conflicts).
 
-Every scenario gets a `priority` and `implementation_hints`:
+Every scenario gets `implementation_hints`:
 - `test_method` — by the naming rule in force (REPO CONVENTIONS, else
   `conventions.md` §B1); unique in the class, and with sibling operations the
   outcome names the operation. It is the ONLY link between scenario and code.
@@ -126,9 +122,9 @@ Write the draft at `dispatch.plan_path`, then run
 |---|---|
 | `READY` | at least one scenario, nothing deferred |
 | `READY_PARTIAL` | something deferred (placeholders will be written) |
-| `COMPLETE` | nothing to write: existing tests or placeholders explain the whole gap; `scenarios` and `deferred` empty, `gap_explanation` says which explain which lines |
-| `BLOCKED` | nothing can be planned (or a human said no) — `reason` required |
-| `NEEDS_CLARIFICATION` | an unresolved spec/code `conflict`, or an ambiguous target — `reason` |
+| `COMPLETE` | nothing to write: existing tests or placeholders explain the whole gap; `scenarios` and `deferred` empty, `reason` says which explain which lines |
+| `BLOCKED` | nothing can be planned (or a human said no) — `reason` |
+| `NEEDS_CLARIFICATION` | an ambiguous or contradictory spec (`reason` quotes both passages), or an ambiguous target — `reason` |
 
 `COMPLETE` is a success state: the run ends DONE / DONE_PARTIAL.
 
@@ -156,8 +152,7 @@ opens with a scoreboard line counted off the JSON:
 
     scope: COVERAGE_GAP | scenarios: 4 (1 replaces) | deferred: 1 | obsolete: 0 | status: READY_PARTIAL
 
-`evidence_strength` is filled by the script — never by you. A whole-class target
-is `{ "class": "OrderService" }`: omit `method`, never `null`.
+`evidence_strength` is filled by the script — never by you.
 
 ## Never
 

@@ -3,134 +3,38 @@
   "$id": "tc-project-profile.schema.json",
   "title": "project-profile",
   "type": "object",
-  "required": [
-    "schema_version"
-  ],
+  "required": ["schema_version"],
   "additionalProperties": false,
   "properties": {
-    "schema_version": {
-      "const": 1
-    },
+    "schema_version": {"const": 1},
     "quality_gates": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Thresholds for the target scope. A key that is not listed here is ignored by the scripts, which is why unknown keys are rejected: a typo would silently restore the built-in default.",
       "properties": {
-        "branch_coverage_target_scope": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 1
-        },
-        "mutation_score_target_scope": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 1
-        }
+        "branch_coverage_target_scope": {"type": "number", "minimum": 0, "maximum": 1},
+        "mutation_score_target_scope": {"type": "number", "minimum": 0, "maximum": 1}
       }
     },
     "tooling": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Only when the pom declares no version, or its version cannot read the class files of the JDK in use. A value here overrides the pom, and prepare-agent must run the same JaCoCo version as the report goal.",
       "properties": {
-        "jacoco_version": {
-          "type": "string",
-          "pattern": "^[0-9]+\\.[0-9]+(\\.[0-9]+)?$"
-        },
-        "pit_version": {
-          "type": "string",
-          "pattern": "^[0-9]+\\.[0-9]+(\\.[0-9]+)?$"
-        }
+        "jacoco_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+(\\.[0-9]+)?$"},
+        "pit_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+(\\.[0-9]+)?$"}
       }
     },
-    "protected_branches": {
-      "type": "array",
-      "items": {"type": "string", "minLength": 1},
-      "description": "Branches finish --commit never commits to (globs allowed). Absent or empty: only master."
-    },
-    "max_rounds": {
-      "type": "integer",
-      "minimum": 1,
-      "description": "Generate+review rounds one run may spend before it ends ESCALATED. A new plan version does not add rounds. Default 3; --max-rounds overrides it for one run."
-    },
-    "freshness_days": {
-      "type": "number",
-      "minimum": 0,
-      "description": "Characterization mode (without --interactive) refuses to freeze a target whose last commit is younger than this many days. Default 7."
-    },
-    "flaky_repeat": {
-      "type": "integer",
-      "minimum": 1,
-      "description": "How many times the tests check runs the suite when nothing fails. Default 1: running a green suite again costs a full build and catches little, while a suite that FAILED is repeated automatically - that is the run which tells a real failure from a flake. Raise it for a module whose tests touch time, ordering or shared state."
-    },
-    "instruction_paths": {
-      "type": "array",
-      "items": {
-        "type": "string",
-        "minLength": 1
-      },
-      "description": "Extra repository instruction files the context pack includes in REPO CONVENTIONS, relative to the repo root; may live outside .github. An `applyTo` front-matter is honoured."
-    },
-    "maven_timeout_seconds": {
-      "type": "number",
-      "minimum": 1,
-      "description": "How long ONE maven call may take before the check gives up with a clear error. Default 600 (10 min), deliberately short: the answer to a slow check is a faster build (maven_also_make false after an install, maven_args such as -T 1C, a narrower target), not a longer wait. Raise it only when you accept runs that take that long."
-    },
-    "maven_also_make": {
-      "description": "When a test run adds Maven's -am (also build the target module's dependencies). Omit it for \"auto\": build only the target's module, and add -am only if maven says the dependencies are missing - fast in a big reactor, still correct in a small repo or a fresh clone. true always adds it (modules that change constantly); false never does (you run mvn -DskipTests install yourself and own that decision).",
-      "oneOf": [
-        {
-          "type": "boolean"
-        },
-        {
-          "const": "auto"
-        }
-      ]
-    },
-    "maven_skip_main_compile": {
-      "description": "When a check may run against the classes already in <module>/target/classes instead of compiling src/main first (-Dmaven.main.skip=true). Omit it for \"auto\": compile when the CLASS UNDER TEST is newer than the class file it produces (that is the bytecode and those are the line numbers the report is read from), skip when it is not - the production code does not change during a run, and in a module with annotation processors or generated sources that compile is a full rebuild every time. A different source in the module being stale is only reported, because in a repo that is pulled daily something always is. \"strict\" rebuilds on any stale source under src/main. true always skips when classes exist and only warns about staleness; false always compiles.",
-      "oneOf": [
-        {
-          "type": "boolean"
-        },
-        {
-          "enum": [
-            "auto",
-            "strict"
-          ]
-        }
-      ]
-    },
-    "junit": {
-      "enum": [
-        "4",
-        "5"
-      ],
-      "description": "The JUnit version new tests must use, overriding what the agent reads from the module's existing tests and from the poms. Set it only when that detection is wrong for your repo - a module whose tests are being migrated, or JUnit coming from a parent pom outside the repo."
-    },
-    "maven_goals_only": {
-      "type": "boolean",
-      "description": "Whether a check runs the plugin goals directly (resources:testResources compiler:testCompile surefire:test) instead of Maven's test phase. Default TRUE: the phase also runs every plugin bound before it - an OpenAPI or Swagger generator writing a frontend client, a node build, resource filtering, stampers - which a unit test does not need and which cost minutes and plugin downloads. It applies only when src/main is not being compiled anyway (see maven_skip_main_compile), so the production classes and any generated sources are already in target/. When the goals fail or run nothing (a surefire configured inside a pom execution ignores a CLI invocation of its goal), the check pays for the full phase once and says so. Set it to false for a repo that must always run the phase."
-    },
-    "maven_args": {
-      "type": "array",
-      "items": {
-        "type": "string",
-        "minLength": 1
-      },
-      "description": "Extra flags added to every maven call, e.g. [\"-o\"] for offline, [\"-T\", \"1C\"] for a parallel build, [\"-DskipITs\"]. Use them to make a slow multi-module build finish in time."
-    },
-    "maven_snapshot_updates": {
-      "type": "boolean",
-      "description": "Whether a check may re-resolve SNAPSHOT dependencies from the remote repository. Default false, which puts -nsu on every maven call: a run measures the code in this working tree, so a colleague's newer snapshot arriving between two checks would make the coverage and the mutation numbers come from different dependencies - and the daily metadata refresh is a round trip to the repository per sibling SNAPSHOT. Set it to true to restore maven's normal behavior."
-    },
-    "test_data_paths": {
-      "type": "array",
-      "items": {
-        "type": "string",
-        "minLength": 1
-      },
-      "description": "Files that list example business values for this system (a customer id is 9 digits, an account number looks like X, the transfer types that are plain strings). The context pack includes them verbatim as TEST DATA, and the planner reads them before asking a human anything - that is how you stop repeating the same answers run after run. Any readable text or markdown file, relative to the repo root."
-    }
+    "protected_branches": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "max_rounds": {"type": "integer", "minimum": 1},
+    "freshness_days": {"type": "number", "minimum": 0},
+    "flaky_repeat": {"type": "integer", "minimum": 1},
+    "instruction_paths": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "maven_timeout_seconds": {"type": "number", "minimum": 1},
+    "maven_also_make": {"oneOf": [{"type": "boolean"}, {"const": "auto"}]},
+    "maven_skip_main_compile": {"oneOf": [{"type": "boolean"}, {"enum": ["auto", "strict"]}]},
+    "junit": {"enum": ["4", "5"]},
+    "maven_goals_only": {"type": "boolean"},
+    "maven_args": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "maven_snapshot_updates": {"type": "boolean"},
+    "test_data_paths": {"type": "array", "items": {"type": "string", "minLength": 1}}
   }
 }

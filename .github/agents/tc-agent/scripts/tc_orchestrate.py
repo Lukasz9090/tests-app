@@ -56,8 +56,7 @@ import tc_javadoc as j  # noqa: E402
 from tc_md_payload import load_payload  # noqa: E402
 
 MODES = ("characterization", "spec-driven")
-PLAN_STOP = {"BLOCKED": "BLOCKED", "NEEDS_CLARIFICATION": "ESCALATED",
-             "UNSUPPORTED_REPOSITORY": "ESCALATED"}
+PLAN_STOP = {"BLOCKED": "BLOCKED", "NEEDS_CLARIFICATION": "ESCALATED"}
 PLAN_GO = {"READY", "READY_PARTIAL"}
 DERIVE_TERMINAL = {"RED": "RED", "BLOCKED": "BLOCKED", "ESCALATE": "ESCALATED"}
 COMMIT_OUTCOMES = {"DONE", "DONE_PARTIAL"}
@@ -214,6 +213,12 @@ def spec_mismatches(d: Path) -> list:
                     seen.add(key)
                     out.append(f)
     return out
+
+
+def gate_checks(d: Path, repo: Path, label: str) -> list:
+    """The coverage / mutation check files of one review: uncovered lines and surviving mutants."""
+    return [rel(p, repo) for p in (d / "checks" / f"{k}-{label}.md" for k in ("coverage", "mutation"))
+            if p.is_file()]
 
 
 def known_test_data(d: Path) -> list:
@@ -463,7 +468,8 @@ def compute_state(repo: Path, directory: Path) -> dict:
         return finish("ESCALATED", f"plan v{n} is COMPLETE although the reviewer asked to repair the "
                                    f"plan: the planner found nothing to repair - a human decides")
     if status == "COMPLETE":
-        return finish("DONE", f"plan v{n} is COMPLETE: nothing left to generate")
+        return finish("DONE", f"plan v{n} is COMPLETE: nothing left to generate"
+                      + (f" - {plan.get('reason')}" if plan.get("reason") else ""))
     if status not in PLAN_GO:
         return finish("ESCALATED", f"unrecognized plan status {status!r}")
 
@@ -528,6 +534,7 @@ def compute_state(repo: Path, directory: Path) -> dict:
                            "references": references_for("tc-planner", run, derive, repo),
                            "plan_path": rel(plan_path(directory, n + 1), repo),
                            "review_path": rel(r_path, repo),
+                           "gate_checks": gate_checks(directory, repo, f"v{n}-r{rev_m}"),
                            "known_test_data": known_test_data(directory)}
         return out
     return finish("ESCALATED", f"unrecognized review decision {decision!r}")
@@ -627,10 +634,16 @@ def collect(repo: Path, directory: Path, state: dict) -> dict:
                                  "message": (f.get("message") or "")[:200]}
                                 for f in last["failures"][:10]]}
 
+    # The numbers come from the check files the scripts wrote, not from a copy in the review.
     gates = {}
-    rchecks = (review.get("checks") or {}) if "__error__" not in review else {}
-    cov = rchecks.get("coverage") or derive.get("coverage") or {}
-    mut = rchecks.get("mutation") or derive.get("mutation") or {}
+    label = r_path.stem[len("review-"):] if r_path else "entry"
+
+    def check(kind: str) -> dict:
+        path = directory / "checks" / f"{kind}-{label}.md"
+        data = _safe(path) if path.is_file() else {}
+        return {} if "__error__" in data else data
+    cov = check("coverage") or derive.get("coverage") or {}
+    mut = check("mutation") or derive.get("mutation") or {}
     if cov.get("branch_ratio") is not None:
         gates["coverage"] = {"ratio": cov.get("branch_ratio"), "gate": cov.get("gate")}
     if mut.get("score") is not None:
@@ -639,12 +652,14 @@ def collect(repo: Path, directory: Path, state: dict) -> dict:
     history = review_history(directory)
     timings = check_timings(directory)
 
-    # CONFIRM questions from EVERY plan version, not only the last one.
+    # CONFIRM questions and the questions of deferred scenarios, from EVERY plan version.
     notes = []
     for n in versions:
         pv = _safe(plan_path(directory, n))
         if "__error__" not in pv:
             notes += (pv.get("context") or {}).get("notes") or []
+            notes += [f"CONFIRM: {d.get('placeholder_method')} — {d['question']}"
+                      for d in pv.get("deferred") or [] if d.get("question")]
     return {
         "run": run,
         "derive": derive,
