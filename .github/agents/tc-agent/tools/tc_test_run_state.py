@@ -879,13 +879,13 @@ def test_maven_goals_are_read_from_the_banners():
     """Maven prints no per-goal timings, so the list of goals is the diagnosis."""
     output = "\n".join([
         "[INFO] Scanning for projects...",
-        "[INFO] --- openapi-generator-maven-plugin:6.6.0:generate (client) @ ces-pl-rest ---",
-        "[INFO] --- maven-resources-plugin:3.3.1:resources (default-resources) @ ces-pl-rest ---",
-        "[INFO] --- maven-compiler-plugin:3.11.0:compile (default-compile) @ ces-pl-rest ---",
+        "[INFO] --- openapi-generator-maven-plugin:6.6.0:generate (client) @ rest-module ---",
+        "[INFO] --- maven-resources-plugin:3.3.1:resources (default-resources) @ rest-module ---",
+        "[INFO] --- maven-compiler-plugin:3.11.0:compile (default-compile) @ rest-module ---",
         "[INFO] Compiling 6571 source files with javac",
-        "[INFO] --- maven-compiler-plugin:3.11.0:testCompile (default-testCompile) @ ces-pl-rest ---",
-        "[INFO] --- maven-surefire-plugin:3.2.5:test (default-test) @ ces-pl-rest ---",
-        "[INFO] --- maven-surefire-plugin:3.2.5:test (default-test) @ ces-pl-rest ---",
+        "[INFO] --- maven-compiler-plugin:3.11.0:testCompile (default-testCompile) @ rest-module ---",
+        "[INFO] --- maven-surefire-plugin:3.2.5:test (default-test) @ rest-module ---",
+        "[INFO] --- maven-surefire-plugin:3.2.5:test (default-test) @ rest-module ---",
         "[INFO] BUILD SUCCESS",
     ])
     goals = c.maven_goals_run(output)

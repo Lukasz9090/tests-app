@@ -374,8 +374,8 @@ def test_the_maven_log_survives_a_timeout():
 def test_missing_dependencies_are_recognised():
     import tc_common as tc
     expect("maven's wording is matched", tc.needs_also_make(
-        "[ERROR] Failed to execute goal on project ces-pl-rest: Could not resolve dependencies "
-        "for project com.acme:ces-pl-rest:jar:2.101.0-SNAPSHOT"), True)
+        "[ERROR] Failed to execute goal on project rest-module: Could not resolve dependencies "
+        "for project com.acme:rest-module:jar:2.101.0-SNAPSHOT"), True)
     expect("a normal failure is not", tc.needs_also_make(
         "[ERROR] Tests run: 3, Failures: 1"), False)
 
