@@ -306,6 +306,7 @@ Rosnąć mogą tylko dev-testy (`tools/`) i dziennik decyzji (`docs/`).
 | E38 | **regresja jakości po etapie 3b:** te same targety (np. `AppointmentService`, `NotificationService`, `SimpleCalculatorService`) w characterization i spec-driven, przed i po 3b | ten sam outcome; liczba testów i zaślepek ±10%; bramki nie niższe; nie więcej `INVALID_ARTIFACT` ani rund; inaczej 3b cofnięty (`git revert`) |
 | E39 | wymuszony `REPAIR_PLAN` po 3b | planer v2 planuje dokładnie linie / mutanty z plików checków; brak „nie widzę niepokrytych linii” |
 | E40 | spec-driven bez interactive, sprzeczna spec, po 3b | `ESCALATED`; w raporcie `reason` z cytatem obu fragmentów |
+| E41 | spec-driven, spec opisuje część klasy (bramka pokrycia klasy niespełniona) | PIT uruchomiony mimo to; mutant przeżywający w linii cytowanej przez scenariusz → `REPAIR_IMPLEMENTATION`; mutant poza spec → `minor` |
 
 ## 7. Poza zakresem / otwarte
 
@@ -330,4 +331,7 @@ Rosnąć mogą tylko dev-testy (`tools/`) i dziennik decyzji (`docs/`).
 - E5: F25 — skrypty 5359 → 4806 linii, AST bez docstringów identyczny. Wątki PIT: `-Dthreads=N` z linii komend
   (pitest.org quickstart: opcja `threads`, domyślnie 1). F19: lista z `anonymize.txt` — zero trafień w repo;
   stare nazwy zostają w historii gita.
+- 2026-10-10 (po E6, pytanie użytkownika): w spec-driven recenzent pomijałby PIT, bo krok 4 wymaga spełnionej
+  bramki pokrycia klasy, a spec opisuje zwykle tylko jej część. `modes/spec-driven.md`: mutacje zawsze przy zielonych
+  testach; ocena jak dotąd (cytowane linie → Attribution, reszta `minor`). Akceptacja: E41.
 - E6: 511/511 asercji; instrukcje 1381 → 1359 linii, skrypty 5265 → 4806, schematy 1465 → 385.

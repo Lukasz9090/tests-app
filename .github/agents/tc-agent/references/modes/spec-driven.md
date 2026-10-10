@@ -44,7 +44,8 @@ does not describe are left to a characterization run.
   with the code — that certifies the bug. When the expectation does not match the
   spec, it is an ordinary implementation (or plan) defect.
 - A failing test this run did NOT write is **NEEDS_TRIAGE**.
-- A FAILED gate on lines no scenario's evidence cites is outside the spec: a `minor`
-  finding, never REPAIR_PLAN. Lines an IMPLEMENTED scenario cites: Attribution as usual.
+- Mutation runs whenever the tests are green — a coverage gate missed outside the spec
+  is no reason to skip it. Lines or mutants no scenario's evidence cites are outside the
+  spec: `minor`, never REPAIR_PLAN; those an IMPLEMENTED scenario cites: Attribution as usual.
 - When every remaining failure is disabled as a mismatch: **ACCEPT_PARTIAL**;
   `finish` lists the mismatches at the top of the report.
