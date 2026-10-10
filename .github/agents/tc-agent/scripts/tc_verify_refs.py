@@ -19,6 +19,7 @@ Usage: tc_verify_refs.py <plan.md> [--repo .]
 """
 
 import argparse
+import json
 import re
 import sys
 from pathlib import Path
@@ -28,6 +29,8 @@ import tc_common as c  # noqa: E402
 from tc_md_payload import load_payload  # noqa: E402
 
 LINE_SUFFIX = re.compile(r":(\d+)(?:-(\d+))?$")
+# `path/File.ext[:NN[-MM]]` - checked whatever the evidence type; a human's answer is not one.
+PATH_REF = re.compile(r"^[\w.$/\\-]+\.\w+(?::\d+(?:-\d+)?)?$")
 
 
 class Repo:
@@ -97,9 +100,9 @@ def verify_member(cls: str, member: str, repo: Repo, shape: str):
 
 
 def verify(ref: str, etype: str, repo: Repo):
-    if etype == "human_decision":
-        return True, "skipped (human)"
     r = (ref or "").strip()
+    if etype == "human_decision" and not PATH_REF.match(r):
+        return True, "skipped (a human's answer)"
     if not r:
         return False, "empty ref"
 
@@ -139,17 +142,26 @@ def main() -> int:
         return 2
 
     repo = Repo(Path(a.repo).resolve())
-    failures = []
+    run_json = Path(a.plan).resolve().parent / "run.json"
+    spec = json.loads(run_json.read_text(encoding="utf-8")).get("spec") if run_json.is_file() else None
+    spec_driven = plan.get("mode") == "spec-driven"
+    failures, no_spec = [], []
     checked = 0
     for section in ("scenarios", "deferred"):
         for sc in plan.get(section) or []:
-            for ev in sc.get("evidence") or []:
+            refs = [(ev.get("type", ""), ev.get("ref", "")) for ev in sc.get("evidence") or []]
+            refs += [("data", d["ref"]) for d in (sc.get("data") or {}).values()
+                     if isinstance(d, dict) and isinstance(d.get("ref"), str) and PATH_REF.match(d["ref"])]
+            for etype, ref in refs:
                 checked += 1
-                ok, detail = verify(ev.get("ref", ""), ev.get("type", ""), repo)
-                print(f"  [{'OK ' if ok else 'FAIL'}] {sc.get('id')}: {ev.get('type')}:"
-                      f"{ev.get('ref')} — {detail}")
+                ok, detail = verify(ref, etype, repo)
+                print(f"  [{'OK ' if ok else 'FAIL'}] {sc.get('id')}: {etype}:{ref} — {detail}")
                 if not ok:
-                    failures.append((sc.get("id"), ev.get("ref")))
+                    failures.append((sc.get("id"), ref))
+            cites_spec = spec and any(LINE_SUFFIX.sub("", r).replace("\\", "/") == spec.replace("\\", "/")
+                                      for _, r in refs)
+            if spec_driven and not cites_spec:
+                no_spec.append(sc.get("id"))
 
     collisions = name_collisions(plan, repo.root)
     for c in collisions:
@@ -164,7 +176,11 @@ def main() -> int:
               f"(conventions.md §B1: the outcome names the operation, e.g. "
               f"shouldReportOddWhenNumberIsOdd vs shouldReportEvenWhenNumberIsEven), or set "
               f"`replaces` when you really mean to rewrite that method.")
-    if failures or collisions:
+    if no_spec:
+        print(f"\nSPEC_REF_MISSING: {', '.join(map(str, no_spec))} cite no line of the spec "
+              f"({spec or 'run.json names none'}). A spec-driven test comes only from the spec: "
+              f"cite its requirement, or remove the scenario.")
+    if failures or collisions or no_spec:
         return 1
     print(f"\nALL_REFS_VERIFIED: {checked}/{checked}; test method names unique")
     return 0

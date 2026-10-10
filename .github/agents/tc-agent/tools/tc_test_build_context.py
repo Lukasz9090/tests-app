@@ -62,6 +62,20 @@ def test_none_found():
         expect_true("precedence header always present", "pipeline integrity" in section(pack))
 
 
+def test_target_survives_huge_repo_instructions():
+    """Instructions and test data can never push the target out of its own pack."""
+    with FixtureRepo() as repo:
+        for k in range(40):                                      # 40 x 4k fill the 150k budget
+            repo.write(f".github/instructions/r{k:02}.instructions.md", "Rule.\n" * 650)
+        repo.write_test("OrderServiceTest", *(human_test(f"human{i}") for i in range(200)))
+        pack = build(repo)
+        expect_true("TARGET is there", "## TARGET: src/main/java/com/acme/OrderService.java" in pack)
+        manifest = pack[pack.index("## MANIFEST"):].split("## NOTES")[0]
+        expect_true("the manifest lists the target", "OrderService.java" in manifest)
+        expect_true("an omitted file is a NOTE, not a manifest entry",
+                    "OrderServiceTest.java" not in manifest and "BUDGET: omitted" in pack)
+
+
 def test_test_data_files_are_included():
     with FixtureRepo() as repo:
         repo.write("docs/test-data.md",

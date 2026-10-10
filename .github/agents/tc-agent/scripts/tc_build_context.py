@@ -469,25 +469,45 @@ def main():
            "of this pack. Signature-only blocks have no numbers: open the file for a ref.", ""]
     budget = MAX_TOTAL_CHARS
     notes = []
+    included = []
+
+    def block_of(title, f, body, with_numbers=True):
+        # ```text, not ```java: with the line-number column the block is no longer
+        # valid Java, and a fence must hold what its language says.
+        body = numbered(body) if with_numbers else body
+        return f"\n## {title}: {f.relative_to(repo)}\n\n```text\n{body}\n```\n"
 
     def add(title, f, body, with_numbers=True):
         nonlocal budget
-        body = numbered(body) if with_numbers else body
-        # ```text, not ```java: with the line-number column the block is no longer
-        # valid Java, and a fence must hold what its language says.
-        block = f"\n## {title}: {f.relative_to(repo)}\n\n```text\n{body}\n```\n"
+        block = block_of(title, f, body, with_numbers)
         if len(block) > budget:
             notes.append(f"BUDGET: omitted {f.relative_to(repo)}")
             return
         out.append(block)
+        included.append(f)
         budget -= len(block)
 
-    # Example business values the repo keeps for exactly this purpose. They go in
-    # before the sources: a planner that finds the shape here asks nobody.
     try:
         run_json = c.load_run(run_dir)
     except Exception:                                  # a pack can be built before run.json exists
         run_json = {}
+
+    # The target and the spec are what the pack exists for: their room is reserved first.
+    target_block = block_of("TARGET", target_file, target_text)
+    spec_rel = run_json.get("spec")
+    spec_file = (repo / spec_rel) if spec_rel else None
+    spec_block = ""
+    if spec_file and spec_file.is_file():
+        text = spec_file.read_text(encoding="utf-8", errors="replace")
+        if len(text) > SPEC_BUDGET:
+            text = text[:SPEC_BUDGET] + f"\n... TRUNCATED at {SPEC_BUDGET} chars - read the rest of the file\n"
+        spec_block = (f"\n## SPEC: {spec_rel} (the oracle of this spec-driven run)\n\n"
+                      f"Cite requirements as `tc-agent-spec: {spec_rel}#<id or heading>`.\n\n"
+                      f"```text\n{numbered(text)}\n```\n")
+    budget -= len(target_block) + len(spec_block)
+
+    # Example business values the repo keeps for exactly this purpose. They go in
+    # before the sources: a planner that finds the shape here asks nobody.
     data_files = test_data_files(repo, run_json)
     if data_files:
         head = ("\n## TEST DATA (repo-provided example business values)\n\n"
@@ -537,18 +557,8 @@ def main():
     # builders and enums come before the dependency dump: they are the EVIDENCE
     # that keeps a scenario out of `deferred`, so losing them to a class with
     # twelve dependencies is the worst trade this script can make.
-    spec_rel = run_json.get("spec")
-    spec_file = (repo / spec_rel) if spec_rel else None
-    if spec_file and spec_file.is_file():
-        text = spec_file.read_text(encoding="utf-8", errors="replace")
-        if len(text) > SPEC_BUDGET:
-            text = text[:SPEC_BUDGET] + f"\n... TRUNCATED at {SPEC_BUDGET} chars - read the rest of the file\n"
-        block = (f"\n## SPEC: {spec_rel} (the oracle of this spec-driven run)\n\n"
-                 f"Cite requirements as `tc-agent-spec: {spec_rel}#<id or heading>`.\n\n"
-                 f"```text\n{numbered(text)}\n```\n")
-        out.append(block)
-        budget -= len(block)
-    add("TARGET", target_file, target_text)
+    out.append(spec_block + target_block)
+    included.append(target_file)
     for f in sorted(set(tests)):
         summary = test_summary(f)
         add(f"EXISTING TEST ({summary})" if summary else "EXISTING TEST", f, read(f))
@@ -578,10 +588,7 @@ def main():
         out.extend(f"- {i}" for i in external)
 
     out.append("\n## MANIFEST (all files included above)\n")
-    for f in [target_file, *[all_by_name[n] for n in sorted(l1 | l2)
-                             if n in all_by_name],
-              *sorted(set(tests)), *sorted(set(builders)), *sorted(set(enums))]:
-        out.append(f"- {f.relative_to(repo)}")
+    out.extend(f"- {f.relative_to(repo)}" for f in included)
     if notes:
         out.append("\n## NOTES\n")
         out.extend(f"- {n}" for n in notes)

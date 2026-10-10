@@ -339,5 +339,39 @@ def test_verify_refs_catches_name_collisions():
         expect("unique name passes", r.returncode, 0)
 
 
+def test_verify_refs_checks_spec_refs_and_spec_driven_scope():
+    import json, subprocess
+    from tc_testkit import TC
+    with FixtureRepo() as repo:
+        repo.write("docs/spec.md", "# Spec\n\nR1: amount must be positive\n")    # 3 lines
+        run_dir = repo.root / ".test-agent" / "runs" / "OrderService" / "r1"
+        run_dir.mkdir(parents=True)
+        (run_dir / "run.json").write_text(json.dumps({"mode": "spec-driven", "spec": "docs/spec.md"}))
+
+        def verify(evidence, mode="spec-driven", data=None):
+            sc = {"id": "TC01", "evidence": evidence, "data": data or {},
+                  "implementation_hints": {"test_method": "shouldX", "test_file": "src/test/java/XTest.java"}}
+            path = run_dir / "plan-v1.md"
+            path.write_text("# p\n\n```json\n" + json.dumps({"mode": mode, "scenarios": [sc]}) + "\n```\n")
+            return subprocess.run([sys.executable, str(TC / "scripts" / "tc_verify_refs.py"), str(path),
+                                   "--repo", str(repo.root)], capture_output=True, text=True)
+        code_ev = {"type": "implementation", "ref": repo.target_path + ":4"}
+        r = verify([{"type": "human_decision", "ref": "docs/spec.md:120"}, code_ev])
+        expect("a spec ref past the end of the spec is fabricated",
+               (r.returncode, "INVALID_EVIDENCE" in r.stdout), (1, True))
+        r = verify([{"type": "human_decision", "ref": "docs/spec.md:3"}, code_ev])
+        expect("a real spec line passes", r.returncode, 0)
+        r = verify([{"type": "human_decision", "ref": "answer: a broker account has 10 digits"},
+                    {"type": "human_decision", "ref": "docs/spec.md:3"}])
+        expect("a human's answer is not a path and is not checked", r.returncode, 0)
+        r = verify([code_ev])
+        expect("spec-driven without a spec ref",
+               (r.returncode, "SPEC_REF_MISSING" in r.stdout), (1, True))
+        expect("the same scenario is fine in characterization", verify([code_ev], mode="characterization").returncode, 0)
+        r = verify([{"type": "human_decision", "ref": "docs/spec.md:3"}],
+                   data={"amount": {"source": "seeder", "ref": "src/main/java/com/acme/Nope.java:3"}})
+        expect("refs in data are checked too", (r.returncode, "Nope.java" in r.stdout), (1, True))
+
+
 if __name__ == "__main__":
     sys.exit(run_all(globals(), "METADATA_AND_GIT_OK"))
