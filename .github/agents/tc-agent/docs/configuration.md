@@ -14,17 +14,18 @@ The first one that exists is used. Files, all optional:
 | `conventions.md` | this repo's test style (overrides the agent's §B defaults, never §A) | the context pack → REPO CONVENTIONS, first source |
 | `test-data.md` | example business values of this system | the context pack → TEST DATA |
 
-Without a project directory the agent runs on its built-in defaults.
+Without a project directory the agent runs on its built-in defaults. A `profile.md` the
+schema rejects (an unknown or misspelled key included) stops `start` with `INVALID_PROFILE`.
 
 ## profile.md keys
 
-**Max rounds** (`max_rounds`, default 3): generate + review rounds one run may
-spend. A new plan version does not add rounds. `--max-rounds` overrides it for one run.
+**Max rounds** (`max_rounds`, default 3): reviews one run may have; every review closes a
+round, also the first one of a new plan version. `--max-rounds` overrides it for one run.
 
-**Protected branches** (`protected_branches`, default `["master"]`): branches
+**Protected branches** (`protected_branches`, default `["master", "main"]`): branches
 `finish --commit` never commits to; globs allowed (`release/*`). On such a branch,
 or a detached HEAD, it creates `tc-agent/<slug>/<run-id>` instead. An empty list
-still protects `master`.
+still protects `master` and `main`.
 
 **Quality gates** are the thresholds `tc_coverage.py` and `tc_mutation.py` must reach
 for the target scope — the class, or the single method when the plan names one.
@@ -96,7 +97,7 @@ For `false`, and to make `"auto"` fast from the first run, install them once:
 
 `maven_args` carries the rest of what makes such a build bearable: `["-T",
 "1C"]` to build in parallel, `["-o"]` offline, `["-DskipITs"]` to leave
-integration tests out.
+integration tests out, `["-Dthreads=4"]` for PIT, which mutates in one thread by default.
 
 SNAPSHOTs are never re-resolved: every call carries `-nsu`. A run measures the
 code in THIS working tree, so a colleague's newer snapshot landing between two
@@ -148,8 +149,8 @@ and says so in the log. A repo that must always run the phase:
     "maven_goals_only": false
 
 The other half of the cost is compiling `src/main` before every check. During a
-run the production code never changes - characterization mode requires it committed, and
-the agent only writes test files - so in a module with annotation processors or
+run the production code never changes - the agent only writes under `src/test`, and any
+other change stops the run - so in a module with annotation processors or
 generated sources you would pay for a full rebuild each time for nothing.
 
 `maven_skip_main_compile` decides this, and its default `"auto"` needs no
@@ -191,10 +192,8 @@ gitignored, and the moment the pom's agent stops attaching anything the run
 takes the agent back and forgets the hint. The exception that pom alone can solve: on JUnit 5, PIT needs
 `pitest-junit5-plugin` as a plugin dependency - the CLI cannot add it.
 
-**Tooling** is deliberately absent. `tool_version()` resolves a version as
-CLI flag → this file → the version declared in the pom → the agent default, so a
-value here OVERRIDES the pom. This repo's pom pins jacoco 0.8.15 and pitest
-1.25.9, and prepare-agent must run the same JaCoCo version as the report goal —
-pinning a different one here would make the report reject the exec file. Add a
-`tooling` block only when the pom declares no version, or when the pom's version
-cannot read the class files of the JDK in use.
+**Tooling** (`jacoco_version`, `pit_version`) is normally absent. A version resolves as
+CLI flag → this file → the version declared in the pom (a `${property}` resolved from
+`<properties>`) → the agent default, so a value here OVERRIDES the pom; prepare-agent
+and the report goal must run the same JaCoCo version. Add a `tooling` block only when
+the pom declares no version, or when its version cannot read the class files of the JDK in use.

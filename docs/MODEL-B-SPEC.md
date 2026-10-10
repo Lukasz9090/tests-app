@@ -1,6 +1,6 @@
 # tc-agent — specyfikacja (stan obecny)
 
-> Opisuje agenta takim, jaki jest teraz (gałąź `model-b2`). Historia decyzji: `docs/MODEL-B-PLAN.md`
+> Opisuje agenta takim, jaki jest teraz (gałąź `model-b3`). Historia decyzji: `docs/MODEL-B-PLAN.md`
 > (D1–D68) i `docs/MODEL-B2-PLAN.md` (D69–D83). Instrukcja dla użytkownika: `.github/agents/tc-agent/README.md`.
 
 ## 1. Zasada
@@ -32,7 +32,7 @@ po `applyTo`, `AGENTS.md`, `instruction_paths`) > domyślne §B.
 | | wyrocznia | metadane | gdy test pada |
 |---|---|---|---|
 | `characterization` (domyślny) | obecny kod, błędy włącznie | `tc-agent-characterizes: <Class>@<sha>` | naprawa testu (albo planu) |
-| `spec-driven` | specyfikacja `--spec` (sekcja SPEC w packu), tylko jej wymagania | `tc-agent-spec: <plik>#<wymaganie>` | rozbieżność: test zostaje wyłączony `AI spec-mismatch` z ciałem, raport ją wymienia |
+| `spec-driven` | specyfikacja `--spec` (wymagana; sekcja SPEC w packu), tylko jej wymagania — nic, czego spec nie opisuje | `tc-agent-spec: <plik>#<wymaganie>` | rozbieżność: test zostaje wyłączony `AI spec-mismatch` z ciałem, raport ją wymienia |
 
 `--interactive` to modyfikator obu trybów: planer pyta człowieka (najpierw o dane, potem o to, co zamrozić
 albo jak rozumieć wymaganie) i zapisuje pytania także jako `CONFIRM:`. W characterization zdejmuje
@@ -60,14 +60,14 @@ Wynik `next_action`:
 
 | wynik | kiedy |
 |---|---|
-| `PLAN` | `NO_TESTS`, `COVERAGE_GAP`, `MUTATION_GAP`, `UNTESTED_METHODS`, `CHANGED_CODE_UNCOVERED`, `STALE`; w spec-driven także `SPEC_REVIEW` (bramki spełnione, spec nieporównany) |
+| `PLAN` | `NO_TESTS`, `COVERAGE_GAP`, `MUTATION_GAP`, `UNTESTED_METHODS`, `CHANGED_CODE_UNCOVERED`, `STALE`; w spec-driven zawsze `SPEC_REVIEW` (tylko testy, bez JaCoCo i PIT) |
 | `DONE` | bramki spełnione na bieżącym kodzie (tylko characterization) |
-| `RED` | czerwony test spoza zakresu naprawy albo błąd kompilacji |
-| `BLOCKED` | characterization: target zmieniony (treść, nie końcówki linii), niezacommitowany albo młodszy niż `freshness_days` bez interactive |
+| `RED` | czerwony test spoza zakresu naprawy (w spec-driven każdy, także stale) albo błąd kompilacji |
+| `BLOCKED` | characterization: target zmieniony (treść, nie końcówki linii) albo niezacommitowany — zawsze, przed mavenem; młodszy niż `freshness_days` bez interactive — gdy jest co planować |
 | `ESCALATE` | target nie istnieje / niejednoznaczny, brak gita, check nie mógł się wykonać |
 
 Stale test characterization, który nadal przechodzi, dostaje mechanicznie nowy sha (`reseal`); czerwony
-wraca do planera.
+wraca do planera (w trybie characterization).
 
 ## 6. Przebieg
 
@@ -78,8 +78,11 @@ rund w całym przebiegu; runda = generacja + review, nowa wersja planu też ją 
 planu decyduje recenzent; po limicie przebieg kończy się `ESCALATED`, testy zostają w drzewie.
 
 Outcome: `DONE`, `DONE_PARTIAL` (placeholdery albo rozbieżności spec), `BLOCKED`, `RED`, `ESCALATED`.
-`--commit`: tylko przy DONE/DONE_PARTIAL, tylko pliki testowe przebiegu, nigdy na branchu z
-`protected_branches` (wtedy nowy `tc-agent/<slug>/<run-id>`), bez push.
+`--commit`: tylko przy DONE/DONE_PARTIAL, tylko pliki przebiegu spod `src/test`, nigdy na branchu z
+`protected_branches` (domyślnie `master`, `main`; wtedy nowy `tc-agent/<slug>/<run-id>`), bez push.
+Zmiana poza `src/test` (i poza `.test-agent/`, `target/`) w trakcie przebiegu → `ESCALATED` bez commita.
+Plan v2+ ze statusem `COMPLETE` → `ESCALATED`. Plan v(N+1) po `REPAIR_PLAN` zawiera tylko zmiany; jego
+pierwsza generacja nie dostaje review.
 
 ## 7. Dane biznesowe
 

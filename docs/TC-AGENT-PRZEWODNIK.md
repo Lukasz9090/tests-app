@@ -1,6 +1,6 @@
 # tc-agent — przewodnik (do prezentacji)
 
-Stan: gałąź `model-b2`, październik 2026. Szczegóły techniczne: `docs/MODEL-B-SPEC.md`,
+Stan: gałąź `model-b3`, październik 2026. Szczegóły techniczne: `docs/MODEL-B-SPEC.md`,
 historia decyzji: `docs/MODEL-B-PLAN.md`, `docs/MODEL-B2-PLAN.md`.
 
 ---
@@ -18,15 +18,15 @@ każdego wygenerowanego testu siedzą w jego Javadocu.
 | możliwość | jak |
 |---|---|
 | **Tryb `characterization`** (domyślny) | zamraża obecne zachowanie kodu, błędy włącznie; test zapamiętuje sha commita (`tc-agent-characterizes`) |
-| **Tryb `spec-driven`** | testy wg specyfikacji (`--spec`); jeśli kod robi co innego niż spec — test zostaje wyłączony z ciałem i ląduje na górze raportu jako rozbieżność |
+| **Tryb `spec-driven`** | testy tylko z wymagań specyfikacji (`--spec`, bez niej orchestrator pyta), bez łatania luk spoza spec; jeśli kod robi co innego niż spec — test zostaje wyłączony z ciałem i ląduje na górze raportu jako rozbieżność |
 | **Modyfikator `interactive`** | planer pyta człowieka (najpierw o przykładowe dane, potem co zamrozić / jak rozumieć wymaganie) |
 | **Dane biznesowe z repo** | `test-data.md` projektu, `--test-data`, sekcja DATA EXAMPLES (jak inne testy w CAŁYM repo wypełniają te same pola — np. `customerId` = 9 cyfr) — nie `CUSTOMER-1` |
 | **Bramki jakości** | branch coverage (JaCoCo) i mutation score (PIT) — domyślnie 80% / 70%, w profilu projektu |
-| **Limit 3 rund** | generacja + review najwyżej 3 razy na przebieg; potem `ESCALATED`, testy zostają w drzewie |
+| **Limit rund** | `max_rounds` w `profile.md` (domyślnie 3) review na przebieg; potem `ESCALATED`, testy zostają w drzewie |
 | **Zaślepki** | scenariusz nietestowalny (np. `LocalDateTime.now()` bez `Clock`) → pusta metoda `@Disabled("AI deferred: …")` + sugestia zmiany w kodzie |
 | **Reseal** | po zmianie kodu, która nie zmieniła zachowania, skrypt tylko przesuwa sha w testach — bez LLM |
-| **Commit (`--commit`)** | tylko pliki testowe przebiegu, tylko przy DONE / DONE_PARTIAL; na chronionym branchu tworzy `tc-agent/<klasa>/<run-id>`; nigdy push |
-| **Ochrona kodu produkcyjnego** | zmiana w `src/main` w trakcie przebiegu → `ESCALATED`, bez commita |
+| **Commit (`--commit`)** | tylko pliki przebiegu spod `src/test`, tylko przy DONE / DONE_PARTIAL; na chronionym branchu (domyślnie `master`, `main`) tworzy `tc-agent/<klasa>/<run-id>`; nigdy push |
+| **Ochrona reszty repo** | zmiana poza `src/test` w trakcie przebiegu → `ESCALATED`, bez commita |
 | **Wielomodułowość, JUnit 4 i 5** | moduł z najbliższego `pom.xml`, `-pl <moduł>`; wersja JUnit z importów istniejących testów |
 | **JaCoCo i PIT bez zmian w pomie** | wołane po pełnych koordynatach z CLI (wyjątek: PIT na JUnit 5 wymaga `pitest-junit5-plugin` w pomie) |
 | **Szybki build** | gdy `target/classes` aktualne: bez kompilacji `src/main` i bez fazy `test` (same gole: `testResources testCompile surefire:test`) — bez generatorów i frontu |
@@ -49,7 +49,7 @@ Opcje (orchestrator przekłada je na `tc_orchestrate.py start`): `--mode charact
 
 ```
 start ── derive-state (git, testy, JaCoCo, PIT) ──┬─ DONE / RED / BLOCKED / ESCALATE ──► FINISH
-                                                  ├─ RESEAL (stale, ale zielone) ──────► FINISH
+                                                  ├─ RESEAL (stale, ale zielone) ──► FINISH albo PLAN
                                                   └─ PLAN
                                                       │
                      ┌────────────── runda (≤ 3) ─────┴──────────────┐
@@ -65,9 +65,9 @@ start ── derive-state (git, testy, JaCoCo, PIT) ──┬─ DONE / RED / BL
 |---|---|
 | `DONE` | bramki spełnione, testy zielone |
 | `DONE_PARTIAL` | jak wyżej, ale zostały zaślepki albo rozbieżności ze spec |
-| `BLOCKED` | target ma niezacommitowane zmiany / nie jest zacommitowany / za świeży (characterization bez interactive) |
+| `BLOCKED` | characterization: target ma niezacommitowane zmiany / nie jest zacommitowany / za świeży (bez interactive) |
 | `RED` | istniejące testy są czerwone albo się nie kompilują — najpierw człowiek |
-| `ESCALATED` | limit rund, decyzja dla człowieka albo zmiana kodu produkcyjnego w trakcie |
+| `ESCALATED` | limit rund, decyzja dla człowieka albo zmiana poza `src/test` w trakcie |
 
 **Kto co decyduje:** `tc_orchestrate.py state` mówi orchestratorowi, co dalej (`next_action`);
 orchestrator tylko wykonuje. O naprawie testu vs planu decyduje recenzent. Bramki liczą skrypty.
@@ -114,14 +114,14 @@ dotyczące jej przebiegu; każda reguła ma jednego właściciela)
 
 | plik | co robi |
 |---|---|
-| `tc_orchestrate.py` | serce przebiegu: `start` / `state` / `reseal` / `finish`; maszyna stanów, limit rund, lista references dla ról, ochrona `src/main`, raport, commit |
+| `tc_orchestrate.py` | serce przebiegu: `start` / `state` / `reseal` / `finish`; maszyna stanów, limit rund, lista references dla ról, ochrona repo poza `src/test`, raport, commit |
 | `tc_derive_state.py` | na starcie liczy, czego target potrzebuje: git (dirty, wiek, sha), metadane testów, potem testy + pokrycie, potem mutacje → `PLAN / DONE / RED / BLOCKED / ESCALATE` |
 | `tc_build_context.py` | składa `context-pack.md` dla planera i generatora (kod targetu z numerami linii, testy, buildery, zależności, dane, konwencje repo, spec) |
 | `tc_run_tests.py` | jedyny skrypt budujący: uruchamia testy targetu z agentem JaCoCo i od razu generuje raport pokrycia |
 | `tc_coverage.py` | czyta pokrycie gałęzi dla targetu, porównuje z bramką, wypisuje niepokryte linie |
 | `tc_mutation.py` | uruchamia PIT tylko na targecie, wypisuje przeżywające mutanty, porównuje z bramką |
 | `tc_javadoc.py` | parser metadanych `tc-agent-*` w Javadocu testów + `reseal` (podmiana sha w jednej linii) |
-| `tc_git.py` | fakty z gita: sha, dirty (bez końcówek linii), wiek commita, zmienione linie, migawka `src/main` |
+| `tc_git.py` | fakty z gita: sha, dirty (bez końcówek linii), wiek commita, zmienione linie, migawka plików poza `src/test` |
 | `tc_common.py` | wspólne: znajdowanie targetu i modułu, profil projektu, wywołania mavena, wersja JUnit, JaCoCo/PIT |
 | `tc_evidence_strength.py` | klasyfikuje siłę dowodów scenariusza (strong / medium / weak) — LLM tego nie szacuje |
 | `tc_verify_refs.py` | sprawdza, że każdy ref w planie wskazuje istniejące linie i że nazwy metod nie kolidują |
@@ -132,7 +132,7 @@ dotyczące jej przebiegu; każda reguła ma jednego właściciela)
 
 | plik | co sprawdza |
 |---|---|
-| `tc_test_run_state.py` | maszyna stanów, limit rund, raport, commit, references, „jeden właściciel reguły”, ochrona `src/main` |
+| `tc_test_run_state.py` | maszyna stanów, limit rund, raport, commit, references, „jeden właściciel reguły”, ochrona repo poza `src/test` |
 | `tc_test_derive_state.py` | decyzje derive-state (dirty, świeży kod, stale, reseal, spec) |
 | `tc_test_check_scripts.py` | skrypty mavenowe: skip kompilacji, gole vs faza, agent JaCoCo, timeout, `-am` |
 | `tc_test_build_context.py` | context pack: konwencje, dane, DATA EXAMPLES, numery linii, wielomodułowość |
@@ -209,7 +209,7 @@ Każdy artefakt `.md` = tytuł + krótkie streszczenie + **jeden blok JSON** (to
 
 | plik | kto pisze | co jest w środku | kto czyta |
 |---|---|---|---|
-| `run.json` | `start` | tryb, interactive, spec, `max_rounds`, `--commit`, pliki test-data, migawka `src/main`, reseal, na końcu wynik i commit | wszystkie skrypty i role |
+| `run.json` | `start` | tryb, interactive, spec, `max_rounds`, `--commit`, pliki test-data, migawka plików poza `src/test`, reseal, na końcu wynik i commit | wszystkie skrypty i role |
 | `derive-state.md` | `tc_derive_state.py` | target (plik, moduł, FQCN), git (sha, dirty, wiek), kontrakt repo (JUnit, JaCoCo/PIT), testy (AI / ludzkie / zaślepki / defekty metadanych), stale / reseal / red, pokrycie (w tym metody bez pokrycia i zmienione od zamrożenia, a niepokryte linie) i mutacje, `next_action` i powody (`NO_TESTS`, `COVERAGE_GAP`, `STALE`, `SPEC_REVIEW`…) | `state`, planer |
 | `context-pack.md` | `tc_build_context.py` (woła planer) | TEST FRAMEWORK, TEST DATA, DATA EXAMPLES, REPO CONVENTIONS, SPEC, kod targetu, istniejące testy, buildery, enumy, zależności (z numerami linii pliku), typy z jarów, manifest | planer, generator, recenzent |
 | `plan-vN.md` | tc-planner | scenariusze (opis, dane, dowody `plik:linie`, siła dowodów, nazwa metody, plik testu), `deferred` z powodem, `obsolete`, notatki `CONFIRM:` dla człowieka, status planu | generator, recenzent |
@@ -239,9 +239,9 @@ Każdy artefakt `.md` = tytuł + krótkie streszczenie + **jeden blok JSON** (to
 |---|---|
 | Czy LLM wymyśla dane? | Nie: wartości tożsamościowe biorą kształt z test-data, z innych testów w repo albo od człowieka; granice i stałe — z linii kodu; brak źródła = zaślepka z pytaniem |
 | Kto decyduje, czy test jest dobry? | Recenzent w osobnym kontekście + twarde liczby: testy, JaCoCo, PIT, walidacja schematów |
-| Czy może popsuć kod produkcyjny? | Nie zapisze go w commicie, a zmiana `src/main` w trakcie zatrzymuje przebieg |
+| Czy może popsuć kod produkcyjny? | Commituje tylko pliki spod `src/test`, a każda zmiana poza `src/test` w trakcie zatrzymuje przebieg |
 | Co jeśli test pada? | characterization: naprawa testu (max 3 rundy); spec-driven: rozbieżność → test wyłączony i zgłoszony; cudzy czerwony test → człowiek |
 | Co po zmianie kodu? | stale test, który przechodzi → automatyczny reseal sha; który pada → planer go przepisuje |
-| Czy to działa w CI? | tak: brak pamięci między przebiegami, `--commit` tworzy branch, push robi Jenkins |
+| Czy to działa w CI? | plan na przyszłość: Jenkins uruchamia orchestratora tylko w characterization bez interactive; brak pamięci między przebiegami, `--commit` tworzy branch, push robi Jenkins |
 | Ile to kosztuje? | najwyżej 3 rundy; build bez kompilacji `src/main` i bez generatorów, gdy `target/` aktualny |
 | Jak dostosować do repo? | `profile.md` (bramki, maven), `conventions.md` (styl), `test-data.md` (dane) — bez zmian w pakiecie |

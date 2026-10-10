@@ -33,8 +33,8 @@ The orchestrator turns this into `tc_orchestrate.py start` with these options:
 |---|---|
 | target | `ClassName` or `ClassName.methodName`. One or a list. |
 | `--mode characterization` (default) | Freeze the CURRENT behavior, bugs included. Tests describe what the code does now. |
-| `--mode spec-driven` | Tests follow the specification (`--spec`), only its requirements. Runs even when the gates are met (`SPEC_REVIEW`). A test that fails because the code does not do what the spec says is kept disabled (`AI spec-mismatch`) and listed at the top of the report. |
-| `--spec <path>` | The specification file for spec-driven mode. |
+| `--mode spec-driven` | Tests come only from the specification's requirements — nothing the spec does not describe; the gates do not drive it. A test that fails because the code does not do what the spec says is kept disabled (`AI spec-mismatch`) and listed at the top of the report. |
+| `--spec <path>` | The specification file; required in spec-driven mode (the orchestrator asks for it). |
 | `--interactive` | The planner may ask questions (what to freeze, example data). Also turns off the freshness guard. |
 | `--test-data <path>` | A file of example business values, used in any mode (repeatable). Say it in the prompt: "examples are in docs/test-data.md". Without it, only `--interactive` makes the planner ask. |
 | `--max-rounds <n>` (3) | Max generate + review rounds in the whole run; a new plan version uses up a round too. Default from the profile's `max_rounds`. |
@@ -42,17 +42,18 @@ The orchestrator turns this into `tc_orchestrate.py start` with these options:
 
 ## Flow
 
-1. **start** — derive-state checks the target: git state, tests, JaCoCo, PIT. Verdict:
-   - `DONE` — tests exist, green, gates met, code unchanged → nothing to do;
-   - `PLAN` — something is missing (no tests, coverage/mutation gap, untested or changed methods, stale tests);
+1. **start** — derive-state checks the target: git state, tests, JaCoCo, PIT (spec-driven: tests only). Verdict:
+   - `DONE` — tests exist, green, gates met, code unchanged → nothing to do (characterization);
+   - `PLAN` — something is missing (no tests, coverage/mutation gap, untested or changed methods, stale tests; spec-driven: always);
    - `RED` — existing tests fail → a human must look;
-   - `BLOCKED` — target has uncommitted changes, is not committed, or is too fresh (characterization only).
-2. **PLAN → GENERATE → REVIEW**, repeated until the reviewer accepts or `--max-rounds` (3) review
-   rounds are spent. The reviewer's decision picks the next step: repair the code, repair the plan, or accept.
-3. **RESEAL** — still-green tests get the new sha after a code change.
+   - `BLOCKED` — characterization only: target has uncommitted changes, is not committed, or is too fresh;
+   - `ESCALATE` — the target cannot be resolved or a check could not run.
+2. **RESEAL** — still-green stale tests get the new sha after a code change.
+3. **PLAN → GENERATE → REVIEW**, repeated until the reviewer accepts or `max_rounds` review rounds are
+   spent. The reviewer's decision picks the next step: repair the tests, repair the plan, or accept.
 4. **FINISH** — writes `run-report.md`, prints it, and commits if `--commit` was given.
 
-Outcomes: `DONE`, `DONE_PARTIAL` (placeholders left), `BLOCKED`, `RED`, `ESCALATED` (round limit reached or a human decision is needed). Commit your production code first — a dirty target is always BLOCKED.
+Outcomes: `DONE`, `DONE_PARTIAL` (placeholders left), `BLOCKED`, `RED`, `ESCALATED` (round limit, a human decision, or a file outside `src/test` changed during the run).
 
 ## Configuration
 
@@ -60,9 +61,9 @@ Per-repository settings live in the **project directory** — `.github/tc-agent/
 (target) or `.github/agents/tc-agent-project/` (current), first one found — never
 inside this package. All files are optional; all keys: `docs/configuration.md`.
 
-- **`profile.md`** (json block): gates (`branch_coverage_target_scope` 0.80,
-  `mutation_score_target_scope` 0.70), `max_rounds` (3), `freshness_days` (7),
-  `protected_branches` (default `["master"]`), `instruction_paths`, `test_data_paths`,
+- **`profile.md`** (json block, checked against its schema at `start`): gates (`branch_coverage_target_scope`
+  0.80, `mutation_score_target_scope` 0.70), `max_rounds` (3), `freshness_days` (7), `flaky_repeat` (1),
+  `protected_branches` (default `["master", "main"]`), `instruction_paths`, `test_data_paths`,
   `junit`, `tooling`, and the maven keys (`maven_timeout_seconds`, `maven_also_make`,
   `maven_skip_main_compile`, `maven_goals_only`, `maven_args`, `maven_snapshot_updates`).
 - **`conventions.md`** — this repo's test style; read first among the style rules.
@@ -75,7 +76,7 @@ Default style: `shouldXxxWhenYyy`, `// given / // when / // then`, AssertJ, Mock
 
 ## Commit (`--commit`)
 
-- Only on `DONE` or `DONE_PARTIAL`, and only the test files this run wrote.
+- Only on `DONE` or `DONE_PARTIAL`, and only the files under `src/test` this run wrote.
 - On a protected branch it first creates a new branch `tc-agent/<target>/<run-id>`.
 - Message: title `[TC-AGENT] Add tests for <target>.`, a 2–5 sentence summary of the whole run
   (written by the reviewer), then facts (mode, target sha, counts, gates, suggestions) — nothing from `.test-agent/`.
