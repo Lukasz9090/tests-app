@@ -1,6 +1,7 @@
 # tc-agent — Model B3: plan naprawczy po przeglądzie
 
-> **Status:** plan zaakceptowany 2026-10-10, wdrożenie nie rozpoczęte.
+> **Status:** etapy 0–6 wdrożone 2026-10-10 na gałęzi `model-b3` (commity „tc-agent B3 E0…E5”); akceptacja
+> §6 (E26–E40, prawdziwy Maven + Copilot) po stronie użytkownika — E38 decyduje o etapie 3b.
 > **Numeracja decyzji** kontynuuje `docs/MODEL-B2-PLAN.md` (od D84).
 > **Gałąź:** `model-b3` od `final-review`. **Punkt powrotu:** tag `model-b2-final` (etap 0).
 > **Charakter:** refaktor naprawczy. Główne zachowanie agenta się nie zmienia; każda poprawka zastępuje
@@ -277,10 +278,10 @@ hosty, URL-e, e-maile) — zero trafień w repo.
 
 | zakres | dziś | cel |
 |---|---|---|
-| prompty ról (orchestrator 79, planner 169, generator 121, reviewer 164) | 533 | ≤ 533 |
-| `references/` (contracts 127, conventions 189, junit4 20, characterization 107, interactive 51, spec-driven 50) | 544 | ≤ 544 |
+| prompty ról (orchestrator 79, planner 169, generator 121, reviewer 164) | 533 | ≤ 533 (po: 517) |
+| `references/` (contracts 127, conventions 189, junit4 20, characterization 107, interactive 51, spec-driven 50) | 544 | ≤ 544 (po: 538) |
 | `README.md` 104 + `docs/configuration.md` 200 | 304 | ≤ 304 |
-| **razem pliki instrukcji pakietu** | **1381** | **≤ 1381** |
+| **razem pliki instrukcji pakietu** | **1381** | **≤ 1381 (po: 1359)** |
 | `scripts/*.py` | 5265 | ≈ 4650 (F24 −40, F25 ≈ −600, poprawki F1–F23 bez dopisków) |
 | `schemas/*.json` (etap 3b) | 1465 | ≈ 385 |
 
@@ -314,4 +315,19 @@ Rosnąć mogą tylko dev-testy (`tools/`) i dziennik decyzji (`docs/`).
 
 ## 8. Odchylenia od planu
 
-(uzupełniane przy wdrożeniu)
+- 2026-10-10 (E0): baseline 460/460 asercji, `tc_check_examples` OK. Git w maszynie Coworku widzi drzewo Windows
+  bez `autocrlf` (same CRLF); wszystkie komendy gita szły z `core.autocrlf=true`, autor = właściciel repo.
+- E1 (F1): migawka pomija też `target/` — w repo bez `target/` w `.gitignore` sam maven zmieniałby ją w trakcie.
+  F3: odmowa także dla nieistniejących `test_data_paths` z profilu. Stary test „dirty → DONE” zmieniony na D87.
+- E2: F7 przez pole `dependencies_missing` w raporcie testów. F8 sprawdzone w źródle PIT (`DetectionStatus`):
+  wykryte = KILLED, TIMED_OUT, NON_VIABLE, MEMORY_ERROR, RUN_ERROR, EQUIVALENT. F24: razem z `stale_classes`
+  w `auto` zniknął komunikat „Another source in the module is stale”.
+- E3: F12 rezerwuje miejsce także na SPEC. F13: refy w `data` sprawdzane, gdy mają kształt ścieżki.
+  Reguła schematu `requirement` (F14) weszła z 3b.
+- E3b: schematy = wersje robocze z `.test-agent/b3-schemas-draft/`; dispatch `REPAIR_PLAN` ma pole `gate_checks`;
+  `tests.status` bez nieużywanych `ERROR` / `NOT_RUN`.
+- E4: testy „generator v2 dostaje review” i „domyślnie tylko master” zmienione na D98 / D100.
+- E5: F25 — skrypty 5359 → 4806 linii, AST bez docstringów identyczny. Wątki PIT: `-Dthreads=N` z linii komend
+  (pitest.org quickstart: opcja `threads`, domyślnie 1). F19: lista z `anonymize.txt` — zero trafień w repo;
+  stare nazwy zostają w historii gita.
+- E6: 511/511 asercji; instrukcje 1381 → 1359 linii, skrypty 5265 → 4806, schematy 1465 → 385.

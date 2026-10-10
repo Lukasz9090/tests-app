@@ -7,8 +7,8 @@ real toolchain works here: the JDK, the JaCoCo agent attached exactly once, PIT
 finding its JUnit 5 plugin. Their failure mode is exit code 2, "the check could
 not run", which derive-state and the Reviewer turn into ESCALATE / BLOCKED.
 
-So this tool creates a real run for a real target (`tc_orchestrate.py start`,
-spec-driven so the freshness guard stays out of the way), then runs
+So this tool creates a run directory for a real target (without `start`, so no
+guard and no second build is involved), then runs
 tc_run_tests.py, tc_coverage.py and tc_mutation.py against it with the label
 `smoke`, and asserts that none of them exits 2 and that every report parses.
 
