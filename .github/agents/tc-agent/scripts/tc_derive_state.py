@@ -113,8 +113,7 @@ def normalize_test_id(test: str) -> str:
 
 
 def tier1(repo: Path, target: c.Target) -> dict:
-    classes = c.discover_test_classes(repo, target)
-    mocked_only = list(getattr(c.discover_test_classes, "mocked_only", []))
+    classes, mocked_only = c.discover_test_classes(repo, target)
     methods, defects = [], []
     for fqcn, path in classes:
         found, file_defects = j.parse_file(path, g.rel(repo, path))

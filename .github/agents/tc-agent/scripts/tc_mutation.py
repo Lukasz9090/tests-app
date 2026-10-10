@@ -22,7 +22,8 @@ from pathlib import Path
 import tc_common as c
 
 GATE_KEY = "mutation_score_target_scope"
-KILLED = {"KILLED", "TIMED_OUT", "MEMORY_ERROR"}
+# PIT's own DetectionStatus: these count as detected in PIT's mutation score.
+DETECTED = {"KILLED", "TIMED_OUT", "NON_VIABLE", "MEMORY_ERROR", "RUN_ERROR", "EQUIVALENT"}
 # Matched against the EXTRACTED error only, never the whole log: PIT prints its
 # plugin inventory on every run ("Detect missing JUnit5 plugin", "Adding
 # org.pitest:pitest-junit5-plugin to SUT classpath"), so scanning the full output
@@ -62,10 +63,17 @@ def main() -> int:
         tests = (
             [t.strip() for t in args.tests.split(",") if t.strip()]
             if args.tests
-            else [fq for fq, _ in c.discover_test_classes(repo, target)]
+            else [fq for fq, _ in c.discover_test_classes(repo, target)[0]]
         )
         if not tests:
             raise c.CheckError(f"no test class exercises {target.cls} - nothing to mutate against")
+
+        # PIT runs on this module alone: the -am the tests check needed is gone here.
+        install = (f"the module's dependencies are not installed in the local repository - run "
+                   f"`mvn -DskipTests install -pl {module} -am` once, then re-run")
+        tests_report = c.checks_dir(directory) / f"tests-{args.label}.md"
+        if tests_report.exists() and c.payload(tests_report).get("dependencies_missing"):
+            raise c.CheckError(f"{install} (the tests check had to build them with -am)")
 
         command = (
             c.mvn_base(repo)
@@ -106,7 +114,9 @@ def main() -> int:
                 c.finish(directory, name, "Check: mutation",
                          [reason[:300]], {"status": "SKIPPED_UNAVAILABLE", "reason": reason}, 2)
                 return c.fail(reason)
-            if any(marker in lowered for marker in UNAVAILABLE_MARKERS):
+            if c.needs_also_make(output):
+                reason = f"{install}; full log: {log}"
+            elif any(marker in lowered for marker in UNAVAILABLE_MARKERS):
                 reason = (
                     "PIT could not run the tests - with JUnit 5 the pitest-junit5-plugin "
                     "must be declared as a plugin dependency in the pom (it cannot be added "
@@ -128,11 +138,11 @@ def main() -> int:
             mutated_method = text(mutation, "mutatedMethod")
             if not (mutated_class == fqcn or mutated_class.startswith(fqcn + "$")):
                 continue
-            if method and mutated_method != method:
+            if method and mutated_method != method and not mutated_method.startswith(f"lambda${method}$"):
                 continue
             total += 1
             status = (mutation.get("status") or "").upper()
-            if status in KILLED:
+            if status in DETECTED:
                 killed += 1
             else:
                 survivors.append(

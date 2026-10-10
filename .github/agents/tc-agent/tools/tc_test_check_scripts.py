@@ -115,6 +115,82 @@ def test_a_green_suite_is_not_run_twice_but_a_failing_one_is():
         expect("a failure in both runs is not a flake", tests["flaky"], [])
 
 
+def test_a_test_that_fails_once_is_flaky_not_failed():
+    with fixture() as repo:
+        out = start(repo, {"FAKE_MVN_FAIL_ONCE": "OrderServiceTest#humanB"})
+        tests = load_payload(out["dir"] / "checks" / "tests-entry.md")[0]
+        expect("flaky, not a failure", (tests["status"], tests["failures"], tests["flaky"]),
+               ("PASSED", [], ["com.acme.OrderServiceTest#humanB"]))
+        expect("so derive-state is not RED", out["state"]["next_action"] != "RED", True)
+        log = (out["dir"] / "checks" / "maven-tests-entry.log").read_text(encoding="utf-8")
+        expect("the log keeps both attempts", log.count("$ "), 2)
+
+
+def test_pit_detected_statuses_count_as_killed():
+    with fixture() as repo:
+        out = start(repo, {"FAKE_MVN_MUTANTS": "2,0", "FAKE_MVN_MUTANT_EXTRA": "RUN_ERROR,NON_VIABLE,NO_COVERAGE"})
+        mut = load_payload(out["dir"] / "checks" / "mutation-entry.md")[0]
+        expect("RUN_ERROR and NON_VIABLE are detected, NO_COVERAGE is not",
+               (mut["killed"], [s["status"] for s in mut["survivors"]]), (4, ["NO_COVERAGE"]))
+
+
+def test_mutation_without_installed_dependencies_says_how_to_fix_it():
+    with fixture() as repo:
+        out = start(repo)
+        report = out["dir"] / "checks" / "tests-entry.md"
+        data, text = load_payload(report)
+        data["dependencies_missing"] = True
+        report.write_text(text.split("```json")[0] + "```json\n" + json.dumps(data) + "\n```\n", encoding="utf-8")
+        before = len((repo.root / "mvn.log").read_text().splitlines())
+        env = {**os.environ, "PATH": f"{FAKE}{os.pathsep}{os.environ['PATH']}", "FAKE_MVN_LOG": str(repo.root / "mvn.log")}
+        proc = subprocess.run([sys.executable, str(TC / "scripts" / "tc_mutation.py"), "OrderService", "--repo",
+                               str(repo.root), "--run", out["run_id"], "--label", "entry"],
+                              capture_output=True, text=True, env=env)
+        mut = load_payload(out["dir"] / "checks" / "mutation-entry.md")[0]
+        expect("exit 2 with the install command", (proc.returncode, "-DskipTests install" in mut["reason"]), (2, True))
+        expect("and no maven call", len((repo.root / "mvn.log").read_text().splitlines()), before)
+
+
+def test_method_scope_includes_its_lambdas():
+    import xml.etree.ElementTree as ET
+    sys.path.insert(0, str(TC / "scripts"))
+    import tc_coverage as cv
+    klass = ET.fromstring('<class name="a/B"><method name="create" line="10"/>'
+                          '<method name="lambda$create$0" line="12"/><method name="other" line="30"/></class>')
+    ranges = cv.method_ranges(klass, "create")
+    expect("the lambda is no boundary", [(s, e) for s, e, _ in ranges if e], [(10, 29)])
+    expect("its counters come along", [el.get("name") for _, _, el in ranges], ["create", "lambda$create$0"])
+
+
+def test_plugin_version_property_is_resolved():
+    import tc_common as tc
+    with FixtureRepo() as repo:
+        repo.write("pom.xml", "<project><properties><jacoco.version>0.8.12</jacoco.version></properties><build>"
+                   "<plugins><plugin><artifactId>jacoco-maven-plugin</artifactId><version>${jacoco.version}"
+                   "</version></plugin></plugins></build></project>")
+        expect("${jacoco.version} -> 0.8.12", tc.pom_plugin_version(repo.root, None, "jacoco-maven-plugin"), "0.8.12")
+        expect("tool_version uses it", tc.tool_version(repo.root, "jacoco"), "0.8.12")
+
+
+def test_auto_never_walks_the_whole_module():
+    import tc_common as tc
+    import tc_run_tests as rt
+    with fixture() as repo:
+        out = start(repo)
+        (repo.root / "target" / "classes" / "com" / "acme").mkdir(parents=True, exist_ok=True)
+        (repo.root / "target" / "classes" / "com" / "acme" / "OrderService.class").write_bytes(b"x")
+        saved, argv, path = tc.stale_classes, sys.argv, os.environ["PATH"]
+        tc.stale_classes = lambda *a: (_ for _ in ()).throw(AssertionError("walked the module"))
+        os.environ["PATH"] = f"{FAKE}{os.pathsep}{path}"
+        sys.argv = ["tc_run_tests.py", "OrderService", "--repo", str(repo.root), "--run", out["run_id"],
+                    "--label", "v1-r1"]
+        try:
+            code = rt.main()
+        finally:
+            tc.stale_classes, sys.argv, os.environ["PATH"] = saved, argv, path
+        expect("auto ran without stale_classes", code in (0, 1), True)
+
+
 def test_failing_human_test_is_red():
     with fixture() as repo:
         out = start(repo, {"FAKE_MVN_FAIL": "OrderServiceTest#humanB"})

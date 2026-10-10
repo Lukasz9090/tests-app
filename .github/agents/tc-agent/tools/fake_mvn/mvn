@@ -11,6 +11,8 @@ discovery, parsing, exit codes) is tested without a JDK or network:
 
 Behaviour is steered by environment variables:
   FAKE_MVN_FAIL      comma list of `Class#method` to report as failing
+  FAKE_MVN_FAIL_ONCE same, but only in the first test run (a flake)
+  FAKE_MVN_MUTANT_EXTRA  comma list of extra mutant statuses (RUN_ERROR, NON_VIABLE, ...)
   FAKE_MVN_COMPILE   when set, fail compilation with this message
   FAKE_MVN_BRANCH    "covered,missed" branch counters for every class (default 8,0)
   FAKE_MVN_MUTANTS   "killed,survived" mutants per class (default 4,0)
@@ -78,6 +80,11 @@ if "test" in args or goals_run:
         sys.exit(1)
     wanted = set((prop("test") or "").split(","))
     failing = set(filter(None, os.environ.get("FAKE_MVN_FAIL", "").split(",")))
+    once = cwd / "target" / ".fake-mvn-failed-once"
+    if os.environ.get("FAKE_MVN_FAIL_ONCE") and not once.exists():
+        failing |= set(os.environ["FAKE_MVN_FAIL_ONCE"].split(","))
+        once.parent.mkdir(parents=True, exist_ok=True)
+        once.write_text("x")
     out = cwd / "target" / "surefire-reports"
     out.mkdir(parents=True, exist_ok=True)
     any_fail = False
@@ -152,7 +159,8 @@ if any("mutationCoverage" in a for a in args):
     out = cwd / "target" / "pit-reports"
     out.mkdir(parents=True, exist_ok=True)
     rows = []
-    for status, count in (("KILLED", killed), ("SURVIVED", survived)):
+    extra = [s for s in os.environ.get("FAKE_MVN_MUTANT_EXTRA", "").split(",") if s]
+    for status, count in [("KILLED", killed), ("SURVIVED", survived)] + [(s, 1) for s in extra]:
         for k in range(count):
             rows.append(f'<mutation status="{status}"><mutatedClass>{target}</mutatedClass>'
                         f"<mutatedMethod>create</mutatedMethod><lineNumber>{5 + k}</lineNumber>"
