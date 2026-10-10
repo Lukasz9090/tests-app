@@ -1,19 +1,16 @@
 #!/usr/bin/env python3
-"""Mechanical evidence-ref verifier — closes the fabricated-ref hole.
+"""Verifies that every evidence ref of a plan points at something real.
 
-Every evidence ref in the plan must point at something that really exists in the
-repository. Supported shapes:
   ClassName                    -> a file ClassName.java exists
-  ClassName#method / Cls.meth  -> file exists AND contains the member name
-  path/to/File.java[:line]     -> path exists AND is long enough for the line
-  human_decision refs          -> skipped (not repo artifacts)
+  ClassName#method / Cls.meth  -> that file contains the member name
+  path/to/File.ext[:NN[-MM]]   -> the path exists and has those lines (any evidence type)
+  a human's answer             -> skipped
 
-Line numbers are checked, not ignored: `File.java:147` on a 90-line file is a
-fabricated ref, and the Reviewer attributes uncovered branches and surviving
-mutants through exactly those numbers.
+Also: planned test method names must be new or `replaces` them, and in spec-driven mode
+every entry cites a line of the run's spec.
 
-Exit 0 = all refs verified. Exit 1 = the plan contains unverified refs
-(INVALID_EVIDENCE) and must not be passed downstream. Exit 2 = cannot run.
+Exit 0 = all verified. Exit 1 = INVALID_EVIDENCE / NAME_COLLISION / SPEC_REF_MISSING.
+Exit 2 = cannot run.
 
 Usage: tc_verify_refs.py <plan.md> [--repo .]
 """
@@ -34,11 +31,7 @@ PATH_REF = re.compile(r"^[\w.$/\\-]+\.\w+(?::\d+(?:-\d+)?)?$")
 
 
 class Repo:
-    """One walk of the repository, then pure lookups.
-
-    The previous version ran `rglob` for every ref, which is O(refs x repo) and
-    dominated the runtime on anything larger than a sample project.
-    """
+    """The repository's .java files indexed once, with cached reads."""
 
     def __init__(self, root: Path):
         self.root = root
@@ -67,7 +60,7 @@ class Repo:
 
 
 def verify_path(ref: str, repo: Repo):
-    """`path/to/File.java`, optionally with `:NN` or `:NN-MM`."""
+    """Verify `path[:NN[-MM]]`: the file exists and has those lines."""
     match = LINE_SUFFIX.search(ref)
     rel = ref[: match.start()] if match else ref
     path = repo.root / rel
@@ -187,9 +180,8 @@ def main() -> int:
 
 
 def name_collisions(plan: dict, root: Path) -> list:
-    """Planned method names that already exist in their test file, or repeat in the plan.
-
-    A name that exists is fine only when the entry `replaces` exactly that method.
+    """Planned method names that already exist in their test file (without `replaces`) or repeat in the
+    plan.
     """
     try:
         import tc_javadoc as tj

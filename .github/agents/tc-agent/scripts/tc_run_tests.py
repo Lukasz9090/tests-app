@@ -1,18 +1,11 @@
 #!/usr/bin/env python3
-"""Compile and run every test class that exercises the target, collecting JaCoCo data.
-
-This is the ONLY check script that builds the project. It makes sure the JaCoCo
-agent is attached exactly ONCE - injected as a fully-qualified goal only when the
-pom does not already bind prepare-agent - so tc_coverage.py can report from the
-resulting exec file without running the tests a second time.
-
-The test classes are discovered from the target (tc_common.discover_test_classes):
-human and AI tests alike, no plan or report needed. That is what lets
-derive-state run it before anything was planned.
+"""Compiles and runs every test class that exercises the target with the JaCoCo agent,
+and writes the coverage report in the same maven call. A failed suite runs once more:
+a test failing in every run is a failure, in some runs a flake.
 
 Usage:
   python tc_run_tests.py <TargetSlug> --repo . --run <id|latest> [--label entry]
-                      [--module M] [--repeat 2] [--tests A,B]
+                      [--module M] [--repeat N] [--tests A,B]
 Output:
   <run>/checks/tests-<label>.md, <run>/checks/jacoco-<label>.exec
 """
@@ -112,18 +105,7 @@ def main() -> int:
         bound_pom = c.pom_binds_jacoco_agent(repo, module)
         prepare_agent = f"org.jacoco:jacoco-maven-plugin:{jacoco}:prepare-agent"
 
-        # JaCoCo and PIT never have to be configured in the pom: the checks call
-        # their goals by full coordinates. prepare-agent is injected ALWAYS,
-        # because the alternative is reading the pom and guessing - and a pom
-        # whose execution sits in an inactive profile reads as "bound" while no
-        # agent ever attaches, which ends as an empty exec file and a dead run.
-        # The one thing that can go wrong - a pom-bound execution firing in the
-        # `test` phase on top of ours, two -javaagent switches, a forked VM that
-        # dies before the first test - is recognisable in the output and costs
-        # one retry (`drop_agent`), not a human.
-        # ... and once a repo has proved its pom really does bind the agent, the
-        # answer is remembered, so the doomed attempt is paid once, not once per
-        # round. The hint is disproved by an empty exec file below.
+        # prepare-agent is always injected; a pom that binds it too is detected and remembered.
         drop_agent = c.env_hint(repo, "jacoco_agent", module) == "pom"
         if drop_agent:
             print("[tc-agent] this pom bound the JaCoCo agent on an earlier run - leaving "
@@ -143,9 +125,7 @@ def main() -> int:
                       "once; in a big module this can take minutes.",
                       file=sys.stderr, flush=True)
             else:
-                # "auto" asks about the class under test; "strict" about every
-                # source in the module. The other answer is still printed, so a
-                # decision is never silent about what it ignored.
+                # "auto" asks about the class under test, "strict" about every source of the module.
                 mine = c.stale_target(repo, module, classes, target.file)
                 # Walking the whole module is only needed when "strict" decides on it.
                 anyone = c.stale_classes(repo, module, classes) if mode == "strict" else None
@@ -174,12 +154,7 @@ def main() -> int:
                   "nothing else the `test` phase would drag in. maven_goals_only: false to run "
                   "the phase." % " ".join(lifecycle), file=sys.stderr, flush=True)
 
-        # The coverage report in the SAME call: the agent has just flushed the exec
-        # file when surefire's JVM exited, so the report goal can read it here and
-        # tc_coverage.py needs no maven of its own. One maven start less, and in a
-        # big reactor that start was 20-40 seconds of the run's budget. It only
-        # runs when the tests pass (maven stops at a failed surefire), which is
-        # exactly when coverage is worth measuring.
+        # The coverage report rides in the same call (it runs only when the tests pass).
         report_goal = [f"org.jacoco:jacoco-maven-plugin:{jacoco}:report",
                        f"-Djacoco.dataFile={exec_file}"]
 
@@ -247,15 +222,7 @@ def main() -> int:
                       "prepare-agent itself; re-running without ours, and remembering it.",
                       file=sys.stderr, flush=True)
                 code, output, report_files, results = attempt()
-            # The lean path needs a complete target/ and a surefire that is not
-            # configured per execution. It can also "succeed" without running
-            # anything, so SILENCE counts as a failure too: no reports, or only
-            # skipped ones, falls back to the real phase instead of reporting
-            # the tests as unavailable.
-            #
-            # Only when the goals RAN NOTHING. Tests that ran and failed, or test
-            # sources that do not compile, are this run's result: the phase would
-            # end the same way, minutes later, after every generator bound to it.
+            # Goals that ran nothing (and did not fail to compile) fall back to the `test` phase.
             ran = any(r["status"] != "SKIPPED" for r in results)
             test_compile_failed = bool(COMPILER_ERROR.search(output)) or "COMPILATION ERROR" in output
             if goals_only and not ran and not test_compile_failed:
@@ -270,9 +237,7 @@ def main() -> int:
                 code, output, report_files, results = attempt()
             runs.append(results)
 
-        # A green suite is not run again - it would cost a full build to learn
-        # almost nothing. A suite that FAILED is: that second run is the one
-        # that separates a real failure from a flake.
+        # A failed suite runs once more to tell a failure from a flake.
         if planned == 1 and any(r["status"] in ("FAILED", "ERROR") for r in runs[0]):
             print("[tc-agent] a test failed - running the suite once more to tell a real failure "
                   "from a flake", file=sys.stderr, flush=True)

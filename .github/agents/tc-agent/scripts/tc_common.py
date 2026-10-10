@@ -1,15 +1,10 @@
-"""Shared helpers for the pipeline scripts.
+"""Shared helpers of the pipeline scripts: run directories, target resolution,
+test discovery, the project profile, maven invocation and pom facts.
 
-Nothing here reads a plan or a generation report. The target, its Maven module
-and the test classes that exercise it are derived from the slug and the file
-system, so the same checks run before a plan exists (derive-state) and inside a
-run (the Reviewer). Every file a script writes lands in the RUN directory,
-`.test-agent/runs/<slug>/<run-id>/`, never in a shared location.
-
-Standard library only. Exit-code convention used by every check script:
+Exit codes of every check script:
   0 - check ran, gate satisfied
-  1 - check ran, gate NOT satisfied (quality defect -> repair loop)
-  2 - check could not run (environment/tooling problem -> BLOCKED)
+  1 - check ran, gate NOT satisfied
+  2 - check could not run (environment / tooling)
 """
 
 from __future__ import annotations
@@ -34,10 +29,7 @@ DEFAULT_GATES = {
     "branch_coverage_target_scope": 0.80,
     "mutation_score_target_scope": 0.70,
 }
-# Both tools must be able to READ the class files the project was compiled with.
-# JaCoCo 0.8.15 is the first release with official Java 26 (class file major 70)
-# support; older ones fail the report goal outright. Override per repo under
-# `tooling` in the project profile.md when the build targets an older JDK.
+# Versions that read the newest class files (JaCoCo 0.8.15: Java 26); `tooling` overrides them.
 DEFAULT_VERSIONS = {"jacoco": "0.8.15", "pit": "1.25.9"}
 
 
@@ -49,11 +41,7 @@ class CheckError(Exception):
 
 
 def payload(path: Path) -> dict:
-    """The artifact's contract, read by the shared fence reader.
-
-    Only the error type is local: every caller here maps a bad artifact to exit
-    code 2 through CheckError.
-    """
+    """The artifact's json payload; a missing or malformed artifact raises CheckError."""
     if not path.exists():
         raise CheckError(f"missing artifact: {path}")
     try:
@@ -141,14 +129,7 @@ _GIT_INDEX_CACHE: dict = {}
 
 
 def git_index(start: Path) -> list | None:
-    """Every file git knows about under `start`'s repository, as absolute paths.
-
-    Reading git's index beats walking the tree: one process instead of a stat per
-    file, which on Windows is most of the cost of finding a class in a big repo.
-    `-c` adds untracked files (a test the generator just wrote is not committed
-    yet) and `--exclude-standard` keeps .gitignore honoured - so anything git
-    ignores, such as generated sources under target/, is NOT here and still needs
-    a walk. Returns None when git cannot answer; every caller then walks.
+    """Every tracked and untracked file of `start`'s repository (cached); None when git cannot answer.
     """
     start = Path(start).resolve()
     for known, files in _GIT_INDEX_CACHE.items():
@@ -170,12 +151,7 @@ def git_index(start: Path) -> list | None:
 
 
 def _under(root: Path, files: list, suffix: str) -> list:
-    """Files of that suffix under `root`, by string prefix.
-
-    `Path.relative_to` on every entry of a 50k-file index, once per module, was
-    minutes of pure path arithmetic in a big repo. Comparing strings is the same
-    answer for a fraction of the cost.
-    """
+    """Files of that suffix under `root`, matched by string prefix."""
     prefix = str(Path(root).resolve()) + os.sep
     cut = len(prefix)
     out = []
@@ -212,11 +188,7 @@ def find_roots(repo: Path) -> tuple[list, list]:
 
 
 def java_files(roots, use_git: bool = True) -> list:
-    """Every .java file under these roots, from git's index when it can answer.
-
-    `use_git=False` for a root git ignores (generated sources under target/):
-    there the walk is the only way to see anything.
-    """
+    """Every .java file under these roots, from git's index unless `use_git` is False."""
     out = []
     for root in roots:
         root = Path(root)
@@ -231,9 +203,8 @@ def java_files(roots, use_git: bool = True) -> list:
 
 
 def resolve_target(repo: Path, slug: str) -> Target:
-    """Slug (`Class`, `Class.method` or a path to a .java file) -> Target.
-
-    Never guesses: no match is TARGET_NOT_FOUND, several are TARGET_AMBIGUOUS.
+    """Slug (`Class`, `Class.method` or a .java path) -> Target; TARGET_NOT_FOUND / TARGET_AMBIGUOUS
+    otherwise.
     """
     repo = Path(repo).resolve()
     if not pom_dirs(repo):
@@ -264,12 +235,8 @@ def mentions(text: str, *names) -> bool:
 
 
 def grep_files(repo: Path, word, pathspec: str = "*.java") -> list | None:
-    """Files that use any of these words, found by git. None when git cannot.
-
-    Reading every test source in a big repo to ask "does it mention this class?"
-    is what made the context pack slow. `git grep` scans the same content in one
-    optimised process; `--untracked` keeps files the generator just wrote. Pass a
-    list to ask about many names AT ONCE - one process, not one per name.
+    """Files that use any of these words (one git grep, untracked files included); None when git
+    cannot.
     """
     repo = Path(repo).resolve()
     words = [word] if isinstance(word, str) else [w for w in word if w]
@@ -289,17 +256,7 @@ MOCK_ANNOTATION = re.compile(r"@(Mock|MockBean|MockitoBean)\b")
 
 
 def exercises(text: str, cls: str) -> bool:
-    """Does this test source actually RUN `cls`, or does it only mock it?
-
-    A class that appears solely as `@Mock TemplateUtil util` is never executed:
-    the test exercises the collaborator's caller, not the collaborator. Running
-    such a class costs the full build and adds exactly zero coverage, and
-    treating it as "a test of the target" hides that the target is untested.
-
-    A spy is real code, an @InjectMocks field is the class under test, and any
-    other mention (a constructor call, a static call, a type in an assertion)
-    counts as use.
-    """
+    """Does this test source run `cls`, rather than only mock it?"""
     word = re.compile(rf"\b{re.escape(cls)}\b")
     mock_call = re.compile(rf"\bmock\s*\(\s*{re.escape(cls)}\s*\.class")
     lines = text.splitlines()
@@ -325,14 +282,7 @@ def exercises(text: str, cls: str) -> bool:
 
 
 def discover_test_classes(repo: Path, target: Target) -> tuple[list, list]:
-    """Test classes that exercise the target: human and AI tests alike.
-
-    A file under a test root counts when its name contains the target's class
-    name or its source uses that name as a whole word, AND it declares at least
-    one test method (so builders and fixtures that merely mention the class are
-    not handed to surefire). Returns ([(fqcn, path), ...] sorted by path, [fqcn of
-    test classes that only mock the target]).
-    """
+    """Test classes that run the target and those that only mock it: ([(fqcn, path)], [fqcn])."""
     repo = Path(repo).resolve()
     _, test_roots = find_roots(repo)
     candidates = java_files(test_roots)
@@ -356,7 +306,7 @@ def discover_test_classes(repo: Path, target: Target) -> tuple[list, list]:
 
 
 def write_container(path: Path, title: str, summary: list, data: dict) -> None:
-    """Markdown container: title + human summary + exactly one json fence (D19)."""
+    """Write a Markdown container: title, summary bullets and one json fence."""
     lines = [f"# {title}", ""]
     lines += [f"- {item}" for item in summary]
     lines += ["", "```json", json.dumps(data, indent=2, ensure_ascii=False), "```", ""]
@@ -364,12 +314,7 @@ def write_container(path: Path, title: str, summary: list, data: dict) -> None:
 
 
 def parse_xml(path: Path):
-    """Parse a report XML defensively.
-
-    JaCoCo emits a DOCTYPE pointing at report.dtd; some parsers refuse to
-    continue without the DTD, so it is stripped. An empty or truncated file is
-    reported as an environment failure with its first bytes, never as a crash.
-    """
+    """Parse a report XML without its DOCTYPE; an empty or broken file raises CheckError."""
     raw = path.read_bytes()
     if not raw.strip():
         raise CheckError(f"{path} is empty - the maven goal produced no report")
@@ -386,7 +331,7 @@ def parse_xml(path: Path):
 
 
 def pid_alive(pid) -> bool:
-    """Is that process still running? Used to tell a slow start from a dead one."""
+    """Is that process still running?"""
     try:
         pid = int(pid)
     except (TypeError, ValueError):
@@ -431,23 +376,13 @@ UNRESOLVED_DEPENDENCY = (
 
 
 def needs_also_make(output: str) -> bool:
-    """Did maven fail because the module\'s own dependencies are not installed?"""
+    """Did maven fail because the module's own dependencies are not installed?"""
     low = (output or "").lower()
     return any(marker in low for marker in UNRESOLVED_DEPENDENCY)
 
 
 def maven_also_make(repo: Path) -> str | bool:
-    """When `-am` (also build the module\'s dependencies) is used. Default "auto".
-
-    `-am` is what makes a test run in a big reactor take 16 minutes instead of
-    two: it rebuilds every upstream module, every time. But in a small repo, or
-    on a fresh clone, nothing is installed and without it maven cannot resolve
-    anything. So the default is "auto": build only the target\'s module, and if
-    maven says the dependencies are missing, do it again with `-am`.
-
-    `true` always adds it (a repo whose modules change constantly), `false` never
-    does (you install the dependencies yourself and own that decision).
-    """
+    """When to add `-am`: profile `maven_also_make` true / false, default "auto"."""
     value = profile(repo).get("maven_also_make", "auto")
     if isinstance(value, bool):
         return value
@@ -455,24 +390,7 @@ def maven_also_make(repo: Path) -> str | bool:
 
 
 def maven_skip_main_compile(repo: Path) -> str | bool:
-    """When a check may skip compiling src/main. Default "auto".
-
-    During a run the production code never changes - characterization mode requires it
-    committed, and the agent only ever writes test files - so recompiling it
-    before every check is pure cost, and in a module with annotation processors
-    or generated sources it is a FULL rebuild every time (6500 files, minutes).
-
-    "auto" decides from the clock, and asks about the TARGET's own class: newer
-    source means this measurement would be taken on the wrong bytecode, so
-    compile (and say it may take a while); otherwise run against target/classes
-    with `-Dmaven.main.skip=true`. Another module member being stale is only
-    reported, because in a repo that is pulled daily something always is - and
-    rebuilding 6500 files because a file nobody in this run touches moved is how
-    every check ended up costing minutes.
-
-    "strict" is the old behavior: ANY stale source under src/main rebuilds.
-    `true` always skips when classes exist, `false` never skips.
-    """
+    """Whether a check may skip compiling src/main: true, false, "strict" or "auto" (default)."""
     value = profile(repo).get("maven_skip_main_compile", "auto")
     if isinstance(value, bool):
         return value
@@ -488,25 +406,7 @@ def built_classes(repo: Path, module: str | None) -> Path | None:
 
 
 def stale_classes(repo: Path, module: str | None, classes: Path) -> tuple | None:
-    """The first out-of-date source as `(path, reason)`, or None. Reasons:
-
-    `"newer"`  - the source was edited after the class it produces was written.
-    `"missing"`- there is no class of that name AND the source is younger than
-                 the whole build, so the build cannot have seen it.
-
-    Each source is compared with the class it produces (com/x/A.java ->
-    com/x/A.class), not with the newest class in the module: that is two stats
-    per file instead of walking every .class first, and it stops at the first
-    file that is out of date.
-
-    A missing class is NOT taken as proof of a stale build. Plenty of sources
-    produce no class of their own name - a file holding a package-private type
-    named differently, a source the compiler plugin excludes, a template the
-    build copies elsewhere - and in a 6000-file module one of them would force
-    a full rebuild on every check forever. So when the class is absent the
-    source is compared with the newest build output instead: older means the
-    last build already saw the file and chose not to emit it.
-    """
+    """The first out-of-date source of the module as `(path, "newer" | "missing")`, or None."""
     sources = module_dir(repo, module) / "src" / "main" / "java"
     if not sources.is_dir():
         return None
@@ -532,53 +432,24 @@ def stale_classes(repo: Path, module: str | None, classes: Path) -> tuple | None
 
 
 def maven_goals_only(repo: Path) -> bool:
-    """Run the plugin goals directly instead of the `test` lifecycle phase.
-
-    DEFAULT: yes. `-Dmaven.main.skip=true` stops the COMPILER, not the
-    lifecycle, so the `test` phase still runs every plugin bound before it - an
-    OpenAPI generator writing a frontend client, a node build, resource
-    filtering, stampers - none of which a unit test needs, all of which cost
-    minutes and pull plugins from the remote repository on the way.
-
-    The goals do what an IDE does: copy the test resources, compile the test
-    sources, run the tests. The production classes and the generated sources
-    they need are already in target/, because this only applies when src/main
-    is not being compiled anyway (`maven_skip_main_compile`), which in turn
-    means the target is in step with the code. If the goals fail or run nothing,
-    the check pays for the full phase once and says so, so a repo that needs the
-    lifecycle still works - it just finds out the slow way, once per round.
-
-    `maven_goals_only: false` for a repo that must always run the phase.
+    """Run the lean plugin goals instead of the `test` phase (profile `maven_goals_only`, default
+    true).
     """
     value = profile(repo).get("maven_goals_only", True)
     return bool(value)
 
 
-# testResources is in the list because it is what the phase would do for the
-# tests and costs milliseconds: without it, a test reading application.yml from
-# the classpath would fail for a reason that has nothing to do with the test.
+# testResources: tests may read resources from the classpath.
 LEAN_GOALS = ["resources:testResources", "compiler:testCompile", "surefire:test"]
 
 
 def maven_lifecycle(repo: Path, skip_main: bool) -> list:
-    """What the test check asks maven to do: the lean goals or the `test` phase.
-
-    The goals cannot build the module, so they are only safe when src/main is
-    already compiled (`skip_main`); otherwise the phase does the work.
-    """
+    """The lean goals when src/main is not compiled and goals are allowed, else the `test` phase."""
     return list(LEAN_GOALS) if (skip_main and maven_goals_only(repo)) else ["test"]
 
 
 def flaky_repeat(repo: Path) -> int:
-    """How many times a check runs the suite when nothing failed. Default 1.
-
-    Running a GREEN suite twice buys little: a flake that happens to pass twice
-    is still accepted, and the second build costs as much as the first. What
-    does pay is repeating a suite that FAILED - that is the run which tells a
-    real failure from a flake - and the check does that by itself. Raise this
-    for a module whose tests touch time, order or shared state, where catching
-    an intermittent green is worth the second build.
-    """
+    """How many times a check runs a suite that did not fail (profile `flaky_repeat`, default 1)."""
     try:
         value = int(profile(repo).get("flaky_repeat", 1))
     except (TypeError, ValueError):
@@ -595,18 +466,7 @@ NO_SNAPSHOT_UPDATES = ("-nsu", "--no-snapshot-updates")
 
 
 def maven_snapshot_updates(repo: Path) -> bool:
-    """May a check re-resolve SNAPSHOT dependencies from the remote repo?
-
-    Default NO, for two reasons. A run measures the code in THIS working tree,
-    so pulling a colleague's newer snapshot halfway through changes what is
-    being measured - and it can land between two checks of the same run, so the
-    coverage and the mutation numbers would come from different dependencies.
-    And it is pure wall-clock: maven re-checks every snapshot's metadata once a
-    day, which in a reactor full of sibling SNAPSHOTs is a round trip to
-    Artifactory per module on the first run of the morning.
-
-    Set `maven_snapshot_updates: true` to restore maven's normal behavior.
-    """
+    """Whether checks may re-resolve SNAPSHOT dependencies (profile, default false: `-nsu`)."""
     return bool(profile(repo).get("maven_snapshot_updates", False))
 
 
@@ -641,11 +501,7 @@ HEARTBEAT_SECONDS = 60
 
 
 def _wait_with_heartbeat(proc: subprocess.Popen, timeout: float | None, loud: bool) -> int:
-    """Wait for the process, saying it is still alive once a minute.
-
-    Maven's own output goes to a file, so a ten-minute build would otherwise
-    print nothing at all between "this can take minutes" and the result.
-    """
+    """Wait for the process, printing a heartbeat once a minute."""
     if not loud:
         return proc.wait(timeout=timeout)
     started = time.monotonic()
@@ -666,24 +522,15 @@ def _wait_with_heartbeat(proc: subprocess.Popen, timeout: float | None, loud: bo
 
 def run(cmd: list, cwd: Path, timeout: float | None = None, log_path: Path | None = None,
         append: bool = False) -> tuple:
-    """Run a command, returning (returncode, combined output).
-
-    Output goes to a FILE, not to a pipe. Maven leaves grandchildren behind (a
-    surefire fork, a JVM that has not exited yet) and on Windows they inherit the
-    pipe: the build prints BUILD SUCCESS, maven exits, and the read still blocks
-    on a pipe nobody will close - which looked exactly like a build that never
-    ends. Waiting on the PROCESS, with the output on disk, ends when maven ends.
-
-    `timeout` is a real limit on that wait; it kills the whole process tree.
+    """Run a command with its output in a file (or `log_path`); returns (returncode, output). A timeout
+    kills the process tree.
     """
     cmd = [str(part) for part in cmd]
     loud = bool(cmd) and Path(cmd[0]).stem == "mvn"
     if loud:
         cmd = [_resolve(cmd[0]), *cmd[1:]]
         print(f"$ {' '.join(cmd)}", file=sys.stderr, flush=True)
-    # With log_path the output is written straight into the run's log, so it
-    # survives a timeout or a killed process - which is exactly when someone
-    # needs to read it. Without it a temporary file is enough.
+    # With log_path the output goes straight into the run's log, so it survives a kill.
     if log_path is not None:
         Path(log_path).parent.mkdir(parents=True, exist_ok=True)
         handle = open(log_path, "a+" if append else "w+", encoding="utf-8", errors="replace", newline="")
@@ -757,13 +604,7 @@ STOP_MARKERS = (
 
 
 def maven_error(output: str, limit: int = 12) -> str:
-    """Pull the real failure out of maven's output.
-
-    A blind tail is useless: maven ends every failed build with generic [Help 1]
-    boilerplate and the JVM appends its own warnings after that, so the actual
-    MojoExecutionException scrolls out of view. Note the message itself ends with
-    "-> [Help 1]", so that suffix is stripped rather than treated as a stop mark.
-    """
+    """The real failure out of maven's output, with a hint for known JDK / JaCoCo errors."""
     lines = [line.rstrip() for line in output.splitlines()]
     start = next((i for i, line in enumerate(lines) if "Failed to execute goal" in line), None)
     if start is None:
@@ -804,12 +645,7 @@ def module_dir(repo: Path, module: str | None) -> Path:
 
 
 def hardcoded_arg_line(repo: Path, module: str | None) -> Path | None:
-    """Find a pom that pins surefire's <argLine> without preserving @{argLine}.
-
-    That single line silently disables JaCoCo: prepare-agent only sets the
-    argLine PROPERTY, and an explicit <argLine> in the pom wins over it, so the
-    tests run without the agent and the exec file stays empty.
-    """
+    """A pom whose surefire <argLine> drops @{argLine} (the JaCoCo agent), or None."""
     candidates = [module_dir(repo, module) / "pom.xml", repo / "pom.xml"]
     for pom in candidates:
         if not pom.exists():
@@ -837,13 +673,7 @@ DOUBLE_AGENT = (
 
 
 def env_hints(repo: Path) -> dict:
-    """What earlier runs LEARNED about this machine's build, per module.
-
-    Not configuration: every value here is a performance hint that the run can
-    disprove by itself, and `.test-agent/` is gitignored, so it never travels to
-    anybody else. It exists so a repo whose pom really does bind the JaCoCo
-    agent stops paying for the doomed first attempt on every single round.
-    """
+    """What earlier runs learned about this machine's build, per module (`.test-agent/env.json`)."""
     path = repo / ".test-agent" / "env.json"
     try:
         return json.loads(path.read_text(encoding="utf-8"))
@@ -852,8 +682,7 @@ def env_hints(repo: Path) -> dict:
 
 
 def save_env_hint(repo: Path, key: str, module: str | None, value) -> None:
-    """Remember one such fact. Best effort: a hint that cannot be written costs
-    a repeated attempt next time, never a failure."""
+    """Remember one hint; a hint that cannot be written is ignored."""
     hints = env_hints(repo)
     hints.setdefault(key, {})[module or ""] = value
     path = repo / ".test-agent" / "env.json"
@@ -869,27 +698,13 @@ def env_hint(repo: Path, key: str, module: str | None):
 
 
 def duplicate_agent(output: str) -> bool:
-    """Did this build die because TWO JaCoCo agents were on the forked JVM?
-
-    The second premain cannot define its class again, so the VM dies before a
-    single test runs and surefire reports it as its own crash. Recognising it
-    is what lets the check inject prepare-agent unconditionally and still work
-    on a pom that binds it.
-    """
+    """Did the forked JVM die from two JaCoCo agents?"""
     low = output.lower()
     return any(marker in low for marker in DOUBLE_AGENT)
 
 
 def pom_binds_jacoco_agent(repo: Path, module: str | None) -> Path | None:
-    """Return the pom that already binds jacoco's prepare-agent to the build.
-
-    Adding a fully-qualified prepare-agent goal on top of such a pom puts TWO
-    -javaagent switches on the forked JVM; the second premain then dies with
-    "duplicate class definition for java.lang.$JaCoCo" and surefire reports
-    "The forked VM terminated without properly saying goodbye" before running a
-    single test. The runnable contract means: inject the agent only when the pom
-    does not already do it.
-    """
+    """The pom that binds jacoco's prepare-agent itself, or None."""
     for pom in (module_dir(repo, module) / "pom.xml", repo / "pom.xml"):
         if not pom.exists():
             continue
@@ -900,12 +715,7 @@ def pom_binds_jacoco_agent(repo: Path, module: str | None) -> Path | None:
 
 
 def module_for_target(repo: Path, target_file: Path) -> str | None:
-    """Derive the Maven module from the target's own location.
-
-    The nearest ancestor directory that owns a pom.xml IS the module. Reports
-    live under <module>/target, and looking for them at the repo root finds
-    nothing while maven exits 0. None = the target lives in the root project.
-    """
+    """The Maven module of the target: its nearest directory with a pom.xml (None = the root)."""
     try:
         current = target_file.resolve().parent
         repo = repo.resolve()
@@ -921,9 +731,7 @@ def module_for_target(repo: Path, target_file: Path) -> str | None:
 # ---------------------------------------------------------------- profile ---
 
 
-# The project's own configuration lives OUTSIDE the shared agent package, so the
-# package can be the same in every repository. The first existing directory wins:
-# the target layout first, then where it lives while the package is in this repo.
+# The project's configuration, outside the shared package; the first existing directory wins.
 PROJECT_DIRS = (
     Path(".github") / "tc-agent",
     Path(".github") / "agents" / "tc-agent-project",
@@ -952,15 +760,8 @@ def project_file(repo: Path, name: str) -> Path | None:
 
 
 def profile(repo: Path) -> dict:
-    """Quality gates and tool versions, first match wins.
-
-    `.test-agent/` is gitignored, so a profile kept only there never reaches the
-    team and every run silently falls back to DEFAULT_GATES.
-
-    A malformed profile still falls back, but says so on stderr: a gate that
-    quietly reverts to the default is the kind of degradation nobody notices
-    until a weak test suite has been accepted. Cached per repo, because every
-    gate and version lookup calls this.
+    """The project profile.md payload (cached); a malformed one falls back to the defaults with a
+    warning.
     """
     key = str(repo)
     if key in _PROFILE_CACHE:
@@ -1026,10 +827,7 @@ DEFAULT_PROTECTED = ["master", "main"]
 
 
 def protected_branches(repo: Path) -> tuple[list, str]:
-    """Branches the agent never commits to, and where that list came from.
-
-    The profile's `protected_branches` (globs allowed: `release/*`). Absent or
-    empty -> `master` and `main`: they cannot be un-protected by accident.
+    """Branches the agent never commits to (globs allowed) and their source; default master and main.
     """
     value = profile(repo).get("protected_branches") or []
     names = [str(n).strip() for n in value if str(n).strip()] if isinstance(value, list) else []
@@ -1040,7 +838,7 @@ PLUGIN_ARTIFACT = {"jacoco": "jacoco-maven-plugin", "pit": "pitest-maven"}
 
 
 def _poms(repo: Path, module: str | None) -> list:
-    """Module pom then root pom (the <parent> chain inside the repo, best effort)."""
+    """Module pom, then root pom."""
     out = []
     for pom in (module_dir(repo, module) / "pom.xml", repo / "pom.xml"):
         if pom.exists() and pom not in out:
@@ -1049,14 +847,7 @@ def _poms(repo: Path, module: str | None) -> list:
 
 
 def stale_target(repo: Path, module: str | None, classes: Path, source) -> tuple | None:
-    """Is the ONE source under test newer than the class it compiles to?
-
-    The decisive question for "auto": coverage and mutation are read from THIS
-    class's bytecode and THIS source's line numbers, so this is the file whose
-    freshness changes the numbers. A stale collaborator can at worst make a test
-    behave like the last build - which shows up as a failing test, not as a
-    silently wrong report.
-    """
+    """Is the source under test newer than its class file? `(path, reason)` or None."""
     sources = (module_dir(repo, module) / "src" / "main" / "java").resolve()
     source = Path(source).resolve()
     try:
@@ -1093,14 +884,8 @@ JUNIT4_MARKERS = ["org.junit.Test", "org.junit.Assert", "junit.framework", "@Run
 
 
 def junit_in_tests(repo: Path, module: str | None) -> tuple:
-    """`(flavor, five, four)` from the imports of the module's EXISTING tests.
-
-    The only fully reliable signal. A pom that declares both JUnit 4 and the
-    platform says nothing about which one a new test must use, and surefire does
-    not fail a test it cannot run: write a @Test from the wrong version and it
-    is silently NOT EXECUTED. What the neighbours import is both the house style
-    and proof of what runs here. `(None, 0, 0)` when git cannot answer or the
-    module has no tests yet.
+    """`(flavor, five, four)` from the imports of the module's existing tests; (None, 0, 0) without
+    tests.
     """
     # Scope the grep to the module: git's pathspec wildcard crosses directories,
     # so this is the module's whole subtree and not the other 50k files.
@@ -1127,15 +912,7 @@ BOOT_VERSION = re.compile(
 
 
 def repo_contract(repo: Path, module: str | None) -> dict:
-    """What the Planner's Phase 0 needs, read WITHOUT running maven.
-
-    Static on purpose: an agent that runs `mvn -Dincludes=org.junit.jupiter ...`
-    in PowerShell gets the argument split at the dots ("No plugin found for
-    prefix '.junit.jupiter'"). Reading the pom text is deterministic and free.
-
-    The JUnit version comes from three sources, in this order: the profile key
-    `junit` (you overrode it), the imports of the module's existing tests (what
-    demonstrably runs here), and only then the poms.
+    """Build, JUnit, JaCoCo and PIT facts of the module, read from the poms and tests without maven.
     """
     text = " ".join(re.sub(r"\s+", " ", p.read_text(encoding="utf-8", errors="replace"))
                     for p in _poms(repo, module))
@@ -1201,11 +978,7 @@ def pom_plugin_version(repo: Path, module: str | None, artifact_id: str) -> str 
 
 
 def tool_version(repo: Path, tool: str, override=None, module: str | None = None) -> str:
-    """CLI flag > the project profile.md > version declared in the pom > agent default.
-
-    The pom wins over the default on purpose: prepare-agent and report must run
-    the same JaCoCo version, otherwise the report goal rejects the exec file.
-    """
+    """Tool version: CLI flag > profile `tooling` > pom > agent default."""
     if override:
         return str(override)
     tooling = profile(repo).get("tooling", {})
@@ -1215,19 +988,7 @@ def tool_version(repo: Path, tool: str, override=None, module: str | None = None
 
 
 def recent_files(root: Path, pattern: str, since: float, prefer=()) -> list:
-    """Files matching a glob that were written by the run we just made.
-
-    Never trust a fixed path for maven output: multi-module layouts, custom
-    reportsDirectory and aggregator roots all move it. Search, then filter by
-    modification time so stale artefacts from earlier runs cannot be mistaken
-    for fresh ones.
-
-    `prefer` holds the conventional places, checked first WITHOUT recursion.
-    The fallback walk crosses the whole module - in a big one that is target/
-    with its generated sources, classes and test-classes, tens of thousands of
-    entries, three times per round. When maven put the file where maven usually
-    puts it, that walk never happens.
-    """
+    """Files matching a glob written since `since`; the `prefer` paths are checked before a walk."""
     for quick in prefer:
         hit = []
         for path in root.glob(quick):
@@ -1293,12 +1054,7 @@ GOAL_BANNER = re.compile(r"^\[INFO\] ---+\s+(\S+?):(?:[\d.]\S*):(\S+)")
 
 
 def maven_goals_run(output: str) -> list:
-    """Every `plugin:goal` maven executed, in order, from its own banners.
-
-    Maven prints no per-goal timings, so this is as close as a log gets to "what
-    ate the four minutes": the list says whether a generator, a node build or a
-    resource filter ran at all before surefire.
-    """
+    """Every `plugin:goal` maven executed, in order, from its banners."""
     seen = []
     for line in output.splitlines():
         match = GOAL_BANNER.match(line)
@@ -1310,13 +1066,7 @@ def maven_goals_run(output: str) -> list:
 
 
 def trim_log(path: Path, keep: int = 60) -> None:
-    """Shrink a green check's maven log to the parts worth reading later.
-
-    Kept: every goal banner (which plugins ran, in order) and the tail with the
-    reactor summary and `Total time`. A green check used to DELETE this file,
-    which is exactly the one you want when the question is "why did this take
-    eight minutes".
-    """
+    """Shrink a green check's maven log to its goal banners and last `keep` lines."""
     try:
         lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
     except OSError:

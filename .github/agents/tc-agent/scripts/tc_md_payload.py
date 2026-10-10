@@ -1,20 +1,4 @@
-"""The single reader/writer for the JSON payload embedded in a Markdown artifact.
-
-Every artifact in this pipeline is a Markdown container holding EXACTLY ONE
-fenced ```json block, which is the contract (see references/contracts.md). Plain
-.json files are accepted too, so the same helpers work on a schema or a profile.
-
-This module is the ONLY place that knows how to find that block. It used to be
-implemented three times — here, in tc_validate_plan.py and in the Reviewer's
-tc_common.py — with three different regexes: one anchored to the start of a line,
-two not. The same file could then pass one tool and be rejected by the next,
-which is the worst kind of disagreement in a pipeline that hands artifacts from
-agent to agent. The anchored form is the strict one, so it is the one that
-survived: a fence must start at the beginning of a line, exactly as every agent
-is told to write it.
-
-Standard library only.
-"""
+"""Reads and writes the one ```json fence of a Markdown artifact (plain .json files too)."""
 
 import json
 import re

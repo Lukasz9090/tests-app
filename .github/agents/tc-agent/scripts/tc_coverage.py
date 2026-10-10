@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
-"""Report JaCoCo coverage for the target scope from the exec file tc_run_tests.py wrote.
-
-Invokes the report goal directly, so nothing is compiled and no test is re-run.
-Emits the concrete uncovered lines/branches, which is what the Reviewer's
-attribution rule and the Planner's gap list consume - the percentage alone is
-not actionable. The scope is the class, or the method when the slug names one.
+"""Reports JaCoCo branch coverage of the target (class or method) from the run's exec file,
+with the uncovered lines and the per-method line counters.
 
 Usage:
   python tc_coverage.py <TargetSlug> --repo . --run <id|latest> [--label entry]
@@ -51,11 +47,7 @@ def find_class(root, fqcn: str):
 
 
 def method_ranges(klass, method_name: str) -> list:
-    """(first, last, element) per overload: a method spans up to the next real method.
-
-    Synthetic methods (lambda$..., access$...) start INSIDE another method, so they
-    are no boundary; the lambdas of this method are returned with it.
-    """
+    """(first, last, element) per overload of the method, plus its lambdas as (0, 0, element)."""
     methods = sorted(
         ((int(m.get("line", 0)), m) for m in klass.findall("method")
          if m.get("line") and "$" not in m.get("name", "")),
@@ -97,12 +89,7 @@ def main() -> int:
                 "would be empty too; re-run tc_run_tests.py and read its diagnosis"
             )
 
-        # The tests check now asks for the report in its own maven call, so most
-        # of the time the XML is already on disk and this check reads it without
-        # starting maven at all - one full reactor start less per round. Maven is
-        # still here for the cases where that report never happened: red tests
-        # (maven stops before the report goal), a pom that overrides the output
-        # formats, or an older tc_run_tests.py.
+        # The tests check usually wrote the report already; maven runs only when it did not.
         reused = None
         tests_payload = c.checks_dir(directory) / f"tests-{args.label}.md"
         if tests_payload.exists():
@@ -113,9 +100,7 @@ def main() -> int:
             if told and Path(told).is_file() and Path(told).stat().st_mtime >= exec_file.stat().st_mtime:
                 reused = Path(told)
 
-        # dataFile HAS a user property, outputDirectory does NOT (it defaults to
-        # ${project.reporting.outputDirectory}/jacoco and cannot be set from the CLI),
-        # so the exec file is pinned and the report is discovered afterwards.
+        # dataFile has a user property, outputDirectory does not: the report is found afterwards.
         command = (
             c.mvn_base(repo)
             + c.module_args(module)
@@ -137,9 +122,7 @@ def main() -> int:
             print(f"[tc-agent] reusing the jacoco report written by the tests check ({reused})",
                   file=sys.stderr, flush=True)
 
-        # The agent version may come from the pom (it runs during the build), but the
-        # REPORT must also be able to ANALYZE the class files. A newer JaCoCo reads an
-        # older exec file fine, so one retry with the agent default beats failing.
+        # A report that cannot read the class files is retried with the agent default.
         newest = c.DEFAULT_VERSIONS["jacoco"]
         if (
             code != 0

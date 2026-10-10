@@ -1,27 +1,14 @@
 #!/usr/bin/env python3
-"""Validate an agent artifact against its JSON Schema.
+"""Validates an agent artifact against its JSON Schema (jsonschema, draft 2020-12).
 
-Thin wrapper over `jsonschema`, the reference implementation. This script used to
-carry a hand-written subset of draft 2020-12 so the pipeline needed no
-dependency, plus a fidelity harness to prove that subset still agreed with the
-real thing — 646 lines to avoid one `pip install`. The library does the job.
-
-One non-standard extension survives, because it is load-bearing: a schema node
-may carry `errorMessage` (a string). When anything under that node fails, its
-generated messages are replaced by that one sentence. `not: {pattern: ...}` is
-otherwise reported as "should not be valid under the given schema", which tells
-the agent that wrote the artifact nothing about what to write instead — and an
-unactionable error is how a defect gets "fixed" by deleting the field.
-
-The artifact is read through tc_md_payload, the single fence reader shared by every
-script, so a file that one tool accepts is accepted by all of them.
+A schema node may carry `errorMessage`: when anything under it fails, that sentence
+replaces the generated messages.
 
 Usage:
   tc_validate_plan.py <artifact.md|artifact.json> <schema.json>
 
-Exit 0 = artifact valid. Exit 1 = INVALID_ARTIFACT, with every violation listed,
-not just the first. Exit 2 = the check could not run (missing schema, or
-jsonschema not installed) — never to be read as a pass.
+Exit 0 = valid. Exit 1 = INVALID_ARTIFACT, every violation listed.
+Exit 2 = the check could not run (missing schema, or jsonschema not installed).
 """
 
 from __future__ import annotations
@@ -47,7 +34,7 @@ def _validator(schema: dict):
 
 
 def follow_ref(node, root: dict):
-    """Step through a local `$ref` so the walk below does not stop at one."""
+    """Resolve the local `$ref`s of a schema node."""
     seen = 0
     while isinstance(node, dict) and isinstance(node.get("$ref"), str) and node["$ref"].startswith("#"):
         target = root
@@ -66,19 +53,7 @@ def follow_ref(node, root: dict):
 
 
 def custom_message(schema: dict, error) -> str | None:
-    """The `errorMessage` of the deepest node that owns the failure.
-
-    A violation often surfaces far below the node that explains it: the rule
-    lives on an `allOf/N/then`, while the error is raised by the `required` of an
-    `items` three levels down. `absolute_schema_path` is the route from the root
-    to the failing keyword, so walking it and keeping the last `errorMessage` on
-    the way finds the sentence a human wrote for exactly this case.
-
-    The route runs THROUGH `$ref`s — `items: {$ref: #/$defs/scenario}` is one
-    step in the path, not a stop — so each node is resolved before indexing.
-    Without that, every rule inside `$defs` silently loses its message and the
-    agent gets "should not be valid under the given schema" instead.
-    """
+    """The `errorMessage` of the deepest schema node on the failure's path, or None."""
     node = schema
     found = None
     for token in list(error.absolute_schema_path):
@@ -96,10 +71,7 @@ def custom_message(schema: dict, error) -> str | None:
 
 
 def validate(instance, schema: dict) -> list:
-    """Human-readable violations, empty list = valid.
-
-    Kept as a function because tc_check_examples.py validates in-process.
-    """
+    """Human-readable violations of the schema; an empty list = valid."""
     violations = []
     for error in _validator(schema).iter_errors(instance):
         message = custom_message(schema, error) or error.message

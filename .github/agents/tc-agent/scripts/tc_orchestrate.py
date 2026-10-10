@@ -1,39 +1,26 @@
 #!/usr/bin/env python3
-"""Run lifecycle and in-run control flow for the test pipeline.
-
-The orchestrator LLM is a DISPATCHER, not a judge. It never parses an artifact
-and never decides "what next" by reasoning: it runs this script and does the
+"""Run lifecycle and in-run control flow: the orchestrator runs this and does the
 printed `next_action`.
-
-Two kinds of state, never mixed:
-
-  * BETWEEN runs there is no stored state. `start` derives the truth from the
-    code, the tests, git, coverage and mutations (tc_derive_state.py).
-  * INSIDE a run the plan -> generate -> review loop is driven by the artifacts
-    of THAT run only, in `.test-agent/runs/<slug>/<run-id>/`. No script ever
-    reads another run's directory; old runs stay on disk for people to read.
 
 Subcommands
 -----------
   start  <slug> --repo . --mode characterization|spec-driven [--interactive] [--spec P]
-                [--max-rounds 3] [--commit]
-      Create the run directory and run.json (the ONLY place mode, interactive,
-      spec, max_rounds and commit are given), then run derive-state. Prints run_id.
+                [--test-data P] [--max-rounds N] [--commit]
+      Create the run directory and run.json (the ONLY place these options are given),
+      then run derive-state. Prints run_id.
 
   state  <slug> --repo . --run <id|latest>
-      Print the in-run `next_action`: PLAN | GENERATE | REVIEW | RESEAL | FINISH,
-      with `dispatch` (who to call, which files) and, on FINISH, the outcome.
+      Print `next_action` (PLAN | GENERATE | REVIEW | RESEAL | WAIT | FINISH) with
+      `dispatch`, and on FINISH the outcome.
 
   reseal <slug> --repo . --run <id|latest>
-      Move the freeze point of stale-but-green characterization tests to the
-      current sha. Touches only the `tc-agent-characterizes` line of those methods.
+      Move the freeze sha of stale-but-green characterization tests to the current sha.
 
   finish <slug> --repo . --run <id|latest>
-      Write run-report.md and print it. With `commit: true` in run.json, commit
-      the run's test files (only on DONE / DONE_PARTIAL; never on a protected
-      branch - a new `tc-agent/<slug>/<run-id>` branch is created instead).
+      Write and print run-report.md; with `commit: true` commit the run's files under
+      src/test (DONE / DONE_PARTIAL only; a protected branch gets a new branch).
 
-Exit codes: 0 ok; 2 usage / IO error / the run is not in a state to do that.
+Exit codes: 0 ok; 2 refusal / usage / IO error / the run is not in a state to do that.
 """
 
 from __future__ import annotations
@@ -139,11 +126,8 @@ def all_reports(d: Path) -> list:
 
 
 def run_results(d: Path) -> tuple:
-    """Merge the results of EVERY generation report of the run, oldest first.
-
-    A later round reports the methods it left alone as SKIPPED; that must not
-    erase what an earlier round of THIS run wrote. The newest real status
-    (IMPLEMENTED / PLACEHOLDER) wins. Returns (results, test_files, suggestions).
+    """Results, test files and suggestions of every generation report of the run; SKIPPED never hides
+    an earlier result.
     """
     results, test_files, suggestions = {}, [], []
     for report_path in all_reports(d):
@@ -165,11 +149,7 @@ def run_results(d: Path) -> tuple:
 
 
 def review_history(d: Path) -> list:
-    """Every review of the run, oldest first: `v1-r1 REPAIR_PLAN`, ...
-
-    One review closes one round, so the length of this list is the number of
-    rounds the run has spent.
-    """
+    """Every review of the run, oldest first (`v1-r1 REPAIR_PLAN`, ...)."""
     out = []
     for n in plan_versions(d):
         for m in review_iterations(d, n):
@@ -186,11 +166,7 @@ REFERENCES = Path(__file__).resolve().parent.parent / "references"
 
 
 def references_for(role: str, run: dict, derive: dict, repo: Path) -> list:
-    """The instruction files THIS role reads in THIS run, in order (contracts.md §1).
-
-    Only what applies: the mode file of the run's mode, junit4.md on a JUnit 4
-    module, the interactive rules for the planner when a human can answer.
-    """
+    """The instruction files a role reads in this run, in order."""
     names = ["contracts.md", "conventions.md"]
     if str(((derive or {}).get("repo") or {}).get("junit")) == "4":
         names.append("junit4.md")
@@ -201,8 +177,7 @@ def references_for(role: str, run: dict, derive: dict, repo: Path) -> list:
 
 
 def spec_mismatches(d: Path) -> list:
-    """`spec_mismatch` findings of every review of the run, one per method: the
-    places where the code does not do what the spec says."""
+    """`spec_mismatch` findings of every review of the run, one per method."""
     out, seen = [], set()
     for n in plan_versions(d):
         for m in review_iterations(d, n):
@@ -222,13 +197,7 @@ def gate_checks(d: Path, repo: Path, label: str) -> list:
 
 
 def known_test_data(d: Path) -> list:
-    """Business values a human already supplied in THIS run.
-
-    Every plan version of the run contributes its `context.test_data`; the
-    orchestrator hands the merged list to the next planner so a human is never
-    asked twice for the same value inside one run. Across runs this knowledge
-    lives where it belongs - in the tests, which are `existing_test` evidence.
-    """
+    """Business values a human supplied in this run, from every plan version."""
     out, seen = [], set()
     for n in plan_versions(d):
         pv = _safe(plan_path(d, n))
@@ -244,8 +213,7 @@ def known_test_data(d: Path) -> list:
 
 
 def run_digest(d: Path) -> dict:
-    """What the WHOLE run has produced so far — the reviewer writes the commit
-    summary from this, so it never describes only its own round."""
+    """What the whole run has produced so far, for the reviewer's commit summary."""
     results, test_files, _ = run_results(d)
     return {
         "tests_written": [{"test_method": k, **({"notes": r["notes"]} if r.get("notes") else {})}
@@ -335,10 +303,7 @@ def cmd_start(args) -> int:
                 "tiers_run": [], "next_action": "ESCALATE", "reasons": [reason],
                 "detail": detail}
 
-    # Written BEFORE the checks run and overwritten when they finish. A start that
-    # is killed - Ctrl+C, a closed terminal, a chat that gives up on a long build -
-    # never reaches an exception handler, and without this the run directory holds
-    # a run.json and nothing else, which reads as "no derive-state.md" later.
+    # Written before the checks and overwritten after them, so a killed start leaves a state.
     ds.write(directory, failed_state(
         "start has not finished deriving the state. Either it is STILL RUNNING in another "
         "terminal (the checks can take minutes) or it was interrupted. Nothing has been "
@@ -346,10 +311,7 @@ def cmd_start(args) -> int:
     try:
         state = ds.derive(repo, args.slug, run)
     except Exception as exc:                      # noqa: BLE001 - the reason must survive
-        # derive-state is the run's first artifact; without it every later
-        # command can only say "file not found" and the real cause (a maven
-        # failure, a module that will not build) is lost. Write the failure
-        # INTO the run so `state`, `finish` and the report can name it.
+        # The failure goes into the run, so `state`, `finish` and the report can name it.
         state = failed_state(f"derive-state failed: {exc}", type(exc).__name__)
         ds.write(directory, state)
         print(json.dumps({"run_id": run_id, "run_dir": rel(directory, repo),
@@ -401,9 +363,7 @@ def compute_state(repo: Path, directory: Path) -> dict:
                       "(see its error). Nothing was planned or generated - start a new run")
     derive = _safe(directory / "derive-state.md")
     if "START_INTERRUPTED" in (derive.get("reasons") or []):
-        # The placeholder start writes before the checks. If that process is alive,
-        # start is simply still working - waiting is the only correct answer, and
-        # a second run would build the same modules all over again.
+        # The start that wrote this placeholder is still working: wait.
         if c.pid_alive(derive.get("pid")):
             out["next_action"] = "WAIT"
             out["reason"] = (f"start (pid {derive.get('pid')}) is still deriving the state; "
@@ -689,11 +649,7 @@ def collect(repo: Path, directory: Path, state: dict) -> dict:
 
 
 def check_timings(directory: Path) -> dict:
-    """Seconds maven spent per kind of check, summed over every round.
-
-    Written so "the run took four minutes" can be answered from the run
-    directory instead of from a log a green check used to delete.
-    """
+    """Seconds maven spent per kind of check, over every round."""
     out = {}
     folder = directory / "checks"
     if not folder.is_dir():
@@ -710,12 +666,7 @@ def check_timings(directory: Path) -> dict:
 
 
 def confirm_lines(notes: list) -> list:
-    """CONFIRM: notes from the plan, cleaned and without duplicates.
-
-    A planner writing through a non-UTF-8 shell turns "—" into "?", and a planner
-    that records a question twice (once asked, once answered) duplicates it.
-    Both are cosmetic, but the report is what a human reads.
-    """
+    """CONFIRM questions, cleaned and without duplicates."""
     out, seen = [], set()
     for note in notes:
         text = str(note).strip()
@@ -751,7 +702,7 @@ def template_summary(info: dict, outcome: str) -> str:
 
 
 def commit_message(info: dict, summary: str) -> str:
-    """Only what the repository can show: .test-agent/ (run id, report) is not in it."""
+    """The commit message: title, summary and the facts the repository can show."""
     run = info["run"]
     lines = [f"[TC-AGENT] Add tests for {run['slug']}.", ""]
     lines += textwrap.wrap(summary, 72) or ["(no summary)"]
@@ -969,9 +920,7 @@ def do_finish(repo: Path, directory: Path) -> tuple[int, str]:
     outcome = state["outcome"]
     if outcome == "DONE" and info["placeholders_in_code"]:
         outcome = "DONE_PARTIAL"
-    # Last-line guard: whatever the state machine concluded, a run that leaves
-    # failing tests behind is RED. Without this a plan that says COMPLETE ends
-    # the run "DONE" over a broken suite - and with --commit it would commit it.
+    # Whatever the state machine concluded, a run that leaves failing tests behind is RED.
     if info["red"] and outcome in ("DONE", "DONE_PARTIAL"):
         outcome = "RED"
     review_summary = (info["review"].get("commit_summary") or "").strip() \

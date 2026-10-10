@@ -1,36 +1,19 @@
 #!/usr/bin/env python3
-"""derive-state: what should happen to a target, computed from the real world.
+"""derive-state: what a target needs, computed from the code, the tests, git,
+coverage and mutations - never from an earlier run.
 
-The pipeline keeps no state between runs. Every run starts here and answers one
-question from the committed code, the tests, git, coverage and mutations -
-never from an artifact an earlier run left behind:
+    PLAN      something to test (no tests, a gap, an untested or changed method, a stale
+              red characterization test); spec-driven: always, after the tests
+    DONE      characterization: gates met on the current code
+    RED       a test fails that this run may not repair
+    BLOCKED   characterization: the target is dirty, uncommitted or too fresh
+    ESCALATE  the target cannot be resolved, or a check could not run
 
-    PLAN      no tests yet, a coverage/mutation gap, a method no test executes,
-              lines changed since the last freeze that no test covers, or
-              characterization tests whose frozen behavior changed (stale AND red)
-    DONE      gates met on the CURRENT code and nothing stale is red
-    RED       a test that is not a stale characterization fails: stop, a human acts
-    BLOCKED   characterization mode would freeze code that is dirty or too fresh
-    ESCALATE  the target cannot be resolved, or a check could not run (exit 2)
-
-It works in tiers, cheapest first, and stops at the first tier that decides:
-
-    tier 0  target        slug -> file, FQCN, module
-    tier 1  git + Javadoc discovery, tc-agent-mode: / tc-agent-characterizes: / tc-agent-deferred,
-                          current sha, dirty, age           (no build)
-    tier 2  tests + coverage                                (build)
-    tier 3  mutations (PIT)                                 (slow)
-
-A stale characterization test that still PASSES only needs its freeze point
-moved (`reseal`); one that FAILS goes to the planner (`recharacterize`).
-
-The run's mode and interactive flag come from <run>/run.json (written by
-`tc_orchestrate.py start`). Output: <run>/derive-state.md. This script changes
-nothing in the repository.
+Tiers, cheapest first: 0 target, 1 git + Javadoc, 2 tests + coverage, 3 PIT.
 
 Usage:
     python tc_derive_state.py <slug> --repo . --run <id|latest>
-
+Output: <run>/derive-state.md
 Exit codes: 0 = derived (whatever the verdict), 2 = could not run at all.
 """
 
@@ -56,16 +39,12 @@ LABEL = "entry"
 
 
 def _say(message: str) -> None:
-    """Progress on stderr: a silent multi-minute build looks like a hung script."""
+    """Progress on stderr."""
     print(f"[tc-agent] {message}", file=sys.stderr, flush=True)
 
 
 class ScriptRunner:
-    """Runs the check scripts and returns (exit code, report payload).
-
-    Tests replace this with a fake, so the decision logic is exercised without
-    maven.
-    """
+    """Runs the check scripts and returns (exit code, report payload); tests replace it."""
 
     def __init__(self, repo: Path, slug: str, run_id: str):
         self.repo, self.slug, self.run_id = repo, slug, run_id
@@ -73,11 +52,7 @@ class ScriptRunner:
     def _run(self, script: str, report: str, extra: list) -> tuple[int, dict]:
         command = [sys.executable, str(SCRIPTS / script), self.slug, "--repo", str(self.repo),
                    "--run", self.run_id, "--label", LABEL, *extra]
-        # stderr is NOT captured: that is where the check script echoes the maven
-        # command it is about to run and why it retries. Swallowing it left the
-        # user with one "this can take minutes" line and silence for the next
-        # quarter of an hour. stdout is captured - it only holds the check's own
-        # json summary, which is read from the report file anyway.
+        # stderr goes to the terminal (maven progress); stdout holds the check's summary.
         proc = subprocess.run(command, cwd=str(self.repo), stdout=subprocess.PIPE, stderr=None,
                               text=True, errors="replace")
         path = c.run_dir(self.repo, self.slug, self.run_id) / "checks" / report

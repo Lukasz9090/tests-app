@@ -1,14 +1,5 @@
 #!/usr/bin/env python3
-"""Deterministic evidence-strength classifier for a test plan (embedded JSON).
-
-Strength is NEVER estimated by the LLM. This script reads each scenario's
-evidence and labels it strong / medium / weak from fixed rules, then (with
---write) stores `evidence_strength` on every scenario and deferred entry. That
-label DRIVES Phase 5: a `weak` scenario moves to `deferred`, the rest stay.
-
-It used to also compute a numeric `confidence` (a noisy-OR over per-type
-weights) that nothing downstream ever read. That number is gone; only the
-categorical label, which actually decides, remains.
+"""Labels the evidence of every plan scenario strong / medium / weak by fixed rules.
 
 Usage:
     tc_evidence_strength.py <plan.md>            # print the per-scenario table

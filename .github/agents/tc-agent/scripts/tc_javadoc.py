@@ -1,31 +1,9 @@
-"""Read and rewrite the per-test metadata the pipeline keeps in the code.
+"""Reads and rewrites the `tc-agent-*` metadata in the Javadoc of test methods.
 
-The committed test suite IS the pipeline's database. Every test the
-agent writes carries a Javadoc with metadata lines (conventions §A1):
-
-    /**
-     * AI-generated test. Characterizes current behavior of OrderService (a freeze, not a spec).
-     *
-     * tc-agent-mode: characterization, interactive: false
-     * tc-agent-characterizes: OrderService@29aeef6a
-     */
-    @Test
-    void shouldCreateOrderWhenCustomerActive() { ... }
-
-`tc-agent-mode` is the marker: a method that has one was written by the agent.
-The lines are plain text, not Javadoc `@tags`, so no IDE or doclint flags them.
-Any other `tc-agent...:` key is a defect.
-
-This module finds test methods in a Java source file, attaches the Javadoc that
-belongs to each one and parses its tags. It is a small character scanner, not a
-regex over raw text: string literals such as `@DisplayName("a (b)")` and comments
-would otherwise break the annotation and brace matching.
-
-It never guesses silently. A key it cannot read, metadata on the class, a
-placeholder without its `@Disabled` / `@Ignore` — each becomes a `defect` that derive-state
-reports instead of dropping the test from the picture.
-
-Standard library only.
+Finds the test methods of a Java source with a small character scanner, attaches each
+method's Javadoc, parses its metadata lines and reports every defect (unknown key,
+metadata on the class, a placeholder without @Disabled / @Ignore). `reseal` moves one
+test's freeze sha.
 """
 
 from __future__ import annotations
@@ -125,11 +103,7 @@ class TestMethod:
 
 
 def mask(text: str) -> tuple[str, list]:
-    """Blank out comments and literal contents, keeping offsets and newlines.
-
-    Returns the masked text and the (start, end) spans of every Javadoc comment
-    in the original. Quotes survive, so `@Disabled("x")` stays `@Disabled(" ")`.
-    """
+    """Blank out comments and literals, keeping offsets; returns (masked text, Javadoc spans)."""
     out = list(text)
     javadocs = []
     i, n = 0, len(text)
@@ -210,10 +184,7 @@ KEY_LINE = re.compile(r"^(tc-agent(?:-[a-z]+)*)\s*:\s*(.*)$")
 
 
 def parse_javadoc(raw: str) -> tuple[str, list, list]:
-    """(first prose line, [[tag, value], ...], unknown keys).
-
-    A non-key line right after a metadata line continues its value.
-    """
+    """(first prose line, [[tag, value], ...], unknown keys) of one Javadoc."""
     body = raw[3:-2] if raw.endswith("*/") else raw[3:]
     prose, tags, unknown = [], [], []
     closed = False
@@ -368,10 +339,7 @@ def parse_file(path: Path, display: str | None = None) -> tuple[list, list]:
 
 
 def reseal(path: Path, method_key: str, target_class: str, new_sha: str) -> tuple[bool, str]:
-    """Move one test's freeze point to `new_sha`, touching only that Javadoc line.
-
-    Returns (changed, detail). Line endings of the file are preserved.
-    """
+    """Move one test's freeze point to `new_sha` in its Javadoc only; returns (changed, detail)."""
     path = Path(path)
     with open(path, encoding="utf-8", newline="") as handle:
         text = handle.read()

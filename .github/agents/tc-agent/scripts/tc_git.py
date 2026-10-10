@@ -1,14 +1,7 @@
-"""Git facts for the pipeline: the version of the code a test froze, and whether
-the code has moved since.
+"""Git facts for the pipeline: the commit a target was last changed in, whether it is
+dirty, how old that commit is, changed lines, and the snapshot of files outside src/test.
 
-The pipeline keeps no state between runs. What a characterization test froze is
-recorded in the test itself (`tc-agent-characterizes: <Class>@<sha>`), and this module
-answers the only questions that record needs: which commit last touched the
-target, is the target dirty, how old is that commit, and does a recorded sha
-still name it.
-
-Standard library only. Every helper degrades to None/False instead of raising
-when the directory is not a git checkout; callers decide what that means.
+Every helper returns None / False instead of raising when git cannot answer.
 """
 
 from __future__ import annotations
@@ -19,10 +12,7 @@ import subprocess
 import time
 from pathlib import Path
 
-# `%h` grows with the repository (core.abbrev), so a sha written today may be
-# shorter or longer than the one computed next month. Two abbreviations name the
-# same commit when one is a prefix of the other; below 7 characters that stops
-# being a safe assumption.
+# Two abbreviated shas name the same commit when one is a prefix of the other (>= 7 chars).
 MIN_SHA = 7
 
 
@@ -59,11 +49,7 @@ def short_sha(repo: Path, path: Path) -> str | None:
 
 
 def is_dirty(repo: Path, path: Path) -> bool:
-    """True when the CONTENT of `path` differs from HEAD (staged or not), or it is untracked.
-
-    Line endings do not count: a checkout whose CRLF differs from the committed LF
-    (no core.autocrlf) is the same code, and calling it dirty would block every
-    characterization run on it.
+    """True when the content of `path` differs from HEAD (line endings ignored) or it is untracked.
     """
     target = rel(repo, path)
     code, _ = git(repo, "diff", "--quiet", "--ignore-cr-at-eol", "HEAD", "--", target)
@@ -100,9 +86,7 @@ HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@", re.M)
 
 
 def changed_lines(repo: Path, path: Path, since: str) -> set | None:
-    """Line numbers of `path` (as it is at HEAD) added or changed since commit `since`.
-
-    None when the diff cannot be computed (unknown sha, not a repo).
+    """Line numbers of `path` at HEAD added or changed since commit `since`; None when git cannot tell.
     """
     code, out = git(repo, "diff", "-U0", "--no-color", "--ignore-cr-at-eol", f"{since}..HEAD", "--",
                     rel(repo, path))
@@ -132,9 +116,7 @@ def _names(repo: Path, *args: str) -> list | None:
 
 
 def outside_tests_snapshot(repo: Path) -> dict:
-    """{file: content hash} of files outside src/test, .test-agent and maven's target/ that differ from HEAD or are untracked.
-
-    Line endings do not count. A file deleted since HEAD maps to "deleted".
+    """{file: content hash} of changed or untracked files outside src/test, .test-agent and target/.
     """
     changed = _names(repo, "diff", "--name-only", "HEAD")
     if changed is None:                              # no HEAD yet: every tracked file is new

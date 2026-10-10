@@ -1,17 +1,11 @@
 #!/usr/bin/env python3
-"""Deterministic context pack builder for the Planner and the Generator.
+"""Builds the run's context pack for the planner and the generator.
 
-Discovers the target's context slice mechanically (no LLM, no tokens):
-target source, level-1 dependencies (full), level-2 (signatures only),
-existing tests (with a count of their AI-generated methods and placeholders),
-builders/fixtures, enums, and the REPO CONVENTIONS section: the repository's
-own instruction files, filtered by `applyTo`. Enforces the context budget in
-code and writes a single context-pack.md the agents read as their main input.
+Target source, level-1 dependencies (full), level-2 (signatures), existing tests,
+builders, enums, test data, data examples, repo instructions (by `applyTo`) and the
+spec, within a fixed size budget; every source block carries the file's line numbers.
 
-Subagents start with a fresh context, so the pack is the reliable channel for
-repo instructions; whether the host also injects them is not relied on.
-
-Stdlib only. Usage:
+Usage:
     python tc_build_context.py <ClassName[.method]> --repo . --run <id|latest>
 Output:
     .test-agent/runs/<slug>/<run-id>/context-pack.md
@@ -27,9 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import tc_common as c  # noqa: E402
 import tc_javadoc as tj  # noqa: E402
 
-# The planner has to READ this pack, so the budget is bounded by its context
-# window, not by disk. ~150k chars is roughly 37k tokens, which leaves room for
-# the agent's own reasoning; the old 400k could not be read at all.
+# The pack is read by the planner: ~150k chars, about 37k tokens.
 MAX_TOTAL_CHARS = 150_000          # hard budget (~37k tokens)
 MAX_FILE_CHARS = 40_000            # per-file cap before truncation
 SPEC_BUDGET = 30_000               # the spec of a spec-driven run, before the sources
@@ -37,9 +29,7 @@ SIG_RE = re.compile(
     r"^\s*(?:public|protected)\s+[\w<>\[\],\s?]+\s+\w+\s*\([^;{]*\)", re.M)
 IMPORT_RE = re.compile(r"^import\s+(?:static\s+)?([\w.]+)\s*;", re.M)
 CLASS_DECL = "(class|interface|enum|record)"
-# ... with one exception: code GENERATED into the build directory (an OpenAPI
-# client, MapStruct mappers, protobuf) is real API the target calls, and without
-# it every scenario that touches such a type looks unevidenced.
+# ... except generated sources, which are real API the target calls.
 GENERATED_DIRS = ("target/generated-sources", "target/generated-test-sources",
                   "build/generated", "build/generated-sources")
 # Imports that need no explanation: nobody defers a test because java.util is
@@ -52,12 +42,7 @@ _CACHE = {}
 
 
 def generated_roots(repo: Path, modules) -> list:
-    """Build-output directories that hold generated SOURCE, if any exist.
-
-    Checked per module, never globbed: `repo.glob("**/target/generated-sources")`
-    walks every target/ in the reactor - thousands of class files per module -
-    and in a big repo that alone took minutes.
-    """
+    """Build-output directories that hold generated SOURCE, if any exist."""
     out = []
     for module in modules:
         for rel in GENERATED_DIRS:
@@ -68,8 +53,7 @@ def generated_roots(repo: Path, modules) -> list:
 
 
 def read(f: Path):
-    """Read a file once. Scanning for tests, builders and enums revisits the same
-    files many times; without the cache a large repo pays for each visit."""
+    """Read a file once (cached), cut at MAX_FILE_CHARS."""
     key = str(f)
     if key in _CACHE:
         return _CACHE[key]
@@ -84,12 +68,7 @@ def read(f: Path):
 
 
 def numbered(text: str) -> str:
-    """The text with each line prefixed by its line number in the FILE.
-
-    Roles cite evidence as `path:NN`. Without the file's own numbers they count
-    lines of the pack instead, and every ref lands as far off as the sections
-    above the block are long.
-    """
+    """The text with each line prefixed by its line number in the FILE."""
     lines = text.split("\n")
     if lines and lines[-1] == "":
         lines.pop()
@@ -210,13 +189,7 @@ def repo_instructions(repo: Path, relevant_paths: list) -> list:
 
 
 def test_data_files(repo: Path, run: dict) -> list:
-    """(path, source) for every file of example business values.
-
-    Only files somebody put there on purpose: the project's `test-data.md`, the
-    profile's `test_data_paths` and this run's `--test-data`. Nothing is guessed
-    from file names - a file the agent found by itself would be data nobody
-    vouched for.
-    """
+    """(path, source) for every file of example business values."""
     seen, out = set(), []
 
     def take(path: Path, source: str) -> None:
@@ -236,9 +209,7 @@ def test_data_files(repo: Path, run: dict) -> list:
     return out
 
 
-# --- DATA EXAMPLES: how the existing tests fill the fields this target uses ---
-# Only value-like types: an id, a code or an amount has a shape worth copying;
-# a collection or a domain object does not.
+# --- DATA EXAMPLES: literals the existing tests give the value-typed fields of the target ---
 VALUE_TYPES = {"String", "CharSequence", "Long", "long", "Integer", "int", "Short", "short",
                "UUID", "BigDecimal", "BigInteger"}
 # Too generic to tell one concept from another: `id` of what, `name` of what.
@@ -273,8 +244,9 @@ def _params(decl: str) -> list:
 
 
 def value_field_names(target_text: str, dep_texts: list) -> list:
-    """Names of value-typed parameters of the target's public methods and of the
-    fields / record components of the classes it uses directly."""
+    """Names of value-typed parameters of the target's public methods and of the fields / record
+    components of the classes it uses directly.
+    """
     pairs = []
     for m in PUBLIC_METHOD.finditer(target_text):
         pairs += _params(m.group(1))
@@ -291,12 +263,7 @@ def value_field_names(target_text: str, dep_texts: list) -> list:
 
 
 def data_examples(repo: Path, names: list, roots: list) -> str | None:
-    """Lines anywhere in the test tree that put a literal into one of these names.
-
-    One `git grep` for all names. Assertion lines are left out: they show what the
-    code returned, not what a real input looks like. None when git cannot answer
-    or nothing was found.
-    """
+    """Lines anywhere in the test tree that put a literal into one of these names."""
     if not names or not roots:
         return None
     paths = []
@@ -355,7 +322,7 @@ _STARTED = time.monotonic()
 
 
 def _say(message: str) -> None:
-    """Progress with elapsed seconds: a pack that takes minutes must show where."""
+    """Progress on stderr, with the seconds since start."""
     print(f"[tc-agent] +{time.monotonic() - _STARTED:5.1f}s {message}",
           file=sys.stderr, flush=True)
 
@@ -409,12 +376,9 @@ def main():
     l2 -= l1 | {cname}
 
     _say(f"{len(all_src)} source file(s) indexed; {len(l1)} direct dependency file(s)")
-    # --- tests, builders/fixtures, enums ---
-    # git grep shortlists the files that use these names; reading every test and
-    # every builder in a big repo just to ask that question was most of the time
-    # this script spent. Without git (no repo, no git) the read is the fallback.
+    # --- tests, builders/fixtures, enums (git grep shortlists the files) ---
     def uses(names, pool: list) -> list:
-        """Files of `pool` that use any of these names - one git grep for all."""
+        """Files of `pool` that use any of these names (one git grep)."""
         found = c.grep_files(repo, list(names))
         if found is None:                          # no git: read the pool instead
             return [f for f in pool if c.mentions(read(f), *names)]
@@ -434,10 +398,7 @@ def main():
              if d in all_by_name
              and re.search(rf"\benum\s+{re.escape(d)}\b", read(all_by_name[d]))]
 
-    # Types the target imports that this pack could not include: they live in a
-    # dependency jar. Naming them beats silence — a role that knows the type
-    # exists can look it up; a role that sees nothing calls the scenario
-    # unevidenced and writes a placeholder.
+    # Imports the pack cannot include (they come from a jar) are listed by name.
     external = sorted({imp for imp in IMPORT_RE.findall(target_text)
                        if not imp.startswith(STDLIB_PREFIXES)
                        and imp.rsplit(".", 1)[-1] not in all_by_name})
@@ -553,10 +514,7 @@ def main():
         else:
             notes.append(f"BUDGET: omitted repo instructions {path.relative_to(repo)}")
 
-    # Order = priority, because `add` drops what no longer fits. Existing tests,
-    # builders and enums come before the dependency dump: they are the EVIDENCE
-    # that keeps a scenario out of `deferred`, so losing them to a class with
-    # twelve dependencies is the worst trade this script can make.
+    # Order = priority: `add` drops what no longer fits, so the evidence comes first.
     out.append(spec_block + target_block)
     included.append(target_file)
     for f in sorted(set(tests)):

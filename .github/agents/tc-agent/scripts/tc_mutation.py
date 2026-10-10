@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
-"""Run PIT on the target class only and report the surviving mutants.
-
-Invokes the mutationCoverage goal directly: nothing is compiled here, PIT reuses
-the classes built by tc_run_tests.py and drives the tests itself. The tests are
-the same discovered set tc_run_tests.py ran (human and AI alike).
+"""Runs PIT on the target (class or method) with the discovered test classes and
+reports the score and the surviving mutants.
 
 Usage:
   python tc_mutation.py <TargetSlug> --repo . --run <id|latest> [--label entry]
@@ -24,10 +21,7 @@ import tc_common as c
 GATE_KEY = "mutation_score_target_scope"
 # PIT's own DetectionStatus: these count as detected in PIT's mutation score.
 DETECTED = {"KILLED", "TIMED_OUT", "NON_VIABLE", "MEMORY_ERROR", "RUN_ERROR", "EQUIVALENT"}
-# Matched against the EXTRACTED error only, never the whole log: PIT prints its
-# plugin inventory on every run ("Detect missing JUnit5 plugin", "Adding
-# org.pitest:pitest-junit5-plugin to SUT classpath"), so scanning the full output
-# diagnoses a missing junit5 plugin on runs that have one.
+# Matched against the extracted error only: PIT's full log always names its plugins.
 UNAVAILABLE_MARKERS = (
     "no test framework",
     "unknown test framework",
@@ -80,10 +74,7 @@ def main() -> int:
             + c.module_args(module)
             + [
                 f"org.pitest:pitest-maven:{pit}:mutationCoverage",
-                # both spellings: bare properties work when the pom leaves targetClasses
-                # unset, the pit.* ones when the pom uses ${pit.targetClasses} indirection.
-                # A literal value inside <configuration> always wins over -D, so a pom that
-                # hardcodes a package makes narrow scoping impossible - reported below.
+                # Both spellings: bare properties, and pit.* for poms that use ${pit.targetClasses}.
                 f"-DtargetClasses={fqcn}",
                 f"-DtargetTests={','.join(tests)}",
                 f"-Dpit.targetClasses={fqcn}",
