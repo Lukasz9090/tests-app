@@ -1,7 +1,7 @@
 # tc-agent project profile — tests-app
 
-Read by the tc-agent scripts: only the ```json fence below is parsed. Every key is
-described in `.github/agents/tc-agent/docs/configuration.md`.
+Read by the tc-agent scripts: only the ```json fence below is parsed. Every key is optional;
+the table of all keys and their defaults is at the top of `.github/agents/tc-agent/docs/configuration.md`.
 
 ```json
 {

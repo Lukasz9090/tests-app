@@ -61,11 +61,9 @@ Per-repository settings live in the **project directory** — `.github/tc-agent/
 (target) or `.github/agents/tc-agent-project/` (current), first one found — never
 inside this package. All files are optional; all keys: `docs/configuration.md`.
 
-- **`profile.md`** (json block, checked against its schema at `start`): gates (`branch_coverage_target_scope`
-  0.80, `mutation_score_target_scope` 0.70), `max_rounds` (3), `freshness_days` (7), `flaky_repeat` (1),
-  `protected_branches` (default `["master", "main"]`), `instruction_paths`, `test_data_paths`,
-  `junit`, `tooling`, and the maven keys (`maven_timeout_seconds`, `maven_also_make`,
-  `maven_skip_main_compile`, `maven_goals_only`, `maven_args`, `maven_snapshot_updates`).
+- **`profile.md`** (json block, checked against its schema at `start`): gates, rounds, freshness,
+  protected branches, test data, maven. Every key is optional — the table of keys and defaults
+  is at the top of `docs/configuration.md`.
 - **`conventions.md`** — this repo's test style; read first among the style rules.
 - **`test-data.md`** — example business values; always in the context pack.
 - **Other style rules** — `.github/copilot-instructions.md`, `.github/instructions/*.instructions.md`

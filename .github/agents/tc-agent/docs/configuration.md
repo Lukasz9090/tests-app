@@ -19,6 +19,27 @@ schema rejects (an unknown or misspelled key included) stops `start` with `INVAL
 
 ## profile.md keys
 
+All optional — a key that is absent takes its default. Details below the table.
+
+| key | default | what it does |
+|---|---|---|
+| `quality_gates.branch_coverage_target_scope` | 0.80 | branch coverage the target must reach |
+| `quality_gates.mutation_score_target_scope` | 0.70 | PIT mutation score the target must reach |
+| `max_rounds` | 3 | reviews one run may have |
+| `freshness_days` | 7 | characterization without `--interactive` refuses younger code |
+| `protected_branches` | `["master", "main"]` | branches `--commit` never commits to; a list replaces the default |
+| `flaky_repeat` | 1 | how many times a suite that did not fail is run |
+| `instruction_paths` | — | extra instruction files for REPO CONVENTIONS |
+| `test_data_paths` | — | files of example business values for TEST DATA |
+| `junit` | from the tests | `"4"` / `"5"` when the detection is wrong |
+| `tooling` | pom, then agent | `jacoco_version` / `pit_version` |
+| `maven_timeout_seconds` | 600 | limit of one maven call |
+| `maven_also_make` | `"auto"` | when `-am` is added (`true` / `false`) |
+| `maven_skip_main_compile` | `"auto"` | when src/main is not compiled (`true` / `false` / `"strict"`) |
+| `maven_goals_only` | `true` | lean goals instead of the `test` phase |
+| `maven_args` | — | extra flags for every maven call |
+| `maven_snapshot_updates` | `false` | re-resolve SNAPSHOTs (`-nsu` otherwise) |
+
 **Max rounds** (`max_rounds`, default 3): reviews one run may have; every review closes a
 round, also the first one of a new plan version. `--max-rounds` overrides it for one run.
 
@@ -27,7 +48,7 @@ round, also the first one of a new plan version. `--max-rounds` overrides it for
 or a detached HEAD, it creates `tc-agent/<slug>/<run-id>` instead. An empty list
 still protects `master` and `main`.
 
-**Quality gates** are the thresholds `tc_coverage.py` and `tc_mutation.py` must reach
+**Quality gates** (`quality_gates`) are the thresholds `tc_coverage.py` and `tc_mutation.py` must reach
 for the target scope — the class, or the single method when the plan names one.
 Raise them deliberately; the Reviewer may never lower one to reach ACCEPT.
 
