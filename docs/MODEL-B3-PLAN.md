@@ -313,6 +313,21 @@ Rosnąć mogą tylko dev-testy (`tools/`) i dziennik decyzji (`docs/`).
 - **Narzędzia ról (`tools` we frontmatterze)** — etap 8 planu B2, po stronie użytkownika. F1 zabezpiecza commit niezależnie od niego.
 - **Automatyczny `mvn install`** zależności przy F7 — świadomie nie (zmienia `~/.m2`, decyzja człowieka).
 - Historia gita przy publikacji — po stronie użytkownika.
+- **Planer z mniejszą liczbą ograniczeń** (pomysł na przyszłość, 2026-10-18; dziś planer działa dobrze — bez zmian).
+  Ograniczenia siedzą prawie wyłącznie w prompcie, więc ich zdjęcie to edycja `tc-planner.agent.md`; skrypty
+  sprawdzające wynik zostają.
+
+  | ograniczenie | gdzie | po zdjęciu | ryzyko | co dalej pilnuje |
+  |---|---|---|---|---|
+  | context pack, bez ad-hoc grep, ≤ 5 dodatkowych plików, potem `BLOCKED` (faza 2) | prompt | planer sam szuka builderów, danych, użyć — mniej `deferred` (największy potencjalny zysk) | czas, koszt, mniejsza powtarzalność | `tc_verify_refs` |
+  | kolejność faz 0–6 | prompt | cel + kryteria zamiast procedury | małe | schemat planu, walidacja |
+  | zakres z `reasons` derive-state | prompt | planer sam ocenia, czego brakuje | rozjazd zakresu; w spec-driven nie ruszać | recenzent, bramki |
+  | `weak` → `deferred`, „never override the script” | prompt + skrypt | skrypt doradza, planer decyduje | słabiej udokumentowane scenariusze | recenzent (atrybucja, jakość) |
+  | brak wiedzy z treningu o „typowych” obiektach, §A4 | prompt + `conventions.md` | **nie zdejmować** — test wynika z kodu, nie z wyobrażeń modelu | wysokie | — |
+
+  Rozstrzygnięcie: drugi wariant promptu (najpierw luźniejsza faza 2), oba na tych samych targetach. Porównać:
+  liczbę `deferred`, pokrycie i zabite mutanty po pierwszej rundzie, liczbę rund naprawczych, odrzucone refy,
+  czas i koszt. Zmiana, gdy luźniejszy wariant ma mniej `deferred` przy tej samej liczbie rund i bez odrzuconych refów.
 
 ## 8. Odchylenia od planu
 
