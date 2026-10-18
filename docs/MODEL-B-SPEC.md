@@ -15,7 +15,7 @@ w `.test-agent/runs/<target>/<run-id>/` (gitignored); żaden skrypt nie czyta ka
 
 | co | gdzie | czyje |
 |---|---|---|
-| prompty ról, `references/`, schematy, skrypty, dev-testy, `docs/` | `.github/agents/tc-agent/` | wspólne (w przyszłości submodule) |
+| prompty ról, `references/`, schematy, skrypty, `docs/` | `.github/agents/tc-agent/` | wspólne (w przyszłości submodule) |
 | `profile.md`, `conventions.md`, `test-data.md` (wszystkie opcjonalne) | `.github/agents/tc-agent-project/` | projektu |
 | przebiegi, cache `env.json` | `.test-agent/` | lokalne |
 
@@ -107,14 +107,7 @@ znanego kształtu; identyfikatory z sumą kontrolną tylko kopiowane.
 Bramki (`branch_coverage_target_scope`, `mutation_score_target_scope`) są poprzeczką: spełniona bramka nie
 prowadzi do naprawy.
 
-## 9. Dev-testy
-
-Bez Mavena (`tools/fake_mvn`): `tc_test_javadoc.py`, `tc_test_derive_state.py`, `tc_test_run_state.py`,
-`tc_test_build_context.py`, `tc_test_check_scripts.py`, `tc_check_examples.py`. Z prawdziwym Mavenem:
-`tc_smoke_pipeline.py`. `tc_test_run_state.py` pilnuje też list `dispatch.references` i zasady
-„jeden właściciel reguły”.
-
-## 10. Otwarte
+## 9. Otwarte
 
 - Pomiar E20/E21 (czy przy DATA EXAMPLES pojawiają się literały typu `CUSTOMER-1`) decyduje o `tc_check_data`.
 - Listy `tools` ról (etap 8 planu B2) — po weryfikacji w Copilocie.
