@@ -340,3 +340,5 @@ Rosnąć mogą tylko dev-testy (`tools/`) i dziennik decyzji (`docs/`).
 - 2026-10-18 (decyzja użytkownika): „slug” → `target` (po polsku „cel”): argument skryptów `<target>`, klucz
   `target_name` w `run.json`, derive-state, wyjściu orkiestratora i `run-report.md`, `Target.name` w kodzie.
 - 2026-10-18 (decyzja użytkownika): plik projektu `test-data.md` → `test-data-examples.md` (nazwa mówi, co zawiera).
+- 2026-10-18 (decyzja użytkownika): README pakietu kończy się sekcją „Files” — opis każdego pliku dla człowieka
+  (żaden agent nie czyta README); budżet README rośnie świadomie. `architecture.svg` po angielsku.
