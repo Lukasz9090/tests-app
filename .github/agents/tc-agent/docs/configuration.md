@@ -1,12 +1,7 @@
 # tc-agent — project configuration
 
-Everything that belongs to ONE repository lives in its project directory, outside
-the shared agent package:
-
-    .github/tc-agent/                 target location
-    .github/agents/tc-agent-project/  current location (moves with one `git mv`)
-
-The first one that exists is used. Files, all optional:
+Everything that belongs to ONE repository lives in its project directory,
+`.github/agents/tc-agent-project/`, outside the shared agent package. Files, all optional:
 
 | file | what it holds | read by |
 |---|---|---|

@@ -196,25 +196,15 @@ def test_project_test_data_is_included_without_listing_it():
 
 def test_project_directory_resolution():
     with FixtureRepo() as repo:
-        expect("no project directory", (c.project_dir(repo.root), c.profile(repo.root)), (None, {}))
+        expect("no project directory", (c.project_file(repo.root, c.PROFILE_FILE), c.profile(repo.root)), (None, {}))
         repo.write(".github/agents/tc-agent-project/profile.md",
                    '# p\n\n```json\n{"schema_version": 1, "freshness_days": 3}\n```\n')
         c._PROFILE_CACHE.clear()
-        expect("current location", c.freshness_days(repo.root), 3.0)
-        repo.git("add", ".github")
-        repo.commit("project directory")
-        repo.git("mv", ".github/agents/tc-agent-project", ".github/tc-agent")
-        c._PROFILE_CACHE.clear()
-        expect("after git mv to the target location", (c.project_dir(repo.root).as_posix().endswith(".github/tc-agent"),
-               c.freshness_days(repo.root)), (True, 3.0))
-        repo.write(".github/agents/tc-agent-project/profile.md",
-                   '# p\n\n```json\n{"schema_version": 1, "freshness_days": 9}\n```\n')
-        c._PROFILE_CACHE.clear()
-        expect("both present: .github/tc-agent wins", c.freshness_days(repo.root), 3.0)
-        repo.write(".github/agents/tc-agent/references/tc-project-profile.md",
-                   '# p\n\n```json\n{"schema_version": 1, "freshness_days": 1}\n```\n')
-        c._PROFILE_CACHE.clear()
-        expect("the old profile location is not read", c.freshness_days(repo.root), 3.0)
+        expect("project directory", c.freshness_days(repo.root), 3.0)
+        for other in (".github/tc-agent/profile.md", ".github/agents/tc-agent/references/tc-project-profile.md"):
+            repo.write(other, '# p\n\n```json\n{"schema_version": 1, "freshness_days": 1}\n```\n')
+            c._PROFILE_CACHE.clear()
+            expect(f"{other} is not read", c.freshness_days(repo.root), 3.0)
         c._PROFILE_CACHE.clear()
 
 

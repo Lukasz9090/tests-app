@@ -11,10 +11,12 @@ w `.test-agent/runs/<slug>/<run-id>/` (gitignored); żaden skrypt nie czyta kata
 
 ## 2. Układ
 
+![Architektura tc-agent](../.github/agents/tc-agent/docs/architecture.svg)
+
 | co | gdzie | czyje |
 |---|---|---|
 | prompty ról, `references/`, schematy, skrypty, dev-testy, `docs/` | `.github/agents/tc-agent/` | wspólne (w przyszłości submodule) |
-| `profile.md`, `conventions.md`, `test-data.md` (wszystkie opcjonalne) | `.github/tc-agent/` (docelowo) albo `.github/agents/tc-agent-project/` (teraz) — pierwszy istniejący | projektu |
+| `profile.md`, `conventions.md`, `test-data.md` (wszystkie opcjonalne) | `.github/agents/tc-agent-project/` | projektu |
 | przebiegi, cache `env.json` | `.test-agent/` | lokalne |
 
 `references/`: `contracts.md`, `conventions.md` (§A integralność, §B domyślny styl), `junit4.md`,

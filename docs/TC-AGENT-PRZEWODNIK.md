@@ -13,6 +13,10 @@ tylko to, w czym jest dobry:** planuje scenariusze, pisze kod testu i ocenia jeg
 przebiegami agent nic nie pamięta — **prawdą jest zacommitowany kod, testy i historia gita**, a metadane
 każdego wygenerowanego testu siedzą w jego Javadocu.
 
+![Architektura tc-agent](../.github/agents/tc-agent/docs/architecture.svg)
+
+*Role LLM (fioletowe) decydują o treści, skrypty (zielone) o przebiegu; wymieniają się tylko plikami w katalogu przebiegu, a commit obejmuje wyłącznie `src/test`.*
+
 ## 2. Co umie
 
 | możliwość | jak |
@@ -144,8 +148,6 @@ dotyczące jej przebiegu; każda reguła ma jednego właściciela)
 **`docs/configuration.md`** — opis wszystkich kluczy `profile.md` (dla ludzi).
 
 ### 5.2 `.github/agents/tc-agent-project/` — konfiguracja tego repo
-
-(docelowo `.github/tc-agent/`; przeniesienie jednym `git mv`)
 
 | plik | zawartość |
 |---|---|

@@ -731,32 +731,17 @@ def module_for_target(repo: Path, target_file: Path) -> str | None:
 # ---------------------------------------------------------------- profile ---
 
 
-# The project's configuration, outside the shared package; the first existing directory wins.
-PROJECT_DIRS = (
-    Path(".github") / "tc-agent",
-    Path(".github") / "agents" / "tc-agent-project",
-)
+# The project's configuration, outside the shared package.
+PROJECT_DIR = Path(".github") / "agents" / "tc-agent-project"
 PROFILE_FILE = "profile.md"
 
 _PROFILE_CACHE = {}
-_WARNED_TWO_DIRS = set()
-
-
-def project_dir(repo: Path) -> Path | None:
-    """The project's tc-agent directory (profile.md, conventions.md, test-data.md)."""
-    found = [Path(repo) / d for d in PROJECT_DIRS if (Path(repo) / d).is_dir()]
-    if len(found) > 1 and str(repo) not in _WARNED_TWO_DIRS:
-        _WARNED_TWO_DIRS.add(str(repo))
-        print(f"WARNING: both {PROJECT_DIRS[0].as_posix()} and {PROJECT_DIRS[1].as_posix()} exist; "
-              f"using {PROJECT_DIRS[0].as_posix()}", file=sys.stderr)
-    return found[0] if found else None
 
 
 def project_file(repo: Path, name: str) -> Path | None:
-    """A file of the project directory, or None when it (or the directory) is absent."""
-    directory = project_dir(repo)
-    path = directory / name if directory else None
-    return path if path and path.is_file() else None
+    """A file of the project directory (profile.md, conventions.md, test-data.md), or None."""
+    path = Path(repo) / PROJECT_DIR / name
+    return path if path.is_file() else None
 
 
 def profile(repo: Path) -> dict:

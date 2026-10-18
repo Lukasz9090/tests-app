@@ -335,3 +335,5 @@ Rosnąć mogą tylko dev-testy (`tools/`) i dziennik decyzji (`docs/`).
   bramki pokrycia klasy, a spec opisuje zwykle tylko jej część. `modes/spec-driven.md`: mutacje zawsze przy zielonych
   testach; ocena jak dotąd (cytowane linie → Attribution, reszta `minor`). Akceptacja: E41.
 - E6: 511/511 asercji; instrukcje 1381 → 1359 linii, skrypty 5265 → 4806, schematy 1465 → 385.
+- 2026-10-18 (decyzja użytkownika): konfiguracja projektu zostaje w `.github/agents/tc-agent-project/` — jedyna
+  ścieżka. Wycofane docelowe `.github/tc-agent/` z D69/E24 (`PROJECT_DIRS`, ostrzeżenie o dwóch katalogach, test `git mv`).

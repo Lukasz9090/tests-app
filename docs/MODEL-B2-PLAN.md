@@ -77,7 +77,7 @@ Gdy istnieją oba katalogi, używany jest `.github/tc-agent`. Stare położenia 
 
 | # | obszar | ustalenie |
 |---|---|---|
-| D69 | Podział | Pakiet wspólny `.github/agents/tc-agent/`; konfiguracja projektu tymczasowo `.github/agents/tc-agent-project/`, docelowo `.github/tc-agent/`. Wyszukiwanie przez stałą `PROJECT_DIRS`. |
+| D69 | Podział | Pakiet wspólny `.github/agents/tc-agent/`; konfiguracja projektu tymczasowo `.github/agents/tc-agent-project/`, docelowo `.github/tc-agent/`. Wyszukiwanie przez stałą `PROJECT_DIRS`. **B3: wycofane** — jedna ścieżka `.github/agents/tc-agent-project/`. |
 | D70 | Brudny target | „Dirty” = zmiana treści, nie końcówek linii (`git diff --quiet --ignore-cr-at-eol HEAD -- <plik>`). |
 | D71 | Limit pętli | `max_rounds` (domyślnie 3) dla całego przebiegu; runda = GENERATE + REVIEW. **Usunięte:** `impl_cap`, `plan_cap`, automatyczny replan po wyczerpaniu napraw (D38) i `replan_cause: impl_cap_exhausted`. Przejście do nowego planu decyduje recenzent (ma już regułę „drugie powtórzenie → REPAIR_PLAN”). |
 | D72 | References | 6 plików (§1). `state` dokłada do `dispatch` listę `references`: zawsze `contracts.md` + `conventions.md`, do tego `junit4.md` przy JUnit 4, `modes/<tryb>.md` i `modes/interactive.md` przy interactive. |
@@ -310,7 +310,7 @@ Regresja: E25.
 | E21 | klucz relacyjny z przykładem / bez przykładu | kształt przykładu / `KEY-1` |
 | E22 | spec-driven na klasie z pełnymi testami charakteryzacyjnymi | `PLAN (SPEC_REVIEW)`, nie `DONE`; testy z `tc-agent-spec` albo `COMPLETE` z wyjaśnieniem |
 | E23 | spec-driven z celową rozbieżnością w kodzie | test wyłączony z zachowanym ciałem, `DONE_PARTIAL`, sekcja rozbieżności w raporcie |
-| E24 | `git mv .github/agents/tc-agent-project .github/tc-agent` | identyczny wynik `start` |
+| E24 | `git mv .github/agents/tc-agent-project .github/tc-agent` | identyczny wynik `start` (**B3: wycofane** razem z D69) |
 | E25 | characterization + interactive po refaktorze (etapy 1.3 i 3) | planer nadal pyta o dane i zamrożenie; odpowiedzi w `context.test_data` / `tc-agent-note` jak dziś |
 
 ---
@@ -375,7 +375,7 @@ Poniższe punkty są następne w kolejce — każdy jako osobny plan.
 
 | # | temat | co zostaje do zrobienia | dlaczego nie teraz |
 |---|---|---|---|
-| P1 | **Dystrybucja pakietu** | wydzielenie `.github/agents/tc-agent/` do osobnego repo; submodule albo subtree w repo docelowych; wersjonowanie (tag pakietu w `run-report.md`); procedura aktualizacji; `git mv .github/agents/tc-agent-project .github/tc-agent` w każdym repo | struktura jest gotowa po E2, ale zasady dystrybucji warto ustalić dopiero na stabilnym pakiecie |
+| P1 | **Dystrybucja pakietu** | wydzielenie `.github/agents/tc-agent/` do osobnego repo; submodule albo subtree w repo docelowych; wersjonowanie (tag pakietu w `run-report.md`); procedura aktualizacji | struktura jest gotowa po E2, ale zasady dystrybucji warto ustalić dopiero na stabilnym pakiecie |
 | P2 | **Walidacja na prawdziwych projektach** | przebiegi E1–E25 na 1–2 realnych repo (np. `big-repo`: wielomodułowy, JUnit 4, generatory, długi build); zebranie metryk z §5; poprawki jako odchylenia | `tests-app` jest za mały, by pokazać problemy skali i danych biznesowych |
 | P3 | **Rodzaje testów Spring** | decyzja, czy agent ma pisać także `@WebMvcTest` (kontrolery), `@DataJpaTest` (repozytoria), testy integracyjne; jeśli tak — osobny plik `modes/` albo `references/spring-slices.md` i reguły wyboru rodzaju testu | dziś zakres to test jednostkowy jednej klasy z zamockowanymi repozytoriami (§B5); poszerzenie zmienia derive-state, bramki i koszt buildu |
 | P4 | **Powroty z §2.1** | `tc_check_data` (mini), katalog danych z JSON/SQL, hash wymagań spec i auto-staleness, `basis: code` w spec-driven | tylko jeśli pomiary po E4/E5 i P2 pokażą, że wersja podstawowa nie wystarcza |

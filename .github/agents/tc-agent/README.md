@@ -3,6 +3,8 @@
 tc-agent writes JUnit tests for one Java class (or method) in a Maven project.
 It trusts only the committed code, the tests and git — no memory between runs.
 
+![tc-agent architecture](docs/architecture.svg)
+
 ## Agents
 
 | agent | job |
@@ -57,9 +59,8 @@ Outcomes: `DONE`, `DONE_PARTIAL` (placeholders left), `BLOCKED`, `RED`, `ESCALAT
 
 ## Configuration
 
-Per-repository settings live in the **project directory** — `.github/tc-agent/`
-(target) or `.github/agents/tc-agent-project/` (current), first one found — never
-inside this package. All files are optional; all keys: `docs/configuration.md`.
+Per-repository settings live in the **project directory** `.github/agents/tc-agent-project/`,
+never inside this package. All files are optional; all keys: `docs/configuration.md`.
 
 - **`profile.md`** (json block, checked against its schema at `start`): gates, rounds, freshness,
   protected branches, test data, maven. Every key is optional — the table of keys and defaults

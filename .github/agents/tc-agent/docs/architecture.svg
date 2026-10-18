@@ -1,0 +1,183 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1230 780" role="img" font-family="'Segoe UI', 'IBM Plex Sans', Helvetica, Arial, sans-serif"
+     aria-label="Architektura tc-agent: orchestrator LLM wykonuje next_action ze skryptu tc_orchestrate.py; role LLM (planer, generator, recenzent) pracują w pętli i wymieniają się plikami w katalogu przebiegu; skrypty bez LLM liczą stan, budują context pack, uruchamiają Mavena i weryfikują plan; repozytorium jest jedynym źródłem prawdy, a commit obejmuje tylko src/test.">
+  <style>
+    .bg { fill: #ffffff; }
+    .fg { fill: #1b2330; } .mu { fill: #5d6876; }
+    .ln { stroke: #4a5566; fill: none; stroke-width: 1.6; }
+    .ah { fill: #4a5566; }
+    .llm-g { fill: #f2effd; stroke: #5b45c9; stroke-dasharray: 6 4; }
+    .llm   { fill: #ffffff; stroke: #5b45c9; stroke-width: 1.6; }
+    .llm-t { fill: #4a36b0; }
+    .det-g { fill: #e9f6f4; stroke: #0b7d72; stroke-dasharray: 6 4; }
+    .det   { fill: #ffffff; stroke: #0b7d72; stroke-width: 1.6; }
+    .det-t { fill: #0a6e64; }
+    .run-g { fill: #fdf5e7; stroke: #a8640a; }
+    .chip  { fill: #ffffff; stroke: #d7b17a; }
+    .run-t { fill: #8a5208; }
+    .repo-g { fill: #f2f4f7; stroke: #9aa5b3; }
+    .repo  { fill: #ffffff; stroke: #9aa5b3; stroke-width: 1.4; }
+    .hum   { fill: #ffffff; stroke: #1b2330; stroke-width: 1.6; }
+    .b { font-weight: 700; } .s { font-size: 12px; } .xs { font-size: 11px; } .m { font-family: 'Cascadia Mono', 'IBM Plex Mono', Consolas, monospace; }
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #12171f; } .fg { fill: #e4e9f0; } .mu { fill: #9aa5b3; }
+      .ln { stroke: #aab4c2; } .ah { fill: #aab4c2; }
+      .llm-g { fill: #1f1a38; stroke: #a493ff; } .llm { fill: #171d27; stroke: #a493ff; } .llm-t { fill: #c3b8ff; }
+      .det-g { fill: #0f2a28; stroke: #3cc3b3; } .det { fill: #171d27; stroke: #3cc3b3; } .det-t { fill: #6fdccf; }
+      .run-g { fill: #2c2110; stroke: #f0a648; } .chip { fill: #171d27; stroke: #8a6631; } .run-t { fill: #f4bb6c; }
+      .repo-g { fill: #19202a; stroke: #5d6876; } .repo { fill: #171d27; stroke: #5d6876; } .hum { fill: #171d27; stroke: #e4e9f0; }
+    }
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" class="ah"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1230" height="780" rx="12"/>
+  <text class="fg b" x="40" y="38" font-size="19">Architektura tc-agent</text>
+  <text class="mu s" x="250" y="38">modele decydują o treści · skrypty decydują o przebiegu · repozytorium jest źródłem prawdy</text>
+
+  <!-- wiersz 1: sterowanie -->
+  <rect class="hum" x="40" y="64" width="190" height="76" rx="8"/>
+  <text class="fg b" x="135" y="94" text-anchor="middle" font-size="15">Ty</text>
+  <text class="fg s" x="135" y="113" text-anchor="middle">Copilot Chat</text>
+  <text class="mu xs" x="135" y="129" text-anchor="middle">(w przyszłości Jenkins)</text>
+
+  <rect class="llm" x="330" y="64" width="230" height="76" rx="8"/>
+  <text class="llm-t b" x="445" y="94" text-anchor="middle" font-size="15">tc-orchestrator</text>
+  <text class="fg s" x="445" y="113" text-anchor="middle">LLM · dyspozytor</text>
+  <text class="mu xs" x="445" y="129" text-anchor="middle">robi next_action, nic nie ocenia</text>
+
+  <rect class="det" x="700" y="56" width="460" height="92" rx="8"/>
+  <text class="det-t b" x="930" y="86" text-anchor="middle" font-size="15">tc_orchestrate.py — maszyna stanów</text>
+  <text class="fg s m" x="930" y="108" text-anchor="middle">start · state · reseal · finish</text>
+  <text class="mu xs" x="930" y="128" text-anchor="middle">limit rund z profile.md · ochrona repo poza src/test · raport · commit</text>
+
+  <line class="ln" x1="230" y1="90" x2="328" y2="90" marker-end="url(#a)"/>
+  <text class="fg xs" x="280" y="82" text-anchor="middle">zlecenie</text>
+  <line class="ln" x1="330" y1="118" x2="232" y2="118" marker-end="url(#a)"/>
+  <text class="mu xs" x="280" y="134" text-anchor="middle">raport</text>
+
+  <line class="ln" x1="560" y1="88" x2="698" y2="88" marker-end="url(#a)"/>
+  <text class="fg xs" x="630" y="80" text-anchor="middle">wywołuje</text>
+  <line class="ln" x1="700" y1="118" x2="562" y2="118" marker-end="url(#a)"/>
+  <text class="mu xs" x="630" y="134" text-anchor="middle">next_action + dispatch</text>
+
+  <!-- wiersz 2: role LLM -->
+  <rect class="llm-g" x="40" y="200" width="600" height="222" rx="10"/>
+  <text class="llm-t b" x="56" y="224" font-size="14">Role LLM — subagenty w świeżym kontekście</text>
+  <text class="mu xs" x="56" y="242">czytają tylko pliki: references/, run.json, artefakty przebiegu</text>
+  <text class="mu xs" x="624" y="224" text-anchor="end">pętla ≤ max_rounds</text>
+
+  <line class="ln" x1="445" y1="140" x2="445" y2="198" marker-end="url(#a)"/>
+  <text class="fg xs" x="453" y="174">uruchamia subagenta (slug + dispatch)</text>
+
+  <rect class="llm" x="60" y="262" width="150" height="72" rx="7"/>
+  <text class="llm-t b" x="135" y="288" text-anchor="middle" font-size="14">Planer</text>
+  <text class="fg xs" x="135" y="306" text-anchor="middle">co testować i czym</text>
+  <text class="mu xs" x="135" y="322" text-anchor="middle">dowody z refami do linii</text>
+
+  <rect class="llm" x="250" y="262" width="150" height="72" rx="7"/>
+  <text class="llm-t b" x="325" y="288" text-anchor="middle" font-size="14">Generator</text>
+  <text class="fg xs" x="325" y="306" text-anchor="middle">pisze testy i zaślepki</text>
+  <text class="mu xs" x="325" y="322" text-anchor="middle">niczego nie uruchamia</text>
+
+  <rect class="llm" x="440" y="262" width="180" height="72" rx="7"/>
+  <text class="llm-t b" x="530" y="288" text-anchor="middle" font-size="14">Recenzent</text>
+  <text class="fg xs" x="530" y="306" text-anchor="middle">testy · pokrycie · PIT</text>
+  <text class="mu xs" x="530" y="322" text-anchor="middle">decyzja + commit_summary</text>
+
+  <line class="ln" x1="210" y1="298" x2="248" y2="298" marker-end="url(#a)"/>
+  <text class="fg xs" x="229" y="291" text-anchor="middle">plan</text>
+  <line class="ln" x1="400" y1="298" x2="438" y2="298" marker-end="url(#a)"/>
+  <text class="fg xs" x="419" y="291" text-anchor="middle">testy</text>
+
+  <path class="ln" d="M500,334 C500,358 325,358 325,336" marker-end="url(#a)"/>
+  <text class="mu xs" x="415" y="371" text-anchor="middle">REPAIR_IMPLEMENTATION</text>
+  <path class="ln" d="M590,334 C590,408 135,408 135,336" marker-end="url(#a)"/>
+  <text class="mu xs" x="365" y="412" text-anchor="middle">REPAIR_PLAN → nowa wersja planu</text>
+
+  <!-- wiersz 2: skrypty -->
+  <rect class="det-g" x="720" y="200" width="440" height="222" rx="10"/>
+  <text class="det-t b" x="736" y="224" font-size="14">Skrypty — logika bez LLM</text>
+  <text class="mu xs" x="736" y="242">decydują o przebiegu</text>
+
+  <line class="ln" x1="1046" y1="148" x2="1046" y2="256" marker-end="url(#a)"/>
+  <text class="fg xs" x="1054" y="188">start</text>
+
+  <rect class="det" x="736" y="258" width="200" height="66" rx="7"/>
+  <text class="det-t b" x="836" y="284" text-anchor="middle" font-size="13">tc_build_context</text>
+  <text class="fg xs" x="836" y="304" text-anchor="middle">context pack dla ról</text>
+
+  <rect class="det" x="948" y="258" width="196" height="66" rx="7"/>
+  <text class="det-t b" x="1046" y="284" text-anchor="middle" font-size="13">tc_derive_state</text>
+  <text class="fg xs" x="1046" y="304" text-anchor="middle">czego target potrzebuje</text>
+
+  <rect class="det" x="736" y="336" width="200" height="70" rx="7"/>
+  <text class="det-t b" x="836" y="363" text-anchor="middle" font-size="13">checki (Maven)</text>
+  <text class="fg xs" x="836" y="383" text-anchor="middle">JUnit · JaCoCo · PIT</text>
+
+  <rect class="det" x="948" y="336" width="196" height="70" rx="7"/>
+  <text class="det-t b" x="1046" y="363" text-anchor="middle" font-size="13">weryfikacja</text>
+  <text class="fg xs" x="1046" y="383" text-anchor="middle">refy · siła dowodów · schematy</text>
+
+  <line class="ln" x1="640" y1="290" x2="734" y2="290" marker-end="url(#a)"/>
+  <text class="fg xs" x="687" y="282" text-anchor="middle">planer</text>
+  <line class="ln" x1="640" y1="372" x2="734" y2="372" marker-end="url(#a)"/>
+  <text class="fg xs" x="687" y="364" text-anchor="middle">recenzent</text>
+
+  <!-- wiersz 3: katalog przebiegu -->
+  <rect class="run-g" x="40" y="470" width="1120" height="84" rx="10"/>
+  <text class="run-t b" x="56" y="492" font-size="13">Katalog przebiegu <tspan class="m" font-weight="400">.test-agent/runs/&lt;slug&gt;/&lt;run-id&gt;/</tspan> — role i skrypty wymieniają się wyłącznie plikami</text>
+  <g class="m" font-size="11">
+    <rect class="chip" x="76"   y="506" width="124" height="32" rx="5"/><text class="fg" x="138"  y="526" text-anchor="middle">run.json</text>
+    <rect class="chip" x="208"  y="506" width="124" height="32" rx="5"/><text class="fg" x="270"  y="526" text-anchor="middle">derive-state.md</text>
+    <rect class="chip" x="340"  y="506" width="124" height="32" rx="5"/><text class="fg" x="402"  y="526" text-anchor="middle">context-pack.md</text>
+    <rect class="chip" x="472"  y="506" width="124" height="32" rx="5"/><text class="fg" x="534"  y="526" text-anchor="middle">plan-vN.md</text>
+    <rect class="chip" x="604"  y="506" width="124" height="32" rx="5"/><text class="fg" x="666"  y="526" text-anchor="middle">generation-report</text>
+    <rect class="chip" x="736"  y="506" width="124" height="32" rx="5"/><text class="fg" x="798"  y="526" text-anchor="middle">review-vN-rM.md</text>
+    <rect class="chip" x="868"  y="506" width="124" height="32" rx="5"/><text class="fg" x="930"  y="526" text-anchor="middle">checks/*.md</text>
+    <rect class="chip" x="1000" y="506" width="124" height="32" rx="5"/><text class="fg" x="1062" y="526" text-anchor="middle">run-report.md</text>
+  </g>
+
+  <line class="ln" x1="180" y1="424" x2="180" y2="468" marker-start="url(#a)" marker-end="url(#a)"/>
+  <text class="fg xs" x="190" y="450">czytają i piszą artefakty</text>
+  <line class="ln" x1="860" y1="424" x2="860" y2="468" marker-end="url(#a)"/>
+  <text class="fg xs" x="868" y="450">zapisują wyniki</text>
+
+  <!-- wiersz 4: repozytorium -->
+  <rect class="repo-g" x="40" y="600" width="1120" height="150" rx="10"/>
+  <text class="fg b" x="56" y="624" font-size="13">Repozytorium — jedyne źródło prawdy; między przebiegami agent nic nie pamięta</text>
+
+  <rect class="repo" x="56" y="640" width="200" height="90" rx="7"/>
+  <text class="fg b m" x="156" y="666" text-anchor="middle" font-size="13">src/main</text>
+  <text class="fg xs" x="156" y="686" text-anchor="middle">kod — tylko odczyt</text>
+  <text class="mu xs" x="156" y="704" text-anchor="middle">zmiana w trakcie → ESCALATED</text>
+
+  <rect class="repo" x="272" y="640" width="200" height="90" rx="7"/>
+  <text class="fg b m" x="372" y="666" text-anchor="middle" font-size="13">src/test</text>
+  <text class="fg xs" x="372" y="686" text-anchor="middle">testy + metadane tc-agent-*</text>
+  <text class="mu xs" x="372" y="704" text-anchor="middle">jedyne pliki w commicie</text>
+
+  <rect class="repo" x="488" y="640" width="210" height="90" rx="7"/>
+  <text class="fg b" x="593" y="666" text-anchor="middle" font-size="13">konfiguracja projektu</text>
+  <text class="fg xs m" x="593" y="686" text-anchor="middle">profile.md · conventions.md</text>
+  <text class="mu xs m" x="593" y="704" text-anchor="middle">test-data.md</text>
+
+  <rect class="repo" x="714" y="640" width="200" height="90" rx="7"/>
+  <text class="fg b" x="814" y="666" text-anchor="middle" font-size="13">specyfikacja</text>
+  <text class="fg xs" x="814" y="686" text-anchor="middle">wyrocznia trybu spec-driven</text>
+
+  <rect class="repo" x="930" y="640" width="214" height="90" rx="7"/>
+  <text class="fg b" x="1037" y="666" text-anchor="middle" font-size="13">git</text>
+  <text class="fg xs" x="1037" y="686" text-anchor="middle">sha · wiek · dirty</text>
+  <text class="mu xs" x="1037" y="704" text-anchor="middle">chroniony branch → nowy branch</text>
+
+  <line class="ln" x1="336" y1="424" x2="336" y2="638" marker-end="url(#a)"/>
+  <text class="fg xs" x="344" y="580">pisze testy</text>
+  <line class="ln" x1="996" y1="426" x2="996" y2="640" marker-start="url(#a)"/>
+  <text class="fg xs" x="1004" y="580">czytają kod, testy, git, profil</text>
+
+  <path class="ln" d="M1160,100 H1186 V685 H1146" marker-end="url(#a)"/>
+  <text class="fg xs" x="1203" y="400" text-anchor="middle" transform="rotate(-90 1203 400)">finish --commit: tylko pliki spod src/test</text>
+</svg>
