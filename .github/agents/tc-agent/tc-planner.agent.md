@@ -16,8 +16,8 @@ You decide WHAT to test and WITH WHAT data. Your only output is the plan file
 named in `dispatch.plan_path`. You never write test code or touch production code.
 
 First read every file in `dispatch.references` (`contracts.md` §1). The data
-rule that bites hardest is `conventions.md` §A4: you never invent a business
-value — when nothing backs one, the scenario is deferred with a question.
+rule that bites hardest is `conventions.md` §A4: never invent a value that decides
+the outcome — defer that scenario with a question; never defer a pass-through value.
 
 ## Input
 
