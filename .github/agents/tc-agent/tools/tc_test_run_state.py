@@ -789,11 +789,11 @@ def test_commit_refusals():
 def test_start_cli_writes_run_json():
     with FixtureRepo() as repo:
         repo.write("docs/spec.md", "# spec")
-        repo.write("docs/test-data.md", "customer id: 9 digits")
+        repo.write("docs/test-data-examples.md", "customer id: 9 digits")
         script = TC / "scripts" / "tc_orchestrate.py"
         proc = subprocess.run([sys.executable, str(script), "start", TARGET, "--repo", str(repo.root),
                                "--mode", "spec-driven", "--spec", "docs/spec.md", "--interactive", "--commit",
-                               "--max-rounds", "4", "--test-data", "docs/test-data.md"],
+                               "--max-rounds", "4", "--test-data", "docs/test-data-examples.md"],
                               capture_output=True, text=True)
         expect("start exits 0", proc.returncode, 0)
         out = json.loads(proc.stdout)
@@ -802,7 +802,7 @@ def test_start_cli_writes_run_json():
                (run["mode"], run["interactive"], run["commit"], run["max_rounds"]),
                ("spec-driven", True, True, 4))
         expect("derive-state ran (no tests -> PLAN)", out["derive_state"]["next_action"], "PLAN")
-        expect("--test-data is stored for the pack", run["test_data_paths"], ["docs/test-data.md"])
+        expect("--test-data is stored for the pack", run["test_data_paths"], ["docs/test-data-examples.md"])
         bad = subprocess.run([sys.executable, str(script), "start", TARGET, "--repo", str(repo.root),
                               "--mode", "tdd"], capture_output=True, text=True)
         expect("tdd is refused", bad.returncode, 2)

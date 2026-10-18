@@ -739,7 +739,7 @@ _PROFILE_CACHE = {}
 
 
 def project_file(repo: Path, name: str) -> Path | None:
-    """A file of the project directory (profile.md, conventions.md, test-data.md), or None."""
+    """A file of the project directory (profile.md, conventions.md, test-data-examples.md), or None."""
     path = Path(repo) / PROJECT_DIR / name
     return path if path.is_file() else None
 

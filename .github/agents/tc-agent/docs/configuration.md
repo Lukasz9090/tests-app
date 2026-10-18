@@ -7,7 +7,7 @@ Everything that belongs to ONE repository lives in its project directory,
 |---|---|---|
 | `profile.md` | one ```json fence: gates, freshness, maven, junit, `max_rounds`, `protected_branches`, extra paths | the scripts |
 | `conventions.md` | this repo's test style (overrides the agent's §B defaults, never §A) | the context pack → REPO CONVENTIONS, first source |
-| `test-data.md` | example business values of this system | the context pack → TEST DATA |
+| `test-data-examples.md` | example business values of this system | the context pack → TEST DATA |
 
 Without a project directory the agent runs on its built-in defaults. A `profile.md` the
 schema rejects (an unknown or misspelled key included) stops `start` with `INVALID_PROFILE`.

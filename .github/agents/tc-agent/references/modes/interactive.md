@@ -10,7 +10,7 @@ Two rounds, in this order, with separate budgets — the second never eats the f
 
 Take every kind of value off the list that `conventions.md` §A4 sources 1–4
 already answer. If nothing is left, write why in `context.notes` ("test data:
-covered by docs/test-data.md", "test data: every value comes from existing
+covered by docs/test-data-examples.md", "test data: every value comes from existing
 tests"). Otherwise ask ONE question listing the uncovered kinds:
 
     "I need example values for: customer id, account number, transfer type.
@@ -22,12 +22,12 @@ an id, account or product code, dictionary key, name or document number, that
 kind is uncovered.
 
 - **A path:** read that file (it counts against the 5-file escape hatch), use it,
-  and note "test data file: <path> (add it to the project's test-data.md)".
+  and note "test data file: <path> (add it to the project's test-data-examples.md)".
 - **Questions:** per KIND, never per field, at most 3 ("Customer ids in this
   system: what does a real one look like?" covers `ownerCustomerId` and
   `coownerCustomerId`). Record each as `{concept, rule, examples, applies_to,
   used_by}` in `context.test_data`, cite it as `human_decision`, and add a note
-  "test data worth keeping: <what you were told> (put it in the project's test-data.md)".
+  "test data worth keeping: <what you were told> (put it in the project's test-data-examples.md)".
 - **No:** neutral values (§A4), defer every kind whose meaning decides a branch,
   note "test data declined by the human", and do not ask again in this run.
 

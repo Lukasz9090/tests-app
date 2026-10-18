@@ -199,9 +199,9 @@ def test_data_files(repo: Path, run: dict) -> list:
         seen.add(key)
         out.append((path, source))
 
-    project_data = c.project_file(repo, "test-data.md")
+    project_data = c.project_file(repo, "test-data-examples.md")
     if project_data:
-        take(project_data, "project test-data.md")
+        take(project_data, "project test-data-examples.md")
     for rel in c.test_data_paths(repo):
         take(repo / rel, "profile.md test_data_paths")
     for rel in run.get("test_data_paths") or []:

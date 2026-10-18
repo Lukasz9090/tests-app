@@ -78,10 +78,10 @@ def test_target_survives_huge_repo_instructions():
 
 def test_test_data_files_are_included():
     with FixtureRepo() as repo:
-        repo.write("docs/test-data.md",
+        repo.write("docs/test-data-examples.md",
                    "customer id: 9 digits, e.g. 123456789\ntransfer type: ELIXIR | SORBNET\n")
         repo.write(".github/agents/tc-agent-project/profile.md",
-                   '# p\n\n```json\n{"schema_version": 1, "test_data_paths": ["docs/test-data.md"]}\n```\n')
+                   '# p\n\n```json\n{"schema_version": 1, "test_data_paths": ["docs/test-data-examples.md"]}\n```\n')
         c._PROFILE_CACHE.clear()
         pack = build(repo)
         expect_true("section is there", "## TEST DATA (repo-provided example business values)" in pack)
@@ -171,8 +171,8 @@ def test_multi_module_repository():
 def test_source_blocks_carry_the_files_line_numbers():
     """A ref copied from the pack must name the same line in the file."""
     with FixtureRepo() as repo:
-        repo.write("docs/test-data.md", "customer id: 9 digits\n" * 30)    # pushes TARGET down the pack
-        repo.write(".github/agents/tc-agent-project/test-data.md", "x\n" * 30)
+        repo.write("docs/test-data-examples.md", "customer id: 9 digits\n" * 30)    # pushes TARGET down the pack
+        repo.write(".github/agents/tc-agent-project/test-data-examples.md", "x\n" * 30)
         c._PROFILE_CACHE.clear()
         pack = build(repo)
         source = (repo.root / repo.target_path).read_text(encoding="utf-8").splitlines()
@@ -187,11 +187,11 @@ def test_source_blocks_carry_the_files_line_numbers():
 
 def test_project_test_data_is_included_without_listing_it():
     with FixtureRepo() as repo:
-        repo.write(".github/agents/tc-agent-project/test-data.md", "account number: PL + 26 digits\n")
+        repo.write(".github/agents/tc-agent-project/test-data-examples.md", "account number: PL + 26 digits\n")
         c._PROFILE_CACHE.clear()
         pack = build(repo)
-        expect_true("project test-data.md is in TEST DATA", "PL + 26 digits" in pack)
-        expect_true("labelled as the project's file", "(project test-data.md)" in pack)
+        expect_true("project test-data-examples.md is in TEST DATA", "PL + 26 digits" in pack)
+        expect_true("labelled as the project's file", "(project test-data-examples.md)" in pack)
 
 
 def test_project_directory_resolution():

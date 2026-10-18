@@ -27,7 +27,7 @@ In Copilot Chat choose **tc-orchestrator** and say what you want, for example:
 
     Generate tests for SimpleCalculatorService, mode characterization, commit
     Generate tests for OrderService.create, mode spec-driven, spec docs/order-spec.md, interactive
-    Generate tests for TransferService, data examples in docs/test-data.md
+    Generate tests for TransferService, data examples in docs/test-data-examples.md
 
 The orchestrator turns this into `tc_orchestrate.py start` with these options:
 
@@ -38,7 +38,7 @@ The orchestrator turns this into `tc_orchestrate.py start` with these options:
 | `--mode spec-driven` | Tests come only from the specification's requirements — nothing the spec does not describe; the gates do not drive it. A test that fails because the code does not do what the spec says is kept disabled (`AI spec-mismatch`) and listed at the top of the report. |
 | `--spec <path>` | The specification file; required in spec-driven mode (the orchestrator asks for it). |
 | `--interactive` | The planner may ask questions (what to freeze, example data). Also turns off the freshness guard. |
-| `--test-data <path>` | A file of example business values, used in any mode (repeatable). Say it in the prompt: "examples are in docs/test-data.md". Without it, only `--interactive` makes the planner ask. |
+| `--test-data <path>` | A file of example business values, used in any mode (repeatable). Say it in the prompt: "examples are in docs/test-data-examples.md". Without it, only `--interactive` makes the planner ask. |
 | `--max-rounds <n>` (3) | Max generate + review rounds in the whole run; a new plan version uses up a round too. Default from the profile's `max_rounds`. |
 | `--commit` | Commit the new test files at the end — see **Commit**. |
 
@@ -66,7 +66,7 @@ never inside this package. All files are optional; all keys: `docs/configuration
   protected branches, test data, maven. Every key is optional — the table of keys and defaults
   is at the top of `docs/configuration.md`.
 - **`conventions.md`** — this repo's test style; read first among the style rules.
-- **`test-data.md`** — example business values; always in the context pack.
+- **`test-data-examples.md`** — example business values; always in the context pack.
 - **Other style rules** — `.github/copilot-instructions.md`, `.github/instructions/*.instructions.md`
   (by `applyTo`) and `AGENTS.md`. Repo rules override the default style in
   `references/conventions.md` §B, never §A.

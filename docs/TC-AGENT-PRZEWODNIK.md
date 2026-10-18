@@ -24,7 +24,7 @@ każdego wygenerowanego testu siedzą w jego Javadocu.
 | **Tryb `characterization`** (domyślny) | zamraża obecne zachowanie kodu, błędy włącznie; test zapamiętuje sha commita (`tc-agent-characterizes`) |
 | **Tryb `spec-driven`** | testy tylko z wymagań specyfikacji (`--spec`, bez niej orchestrator pyta), bez łatania luk spoza spec; jeśli kod robi co innego niż spec — test zostaje wyłączony z ciałem i ląduje na górze raportu jako rozbieżność |
 | **Modyfikator `interactive`** | planer pyta człowieka (najpierw o przykładowe dane, potem co zamrozić / jak rozumieć wymaganie) |
-| **Dane biznesowe z repo** | `test-data.md` projektu, `--test-data`, sekcja DATA EXAMPLES (jak inne testy w CAŁYM repo wypełniają te same pola — np. `customerId` = 9 cyfr) — nie `CUSTOMER-1` |
+| **Dane biznesowe z repo** | `test-data-examples.md` projektu, `--test-data`, sekcja DATA EXAMPLES (jak inne testy w CAŁYM repo wypełniają te same pola — np. `customerId` = 9 cyfr) — nie `CUSTOMER-1` |
 | **Bramki jakości** | branch coverage (JaCoCo) i mutation score (PIT) — domyślnie 80% / 70%, w profilu projektu |
 | **Limit rund** | `max_rounds` w `profile.md` (domyślnie 3) review na przebieg; potem `ESCALATED`, testy zostają w drzewie |
 | **Zaślepki** | scenariusz nietestowalny (np. `LocalDateTime.now()` bez `Clock`) → pusta metoda `@Disabled("AI deferred: …")` + sugestia zmiany w kodzie |
@@ -44,7 +44,7 @@ W Copilot Chat agent **tc-orchestrator**:
 
     Generate tests for SimpleCalculatorService, mode characterization, commit
     Generate tests for OrderService.create, mode spec-driven, spec docs/order-spec.md, interactive
-    Generate tests for TransferService, data examples in docs/test-data.md
+    Generate tests for TransferService, data examples in docs/test-data-examples.md
 
 Opcje (orchestrator przekłada je na `tc_orchestrate.py start`): `--mode characterization|spec-driven`,
 `--interactive`, `--spec <plik>`, `--test-data <plik>`, `--max-rounds <n>`, `--commit`.
@@ -140,7 +140,7 @@ dotyczące jej przebiegu; każda reguła ma jednego właściciela)
 |---|---|
 | `profile.md` | blok JSON: bramki, `freshness_days`, `max_rounds`, `protected_branches`, opcje mavena, wersja JUnit |
 | `conventions.md` (opcjonalny) | styl testów tego repo — nadpisuje §B, nigdy §A |
-| `test-data.md` (opcjonalny) | przykładowe wartości biznesowe („customer id = 9 cyfr, np. 123456789”) |
+| `test-data-examples.md` (opcjonalny) | przykładowe wartości biznesowe („customer id = 9 cyfr, np. 123456789”) |
 | `README.md` | co to za katalog |
 
 ### 5.3 Pozostałe
@@ -233,4 +233,4 @@ Każdy artefakt `.md` = tytuł + krótkie streszczenie + **jeden blok JSON** (to
 | Co po zmianie kodu? | stale test, który przechodzi → automatyczny reseal sha; który pada → planer go przepisuje |
 | Czy to działa w CI? | plan na przyszłość: Jenkins uruchamia orchestratora tylko w characterization bez interactive; brak pamięci między przebiegami, `--commit` tworzy branch, push robi Jenkins |
 | Ile to kosztuje? | najwyżej 3 rundy; build bez kompilacji `src/main` i bez generatorów, gdy `target/` aktualny |
-| Jak dostosować do repo? | `profile.md` (bramki, maven), `conventions.md` (styl), `test-data.md` (dane) — bez zmian w pakiecie |
+| Jak dostosować do repo? | `profile.md` (bramki, maven), `conventions.md` (styl), `test-data-examples.md` (dane) — bez zmian w pakiecie |

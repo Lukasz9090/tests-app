@@ -339,3 +339,4 @@ Rosnąć mogą tylko dev-testy (`tools/`) i dziennik decyzji (`docs/`).
   ścieżka. Wycofane docelowe `.github/tc-agent/` z D69/E24 (`PROJECT_DIRS`, ostrzeżenie o dwóch katalogach, test `git mv`).
 - 2026-10-18 (decyzja użytkownika): „slug” → `target` (po polsku „cel”): argument skryptów `<target>`, klucz
   `target_name` w `run.json`, derive-state, wyjściu orkiestratora i `run-report.md`, `Target.name` w kodzie.
+- 2026-10-18 (decyzja użytkownika): plik projektu `test-data.md` → `test-data-examples.md` (nazwa mówi, co zawiera).
