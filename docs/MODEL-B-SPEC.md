@@ -7,7 +7,7 @@
 
 **Prawda = zacommitowany kod + testy + historia git.** Między przebiegami agent niczego nie pamięta:
 każdy przebieg wyprowadza stan od nowa (`derive-state`). Wewnątrz przebiegu role wymieniają się plikami
-w `.test-agent/runs/<slug>/<run-id>/` (gitignored); żaden skrypt nie czyta katalogu innego przebiegu.
+w `.test-agent/runs/<target>/<run-id>/` (gitignored); żaden skrypt nie czyta katalogu innego przebiegu.
 
 ## 2. Układ
 
@@ -81,7 +81,7 @@ planu decyduje recenzent; po limicie przebieg kończy się `ESCALATED`, testy zo
 
 Outcome: `DONE`, `DONE_PARTIAL` (placeholdery albo rozbieżności spec), `BLOCKED`, `RED`, `ESCALATED`.
 `--commit`: tylko przy DONE/DONE_PARTIAL, tylko pliki przebiegu spod `src/test`, nigdy na branchu z
-`protected_branches` (domyślnie `master`, `main`; wtedy nowy `tc-agent/<slug>/<run-id>`), bez push.
+`protected_branches` (domyślnie `master`, `main`; wtedy nowy `tc-agent/<target>/<run-id>`), bez push.
 Zmiana poza `src/test` (i poza `.test-agent/`, `target/`) w trakcie przebiegu → `ESCALATED` bez commita.
 Plan v2+ ze statusem `COMPLETE` → `ESCALATED`. Plan v(N+1) po `REPAIR_PLAN` zawiera tylko zmiany; jego
 pierwsza generacja nie dostaje review.

@@ -3,7 +3,7 @@
 reports the score and the surviving mutants.
 
 Usage:
-  python tc_mutation.py <TargetSlug> --repo . --run <id|latest> [--label entry]
+  python tc_mutation.py <target> --repo . --run <id|latest> [--label entry]
                      [--module M] [--gate 0.7] [--tests A,B]
 Output:
   <run>/checks/mutation-<label>.md

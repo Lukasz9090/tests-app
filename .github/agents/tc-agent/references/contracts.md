@@ -12,7 +12,7 @@ pipeline writes to `.test-agent/` is ever read as state by a later run.
   code, the test methods and their `tc-agent-` metadata, git, coverage and
   mutations (`tc_derive_state.py`).
 - Inside one run, the roles hand work to each other through files in that run's
-  directory, `.test-agent/runs/<slug>/<run-id>/`. Never read, cite or continue
+  directory, `.test-agent/runs/<target>/<run-id>/`. Never read, cite or continue
   from another run's directory.
 
 ## 1. What you read, and in which order of authority

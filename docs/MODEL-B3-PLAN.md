@@ -301,7 +301,7 @@ Rosnąć mogą tylko dev-testy (`tools/`) i dziennik decyzji (`docs/`).
 | E33 | spec-driven + interactive, wartość identyfikująca (numer rachunku brokerskiego) | pytanie o przykład; testy z podaną wartością |
 | E34 | wymuszony `REPAIR_PLAN` | v2 = nowe scenariusze + `replaces`; generator realizuje całe v2, brak `SKIPPED` dla v2 |
 | E35 | target `Klasa.metoda` z lambdą | niepokryte linie lambdy w checku coverage |
-| E36 | `--commit` na `main` | nowy branch `tc-agent/<slug>/<run-id>` |
+| E36 | `--commit` na `main` | nowy branch `tc-agent/<target>/<run-id>` |
 | E37 | regresja E1–E25 | wyniki jak dotąd |
 | E38 | **regresja jakości po etapie 3b:** te same targety (np. `AppointmentService`, `NotificationService`, `SimpleCalculatorService`) w characterization i spec-driven, przed i po 3b | ten sam outcome; liczba testów i zaślepek ±10%; bramki nie niższe; nie więcej `INVALID_ARTIFACT` ani rund; inaczej 3b cofnięty (`git revert`) |
 | E39 | wymuszony `REPAIR_PLAN` po 3b | planer v2 planuje dokładnie linie / mutanty z plików checków; brak „nie widzę niepokrytych linii” |
@@ -337,3 +337,5 @@ Rosnąć mogą tylko dev-testy (`tools/`) i dziennik decyzji (`docs/`).
 - E6: 511/511 asercji; instrukcje 1381 → 1359 linii, skrypty 5265 → 4806, schematy 1465 → 385.
 - 2026-10-18 (decyzja użytkownika): konfiguracja projektu zostaje w `.github/agents/tc-agent-project/` — jedyna
   ścieżka. Wycofane docelowe `.github/tc-agent/` z D69/E24 (`PROJECT_DIRS`, ostrzeżenie o dwóch katalogach, test `git mv`).
+- 2026-10-18 (decyzja użytkownika): „slug” → `target` (po polsku „cel”): argument skryptów `<target>`, klucz
+  `target_name` w `run.json`, derive-state, wyjściu orkiestratora i `run-report.md`, `Target.name` w kodzie.

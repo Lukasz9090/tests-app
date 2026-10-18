@@ -4,7 +4,7 @@ and writes the coverage report in the same maven call. A failed suite runs once 
 a test failing in every run is a failure, in some runs a flake.
 
 Usage:
-  python tc_run_tests.py <TargetSlug> --repo . --run <id|latest> [--label entry]
+  python tc_run_tests.py <target> --repo . --run <id|latest> [--label entry]
                       [--module M] [--repeat N] [--tests A,B]
 Output:
   <run>/checks/tests-<label>.md, <run>/checks/jacoco-<label>.exec

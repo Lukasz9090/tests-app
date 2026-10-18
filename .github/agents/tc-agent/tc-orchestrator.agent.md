@@ -20,7 +20,7 @@ Read `.github/agents/tc-agent/references/contracts.md` first.
 
 ## Input
 
-- `targets` — one slug or a list; a slug is `ClassName` or `ClassName.methodName`,
+- `targets` — one target or a list; a target is `ClassName` or `ClassName.methodName`,
   passed through unchanged.
 - `mode` — `characterization` (default) or `spec-driven`; `interactive` (default false);
   `spec` — the specification (spec-driven); `test_data` — file(s) of example values the user names;
@@ -31,7 +31,7 @@ Read `.github/agents/tc-agent/references/contracts.md` first.
 **1. Start the run** — the ONLY place these options are given; they go to the
 run's `run.json` and every role reads them from there:
 
-    python $C/tc_orchestrate.py start <slug> --repo . --mode <mode> [--interactive] [--spec <path>] [--test-data <path>] [--max-rounds <n>] [--commit]
+    python $C/tc_orchestrate.py start <target> --repo . --mode <mode> [--interactive] [--spec <path>] [--test-data <path>] [--max-rounds <n>] [--commit]
 
 Remember the printed `run_id`. `start` derives the state and may build the
 project and run tests, coverage and mutations — minutes in a big repo. Let it
@@ -43,7 +43,7 @@ which answers `WAIT` while that `start` is alive.
 again; any other refusal → show it and STOP; `START_FAILED: <reason>` → run `finish`
 for that run_id, show the report verbatim, STOP. Never start a run around a stop.
 
-**2. Loop until FINISH:** `python $C/tc_orchestrate.py state <slug> --repo . --run <run_id>`,
+**2. Loop until FINISH:** `python $C/tc_orchestrate.py state <target> --repo . --run <run_id>`,
 then do exactly its `next_action`:
 
 | `next_action` | what you do |
@@ -51,11 +51,11 @@ then do exactly its `next_action`:
 | `PLAN` | invoke the `tc-planner` custom agent with `run_subagent` |
 | `GENERATE` | invoke the `tc-generator` custom agent with `run_subagent` |
 | `REVIEW` | invoke the `tc-reviewer` custom agent with `run_subagent` |
-| `RESEAL` | `python $C/tc_orchestrate.py reseal <slug> --repo . --run <run_id>` |
+| `RESEAL` | `python $C/tc_orchestrate.py reseal <target> --repo . --run <run_id>` |
 | `WAIT` | wait (a minute is a reasonable step) and run `state` again; never start or finish the run meanwhile |
-| `FINISH` | `python $C/tc_orchestrate.py finish <slug> --repo . --run <run_id>`, then stop this target |
+| `FINISH` | `python $C/tc_orchestrate.py finish <target> --repo . --run <run_id>`, then stop this target |
 
-Each role runs in a fresh context and reads only files: give it ONLY the slug and
+Each role runs in a fresh context and reads only files: give it ONLY the target and
 the `dispatch` object from `state`, as printed. Never paste this conversation,
 never pass mode / interactive / spec / test data, never paraphrase a review.
 One role at a time per target; independent targets may run in parallel, when in
@@ -75,5 +75,5 @@ something rosier or add fixes of your own.
 
 ## Resume
 
-Hold no state. Same session: `state <slug> --run latest`. A new session starts a
+Hold no state. Same session: `state <target> --run latest`. A new session starts a
 new run with `start`; never continue from an old run's directory.

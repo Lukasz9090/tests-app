@@ -40,7 +40,7 @@ round, also the first one of a new plan version. `--max-rounds` overrides it for
 
 **Protected branches** (`protected_branches`, default `["master", "main"]`): branches
 `finish --commit` never commits to; globs allowed (`release/*`). On such a branch,
-or a detached HEAD, it creates `tc-agent/<slug>/<run-id>` instead. An empty list
+or a detached HEAD, it creates `tc-agent/<target>/<run-id>` instead. An empty list
 still protects `master` and `main`.
 
 **Quality gates** (`quality_gates`) are the thresholds `tc_coverage.py` and `tc_mutation.py` must reach

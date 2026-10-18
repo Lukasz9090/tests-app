@@ -12,7 +12,7 @@ coverage and mutations - never from an earlier run.
 Tiers, cheapest first: 0 target, 1 git + Javadoc, 2 tests + coverage, 3 PIT.
 
 Usage:
-    python tc_derive_state.py <slug> --repo . --run <id|latest>
+    python tc_derive_state.py <target> --repo . --run <id|latest>
 Output: <run>/derive-state.md
 Exit codes: 0 = derived (whatever the verdict), 2 = could not run at all.
 """
@@ -46,16 +46,16 @@ def _say(message: str) -> None:
 class ScriptRunner:
     """Runs the check scripts and returns (exit code, report payload); tests replace it."""
 
-    def __init__(self, repo: Path, slug: str, run_id: str):
-        self.repo, self.slug, self.run_id = repo, slug, run_id
+    def __init__(self, repo: Path, target_name: str, run_id: str):
+        self.repo, self.target_name, self.run_id = repo, target_name, run_id
 
     def _run(self, script: str, report: str, extra: list) -> tuple[int, dict]:
-        command = [sys.executable, str(SCRIPTS / script), self.slug, "--repo", str(self.repo),
+        command = [sys.executable, str(SCRIPTS / script), self.target_name, "--repo", str(self.repo),
                    "--run", self.run_id, "--label", LABEL, *extra]
         # stderr goes to the terminal (maven progress); stdout holds the check's summary.
         proc = subprocess.run(command, cwd=str(self.repo), stdout=subprocess.PIPE, stderr=None,
                               text=True, errors="replace")
-        path = c.run_dir(self.repo, self.slug, self.run_id) / "checks" / report
+        path = c.run_dir(self.repo, self.target_name, self.run_id) / "checks" / report
         try:
             data, _ = load_payload(path)
         except ValueError:
@@ -137,7 +137,7 @@ def _gate_summary(data: dict | None, key: str) -> dict | None:
     return out
 
 
-def derive(repo: Path, target_slug: str, run: dict, runner=None,
+def derive(repo: Path, target_name: str, run: dict, runner=None,
            freshness_days: float | None = None) -> dict:
     """The whole derivation. `run` is the run.json payload; `runner` runs the checks."""
     repo = Path(repo).resolve()
@@ -145,7 +145,7 @@ def derive(repo: Path, target_slug: str, run: dict, runner=None,
     interactive = bool(run.get("interactive"))
     out = {
         "schema_version": 1,
-        "slug": target_slug,
+        "target_name": target_name,
         "mode": mode,
         "interactive": interactive,
         "target": None,
@@ -166,7 +166,7 @@ def derive(repo: Path, target_slug: str, run: dict, runner=None,
     # tier 0 ------------------------------------------------------------
     out["tiers_run"].append(0)
     try:
-        target = c.resolve_target(repo, target_slug)
+        target = c.resolve_target(repo, target_name)
     except c.TargetError as exc:
         out["next_action"] = "ESCALATE"
         out["reasons"] = [exc.code]
@@ -228,7 +228,7 @@ def derive(repo: Path, target_slug: str, run: dict, runner=None,
                               "to measure and nothing was run.")
         return conclude("PLAN", ["NO_TESTS", "SPEC_REVIEW"] if mode == "spec-driven" else ["NO_TESTS"])
 
-    runner = runner or ScriptRunner(repo, target_slug, run["run_id"])
+    runner = runner or ScriptRunner(repo, target_name, run["run_id"])
 
     # tier 2 ------------------------------------------------------------
     out["tiers_run"].append(2)
@@ -354,25 +354,25 @@ def summary_lines(state: dict) -> list:
 
 def write(directory: Path, state: dict) -> Path:
     path = directory / "derive-state.md"
-    c.write_container(path, f"derive-state: {state['slug']}", summary_lines(state), state)
+    c.write_container(path, f"derive-state: {state['target_name']}", summary_lines(state), state)
     return path
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("slug")
+    parser.add_argument("target")
     parser.add_argument("--repo", default=".")
     parser.add_argument("--run", default="latest")
     args = parser.parse_args()
     repo = Path(args.repo).resolve()
     try:
-        directory = c.run_dir(repo, args.slug, args.run)
+        directory = c.run_dir(repo, args.target, args.run)
         run = c.load_run(directory)
     except (c.CheckError, OSError, json.JSONDecodeError) as exc:
         print(f"CANNOT_RUN: {exc}", file=sys.stderr)
         return 2
-    state = derive(repo, args.slug, run)
+    state = derive(repo, args.target, run)
     path = write(directory, state)
     print(json.dumps({"next_action": state["next_action"], "reasons": state["reasons"],
                       "derive_state": g.rel(repo, path)}, indent=2))

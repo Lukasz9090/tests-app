@@ -32,7 +32,7 @@ except ImportError as exc:  # pragma: no cover
 def build(repo: FixtureRepo) -> str:
     directory = c.runs_root(repo.root, "OrderService") / "r1"
     directory.mkdir(parents=True, exist_ok=True)
-    c.save_run(directory, {"run_id": "r1", "slug": "OrderService"})
+    c.save_run(directory, {"run_id": "r1", "target_name": "OrderService"})
     proc = subprocess.run([sys.executable, str(TC / "scripts" / "tc_build_context.py"), "OrderService",
                            "--repo", str(repo.root), "--run", "r1"], capture_output=True, text=True)
     if proc.returncode != 0:
@@ -125,7 +125,7 @@ def test_spec_is_in_the_pack_of_a_spec_driven_run():
         repo.write("docs/order-spec.md", "# Orders\n\n## R1 Amount\nAn amount must be positive.\n")
         directory = c.runs_root(repo.root, "OrderService") / "r1"
         directory.mkdir(parents=True, exist_ok=True)
-        c.save_run(directory, {"run_id": "r1", "slug": "OrderService", "mode": "spec-driven",
+        c.save_run(directory, {"run_id": "r1", "target_name": "OrderService", "mode": "spec-driven",
                                "spec": "docs/order-spec.md"})
         subprocess.run([sys.executable, str(TC / "scripts" / "tc_build_context.py"), "OrderService",
                         "--repo", str(repo.root), "--run", "r1"], capture_output=True, text=True, check=True)
@@ -159,7 +159,7 @@ def test_multi_module_repository():
         expect("project profile read at the repo root", c.freshness_days(repo.root), 2.0)
         directory = c.runs_root(repo.root, "PaymentService") / "r1"
         directory.mkdir(parents=True, exist_ok=True)
-        c.save_run(directory, {"run_id": "r1", "slug": "PaymentService"})
+        c.save_run(directory, {"run_id": "r1", "target_name": "PaymentService"})
         subprocess.run([sys.executable, str(TC / "scripts" / "tc_build_context.py"), "PaymentService",
                         "--repo", str(repo.root), "--run", "r1"], capture_output=True, text=True, check=True)
         pack = (directory / "context-pack.md").read_text(encoding="utf-8")

@@ -83,7 +83,7 @@ def main() -> int:
     run_id = "smoke-" + __import__("datetime").datetime.now().strftime("%Y%m%d-%H%M%S")
     directory = root / run_id
     directory.mkdir(parents=True)
-    c.save_run(directory, {"schema_version": 1, "slug": args.target, "run_id": run_id,
+    c.save_run(directory, {"schema_version": 1, "target_name": args.target, "run_id": run_id,
                            "mode": "spec-driven", "interactive": False, "spec": None,
                            "max_rounds": 1, "commit": False,
                            "started": "smoke", "resealed": False})

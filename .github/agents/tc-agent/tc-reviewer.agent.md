@@ -29,7 +29,7 @@ null), `review_path` (the file you write), `label` (e.g. `v1-r2`), `run_digest`
 and `<run_dir>/context-pack.md`.
 
 `$S` = `.github/agents/tc-agent/scripts`; every check takes
-`<slug> --repo . --run <run_id> --label <label>`.
+`<target> --repo . --run <run_id> --label <label>`.
 
 ## Steps — stop at the first step that decides
 

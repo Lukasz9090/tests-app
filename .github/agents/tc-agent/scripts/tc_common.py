@@ -57,13 +57,13 @@ TEST_ANNOTATION = re.compile(r"@(?:[\w.]*\.)?(?:Test|ParameterizedTest|RepeatedT
 # --------------------------------------------------------------- run dirs ---
 
 
-def runs_root(repo: Path, slug: str) -> Path:
-    return repo / ".test-agent" / "runs" / slug
+def runs_root(repo: Path, target_name: str) -> Path:
+    return repo / ".test-agent" / "runs" / target_name
 
 
-def run_dir(repo: Path, slug: str, run: str) -> Path:
+def run_dir(repo: Path, target_name: str, run: str) -> Path:
     """The directory of one run. `latest` resolves to the newest existing run."""
-    root = runs_root(repo, slug)
+    root = runs_root(repo, target_name)
     if run == "latest":
         runs = sorted(p for p in root.glob("*") if (p / "run.json").is_file()) if root.is_dir() else []
         if not runs:
@@ -94,11 +94,11 @@ def checks_dir(directory: Path) -> Path:
 
 
 class Target:
-    """What a slug names: class, optional method, source file, FQCN, module."""
+    """What a target name points to: class, optional method, source file, FQCN, module."""
 
-    def __init__(self, repo: Path, slug: str, cls: str, method: str | None,
+    def __init__(self, repo: Path, name: str, cls: str, method: str | None,
                  file: Path, fqcn: str, module: str | None):
-        self.repo, self.slug, self.cls, self.method = repo, slug, cls, method
+        self.repo, self.name, self.cls, self.method = repo, name, cls, method
         self.file, self.fqcn, self.module = file, fqcn, module
 
     @property
@@ -110,7 +110,7 @@ class Target:
         return f"{self.fqcn}.{self.method}" if self.method else self.fqcn
 
     def as_dict(self) -> dict:
-        out = {"slug": self.slug, "class": self.cls, "fqcn": self.fqcn,
+        out = {"name": self.name, "class": self.cls, "fqcn": self.fqcn,
                "file": self.rel_file, "module": self.module}
         if self.method:
             out["method"] = self.method
@@ -118,7 +118,7 @@ class Target:
 
 
 class TargetError(CheckError):
-    """A slug that names no class, or more than one. `code` is machine-readable."""
+    """A target name that matches no class, or more than one. `code` is machine-readable."""
 
     def __init__(self, code: str, message: str):
         super().__init__(f"{code}: {message}")
@@ -202,8 +202,8 @@ def java_files(roots, use_git: bool = True) -> list:
     return out
 
 
-def resolve_target(repo: Path, slug: str) -> Target:
-    """Slug (`Class`, `Class.method` or a .java path) -> Target; TARGET_NOT_FOUND / TARGET_AMBIGUOUS
+def resolve_target(repo: Path, name: str) -> Target:
+    """Target name (`Class`, `Class.method` or a .java path) -> Target; TARGET_NOT_FOUND / TARGET_AMBIGUOUS
     otherwise.
     """
     repo = Path(repo).resolve()
@@ -211,11 +211,11 @@ def resolve_target(repo: Path, slug: str) -> Target:
         raise TargetError("UNSUPPORTED_REPOSITORY", "no pom.xml found - this pipeline is Maven-only")
     src_roots, _ = find_roots(repo)
     method = None
-    if slug.endswith(".java") and (repo / slug).is_file():
-        file = (repo / slug).resolve()
+    if name.endswith(".java") and (repo / name).is_file():
+        file = (repo / name).resolve()
         cls = file.stem
     else:
-        parts = slug.split(".")
+        parts = name.split(".")
         cls = parts[0]
         method = parts[1] if len(parts) > 1 else None
         hits = [f for f in java_files(src_roots) if f.stem == cls]
@@ -225,7 +225,7 @@ def resolve_target(repo: Path, slug: str) -> Target:
             listing = ", ".join(h.relative_to(repo).as_posix() for h in hits)
             raise TargetError("TARGET_AMBIGUOUS", f"{cls}.java exists in several places: {listing}")
         file = hits[0].resolve()
-    return Target(repo, slug, cls, method, file, fqcn_of_file(file), module_for_target(repo, file))
+    return Target(repo, name, cls, method, file, fqcn_of_file(file), module_for_target(repo, file))
 
 
 def mentions(text: str, *names) -> bool:
@@ -1006,7 +1006,7 @@ def fqcn_of_file(path: Path) -> str:
 
 
 def add_common_args(parser) -> None:
-    parser.add_argument("slug", help="target slug, e.g. OrderService or OrderService.createOrder")
+    parser.add_argument("target", help="class or Class.method, e.g. OrderService or OrderService.createOrder")
     parser.add_argument("--repo", default=".", help="repository root (default: .)")
     parser.add_argument("--run", default="latest", help="run id, or `latest` (default)")
     parser.add_argument("--module", default=None, help="override the maven module owning the target")
@@ -1017,8 +1017,8 @@ def add_common_args(parser) -> None:
 def open_run(args) -> tuple[Path, Path, "Target"]:
     """(repo, run directory, target) for a check script's arguments."""
     repo = Path(args.repo).resolve()
-    directory = run_dir(repo, args.slug, args.run)
-    target = resolve_target(repo, args.slug)
+    directory = run_dir(repo, args.target, args.run)
+    target = resolve_target(repo, args.target)
     if args.module:
         if not is_module(repo, args.module):
             raise CheckError(f"--module {args.module}: no {args.module}/pom.xml under {repo}")

@@ -3,7 +3,7 @@
 with the uncovered lines and the per-method line counters.
 
 Usage:
-  python tc_coverage.py <TargetSlug> --repo . --run <id|latest> [--label entry]
+  python tc_coverage.py <target> --repo . --run <id|latest> [--label entry]
                      [--module M] [--gate 0.8]
 Output:
   <run>/checks/coverage-<label>.md
