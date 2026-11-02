@@ -620,8 +620,11 @@ def collect(repo: Path, directory: Path, state: dict) -> dict:
         pv = _safe(plan_path(directory, n))
         if "__error__" not in pv:
             notes += (pv.get("context") or {}).get("notes") or []
-            notes += [f"CONFIRM: {d.get('placeholder_method')} — {d['question']}"
-                      for d in pv.get("deferred") or [] if d.get("question")]
+            asked = {}
+            for d in pv.get("deferred") or []:
+                if d.get("question"):
+                    asked.setdefault(d["question"].strip(), []).append(d.get("placeholder_method") or "?")
+            notes += [f"CONFIRM: {q} — blocks: {', '.join(ms)}" for q, ms in asked.items()]
     return {
         "run": run,
         "derive": derive,

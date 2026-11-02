@@ -357,3 +357,9 @@ Rosnąć mogą tylko dev-testy (`tools/`) i dziennik decyzji (`docs/`).
 - 2026-10-18 (decyzja użytkownika): plik projektu `test-data.md` → `test-data-examples.md` (nazwa mówi, co zawiera).
 - 2026-10-18 (decyzja użytkownika): README pakietu kończy się sekcją „Files” — opis każdego pliku dla człowieka
   (żaden agent nie czyta README); budżet README rośnie świadomie. `architecture.svg` po angielsku.
+- 2026-11-02 (przebieg użytkownika: characterization bez interactive, 10 z 16 scenariuszy jako zaślepki, bo brak
+  przykładu poprawnego numeru rachunku odbiorcy — kaskada przez strażniki walidatora): §A4 źródło 4 obejmuje kod
+  walidatora/klasyfikatora z repo (wartość zbudowana pod ten kod = `implementation`); suma kontrolna liczona kodem
+  walidatora z repo, nigdy zgadywana; wartość oceniana przez mockowany walidator jest relacyjna; B5 mockuje
+  wstrzykiwane walidatory i klasyfikatory, od których zależy strażnik; planer czyta je najpierw w escape hatch;
+  wspólne pytanie dla scenariuszy z tą samą brakującą wartością, raport: `CONFIRM: <pytanie> — blocks: <metody>`.

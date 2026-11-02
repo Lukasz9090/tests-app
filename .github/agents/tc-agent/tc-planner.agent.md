@@ -70,8 +70,9 @@ Do not explore with ad-hoc grep or find. Run
 and read `<run_dir>/context-pack.md` (`contracts.md` §5). On `TARGET_AMBIGUOUS`
 stop with `NEEDS_CLARIFICATION` and a `reason` naming the candidates.
 
-Escape hatch: when the pack clearly lacks something, read AT MOST 5 extra files
-and list each under `context.notes` with the reason. When 5 is not enough, stop
+Escape hatch: when the pack clearly lacks something — first of all the validator or
+classifier a guard of the target calls when scenarios must pass that guard (§A4
+source 4) — read AT MOST 5 extra files and list each under `context.notes` with the reason. When 5 is not enough, stop
 with `BLOCKED`.
 
 ### Phase 3 — evidence
@@ -113,7 +114,7 @@ Write the draft at `dispatch.plan_path`, then run
 
 `strong` and `medium` stay in `scenarios`; `weak` moves to `deferred` with a
 `reason`, a `placeholder_method` (same naming rule) and, where it helps, a
-`question`. Never override the script — find an INDEPENDENT source instead. A
+`question` — scenarios blocked by the same missing value share one question, word for word. Never override the script — find an INDEPENDENT source instead. A
 `strong` or `medium` scenario goes to `deferred` only for a reason §A2 accepts
 (no seam, an identity value whose meaning nothing backs), never for "no second source".
 

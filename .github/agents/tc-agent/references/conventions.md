@@ -96,7 +96,9 @@ in this order and take the first that answers:
 3. DATA EXAMPLES and the existing tests in the pack — a value a test anywhere in
    the repository already uses shows the shape; cite that line (`existing_test`);
 4. builders, fixtures, seeders, enums and validation constraints (`@Pattern`,
-   `@Size`) in the pack;
+   `@Size`) in the pack, and the code of a validator or classifier in the repository
+   that the value must pass: a value built to pass that code is evidenced by it
+   (`implementation`);
 5. a human — only in an `interactive` run (`modes/interactive.md`);
 6. nothing found: the scenario is deferred with a question.
 
@@ -105,13 +107,14 @@ A value from these sources comes with a SHAPE (`customer id:
 kind and every distinct entity gets its OWN value of that shape, never one id
 for two parties; the same value only when it means the same entity.
 Identifiers with a checksum (PESEL, NIP, REGON, IBAN, account numbers) are
-copied from an example, never derived from the shape.
+copied from an example or computed with the checksum code of a validator in the
+repository (source 4) — never guessed from the shape.
 
 Two things are NOT business data and never make a scenario a placeholder:
 - **Relational values** — a value whose only role is to equal (or not equal)
   another value the test also controls: a key compared with the key of an entry
-  a mock returns, an id passed in and echoed back; the comparison line is the
-  evidence. When sources 1–4 show the shape of that field, use the shape — a
+  a mock returns, an id passed in and echoed back, a value a mocked validator or
+  classifier accepts or rejects (B5); the comparison line is the evidence. When sources 1–4 show the shape of that field, use the shape — a
   relational customer id still looks like a customer id. Only a field with no
   known shape gets a neutral literal named so nobody reads it as real data
   (`"KEY-1"` / `"OTHER-KEY"`).
@@ -176,7 +179,8 @@ it apart (status, code, message) — never a bare "throws". Not `assertNotNull`
 alone, not `verify` alone.
 
 **B5. Collaborators:** mock the classes that stand for a database or network
-boundary (repositories, gateways, clients) with Mockito
+boundary (repositories, gateways, clients), and injected validators or classifiers
+whose answer a guard of the code under test depends on, with Mockito
 (`@ExtendWith(MockitoExtension.class)`); build real domain objects, DTOs and
 value types.
 

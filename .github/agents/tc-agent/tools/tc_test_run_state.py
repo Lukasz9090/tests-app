@@ -352,13 +352,15 @@ def test_the_report_shows_what_the_planner_told_the_human():
     with FixtureRepo() as repo:
         run = Run(repo)
         run.derive_raw("PLAN")
-        run.plan(1, "READY_PARTIAL", deferred=[{"id": "TC02", "placeholder_method": "shouldB",
-                                                 "question": "what does a broker account number look like?"}])
+        q = "what does a broker account number look like?"
+        run.plan(1, "READY_PARTIAL", deferred=[{"id": "TC02", "placeholder_method": "shouldB", "question": q},
+                                               {"id": "TC03", "placeholder_method": "shouldC", "question": q}])
         run.report(1)
         run.review(1, 1, "ACCEPT_PARTIAL", commit_summary="Added one test and one placeholder for OrderService.")
         code, prose = run.finish()
-        expect_true("a deferred scenario's question reaches the human",
-                    "CONFIRM: shouldB — what does a broker account number look like?" in prose)
+        expect_true("a deferred scenario's question reaches the human, once for every scenario it blocks",
+                    "CONFIRM: what does a broker account number look like? — blocks: shouldB, shouldC" in prose
+                    and prose.count("broker account number") == 1)
 
 
 def test_plan_schema_rules():

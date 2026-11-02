@@ -91,9 +91,11 @@ pierwsza generacja nie dostaje review.
 LLM nie jest źródłem prawdy o danych (`conventions.md` §A4). Kolejność źródeł: TEST DATA (pliki
 wskazane przez człowieka, w tym `test-data-examples.md` projektu) → odpowiedzi z tego przebiegu → DATA EXAMPLES
 (linie z całego drzewa testów i zasobów testowych, które ustawiają pola używane przez target) i testy w
-packu → buildery, fixture'y, seedery, ograniczenia walidacji → człowiek (interactive) → odroczenie.
+packu → buildery, fixture'y, seedery, ograniczenia walidacji i kod walidatora z repo → człowiek (interactive) → odroczenie.
 Kształt wartości dotyczy też wartości relacyjnych; neutralny literał (`"KEY-1"`) tylko dla pola bez
-znanego kształtu; identyfikatory z sumą kontrolną tylko kopiowane.
+znanego kształtu; identyfikatory z sumą kontrolną kopiowane albo liczone kodem walidatora z repo, nigdy zgadywane.
+Wstrzykiwany walidator lub klasyfikator, od którego zależy strażnik, jest mockowany — wartość staje się relacyjna.
+Scenariusze zablokowane tą samą brakującą wartością mają jedno pytanie; raport podaje je raz z listą zaślepek.
 
 ## 8. Role
 
