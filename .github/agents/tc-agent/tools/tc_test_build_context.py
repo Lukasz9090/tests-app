@@ -194,6 +194,13 @@ def test_project_test_data_is_included_without_listing_it():
         expect_true("labelled as the project's file", "(project test-data-examples.md)" in pack)
 
 
+def test_unread_project_files_are_named():
+    with FixtureRepo() as repo:
+        repo.write(".github/agents/tc-agent-project/test-data.md", "old name\n")
+        repo.write(".github/agents/tc-agent-project/test-data-examples.md", "account: 26 digits\n")
+        expect("only the old name is reported", c.unread_project_files(repo.root), ["test-data.md"])
+
+
 def test_project_directory_resolution():
     with FixtureRepo() as repo:
         expect("no project directory", (c.project_file(repo.root, c.PROFILE_FILE), c.profile(repo.root)), (None, {}))

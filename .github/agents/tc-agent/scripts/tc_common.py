@@ -734,8 +734,15 @@ def module_for_target(repo: Path, target_file: Path) -> str | None:
 # The project's configuration, outside the shared package.
 PROJECT_DIR = Path(".github") / "agents" / "tc-agent-project"
 PROFILE_FILE = "profile.md"
+PROJECT_FILES = ("README.md", PROFILE_FILE, "conventions.md", "test-data-examples.md")
 
 _PROFILE_CACHE = {}
+
+
+def unread_project_files(repo: Path) -> list:
+    """Files in the project directory the agent never reads (a misspelled or old name)."""
+    d = Path(repo) / PROJECT_DIR
+    return sorted(f.name for f in d.iterdir() if f.is_file() and f.name not in PROJECT_FILES) if d.is_dir() else []
 
 
 def project_file(repo: Path, name: str) -> Path | None:

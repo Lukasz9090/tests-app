@@ -274,6 +274,9 @@ def cmd_start(args) -> int:
     if problem:
         print(problem, file=sys.stderr)
         return 2
+    for name in c.unread_project_files(repo):
+        print(f"WARNING: {c.PROJECT_DIR.as_posix()}/{name} is never read - the agent reads only "
+              f"{', '.join(c.PROJECT_FILES)}", file=sys.stderr)
     root = c.runs_root(repo, args.target)
     run_id = new_run_id(root)
     directory = root / run_id

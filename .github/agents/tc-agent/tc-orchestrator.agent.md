@@ -33,7 +33,7 @@ run's `run.json` and every role reads them from there:
 
     python $C/tc_orchestrate.py start <target> --repo . --mode <mode> [--interactive] [--spec <path>] [--test-data <path>] [--max-rounds <n>] [--commit]
 
-Remember the printed `run_id`. `start` derives the state and may build the
+Remember the printed `run_id`; show any `WARNING:` line to the user. `start` derives the state and may build the
 project and run tests, coverage and mutations — minutes in a big repo. Let it
 finish; if your terminal tool gives up on it, the command keeps running: never
 re-issue it and never open a second terminal for the same target — run `state`,

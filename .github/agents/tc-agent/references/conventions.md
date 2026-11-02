@@ -103,8 +103,10 @@ in this order and take the first that answers:
 6. nothing found: the scenario is deferred with a question.
 
 A value from these sources comes with a SHAPE (`customer id:
-9 digits, e.g. 123456789`): use the shape, not one literal — every field of that
-kind and every distinct entity gets its OWN value of that shape, never one id
+9 digits, e.g. 123456789`): use the shape, not one literal. An example names a KIND
+of value, not one field: an `accountNumber` example serves `receiverAccountNumber`
+and `senderAccountNumber` alike. Every field of that kind and every distinct entity
+gets its OWN value of that shape, never one id
 for two parties; the same value only when it means the same entity.
 Identifiers with a checksum (PESEL, NIP, REGON, IBAN, account numbers) are
 copied from an example or computed with the checksum code of a validator in the

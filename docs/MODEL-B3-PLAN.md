@@ -367,3 +367,6 @@ Rosnąć mogą tylko dev-testy (`tools/`) i dziennik decyzji (`docs/`).
   klasy bazowe i typ salda): context pack dokłada w całości klasy bazowe zależności poziomu 1 (ich pola są polami
   zależności), sygnatury poziomu 2 obejmują konstruktory; brak typu po wyczerpaniu limitu nie jest już `BLOCKED` —
   to lookup generatora (`contracts.md` §5), planer planuje z tym, co ma.
+- 2026-11-02: plik z danymi miał jeszcze starą nazwę `test-data.md` i był po cichu pomijany (stąd `"KEY-1"` zamiast
+  numeru rachunku z przykładu). `start` ostrzega o każdym pliku katalogu projektu, którego agent nie czyta; §A4: przykład
+  opisuje RODZAJ wartości (`accountNumber` obsługuje `receiverAccountNumber` i `senderAccountNumber`).
