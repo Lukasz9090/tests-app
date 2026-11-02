@@ -423,6 +423,14 @@ def test_runs_are_isolated():
 # ------------------------------------------------------------ reseal/finish ---
 
 
+def test_state_builds_a_missing_context_pack():
+    with FixtureRepo() as repo:
+        run = Run(repo)
+        expect("no pack yet", (run.dir / "context-pack.md").is_file(), False)
+        path = o.ensure_context_pack(repo.root, run.dir)
+        expect_true("state built it", path.endswith("context-pack.md") and (run.dir / "context-pack.md").is_file())
+
+
 def test_reseal_and_finish_done():
     with FixtureRepo() as repo:
         old = repo.sha()

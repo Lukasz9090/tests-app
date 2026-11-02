@@ -110,7 +110,10 @@ gets its OWN value of that shape, never one id
 for two parties; the same value only when it means the same entity.
 Identifiers with a checksum (PESEL, NIP, REGON, IBAN, account numbers) are
 copied from an example or computed with the checksum code of a validator in the
-repository (source 4) — never guessed from the shape.
+repository (source 4) — never guessed from the shape. With fewer examples than
+fields, the examples go to the fields a validator checks; a field that is only
+compared with them (a sender that must differ from the receiver) is relational
+and needs only a different value of the same shape.
 
 Two things are NOT business data and never make a scenario a placeholder:
 - **Relational values** — a value whose only role is to equal (or not equal)

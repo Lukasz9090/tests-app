@@ -370,3 +370,9 @@ Rosnąć mogą tylko dev-testy (`tools/`) i dziennik decyzji (`docs/`).
 - 2026-11-02: plik z danymi miał jeszcze starą nazwę `test-data.md` i był po cichu pomijany (stąd `"KEY-1"` zamiast
   numeru rachunku z przykładu). `start` ostrzega o każdym pliku katalogu projektu, którego agent nie czyta; §A4: przykład
   opisuje RODZAJ wartości (`accountNumber` obsługuje `receiverAccountNumber` i `senderAccountNumber`).
+- 2026-11-02 (przegląd B2 → B3 po słabszych przebiegach użytkownika): generator pisał zaślepki „No context pack
+  was available” — `state` buduje teraz brakujący pack przed PLAN / GENERATE / REVIEW i podaje go w
+  `dispatch.context_pack`; generator przy brakującym typie szuka jego pliku zamiast pisać zaślepkę. §A4: przy jednym
+  przykładzie trafia on do pola sprawdzanego przez walidator, a pole tylko porównywane (nadawca ≠ odbiorca) jest
+  relacyjne. Revert E3b (schematy) sprawdzony i odrzucony: konflikty z późniejszymi zmianami, a role nie czytają
+  opisów schematów — ryzyko większe niż zysk.

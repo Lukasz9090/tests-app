@@ -31,6 +31,7 @@ import fnmatch
 import json
 import os
 import re
+import subprocess
 import sys
 import textwrap
 from pathlib import Path
@@ -512,8 +513,25 @@ def cmd_state(args) -> int:
     except c.CheckError as exc:
         print(str(exc), file=sys.stderr)
         return 2
-    print(json.dumps(compute_state(repo, directory), indent=2, ensure_ascii=False))
+    out = compute_state(repo, directory)
+    if out.get("dispatch") and out.get("next_action") in ("PLAN", "GENERATE", "REVIEW"):
+        out["dispatch"]["context_pack"] = ensure_context_pack(repo, directory)
+    print(json.dumps(out, indent=2, ensure_ascii=False))
     return 0
+
+
+def ensure_context_pack(repo: Path, directory: Path) -> str:
+    """The run's context pack, built here when no role has built it yet."""
+    pack = directory / "context-pack.md"
+    if not pack.is_file():
+        target = c.load_run(directory).get("target_name", "")
+        command = [sys.executable, str(Path(__file__).resolve().parent / "tc_build_context.py"),
+                   target, "--repo", str(repo), "--run", directory.name]
+        try:
+            subprocess.run(command, capture_output=True, text=True, timeout=900)
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+    return rel(pack, repo) if pack.is_file() else "MISSING - run tc_build_context.py before anything else"
 
 
 # ----------------------------------------------------------------- reseal ---

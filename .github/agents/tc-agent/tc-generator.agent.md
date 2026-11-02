@@ -21,11 +21,10 @@ First read every file in `dispatch.references` (`contracts.md` §1) — all of
 ## Input
 
 `dispatch`: `run_dir`, `plan_path`, `report_path` (the file you write),
-`review_path` (set only in a repair round of the same plan) and `references`. Read
-`run.json` (mode and interactive go into every Javadoc), the plan, the review
-when there is one, and `<run_dir>/context-pack.md` — its REPO CONVENTIONS
-override §B, never §A. You cannot build a missing pack: then note "no context
-pack — worked from the plan alone" and read only the files the evidence refs name.
+`review_path` (set only in a repair round of the same plan), `context_pack` and
+`references`. Read `run.json` (mode and interactive go into every Javadoc), the plan,
+the review when there is one, and the context pack — its REPO CONVENTIONS override §B,
+never §A. A type the pack lacks is a lookup (`contracts.md` §5): find its file and read it.
 
 ## What to write
 
