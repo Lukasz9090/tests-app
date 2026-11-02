@@ -227,6 +227,25 @@ def test_only_files_that_use_the_target_are_packed():
         c._GIT_INDEX_CACHE.clear()
 
 
+def test_superclasses_of_a_dependency_are_packed_in_full():
+    with FixtureRepo() as repo:
+        repo.write("src/main/java/com/acme/OrderService.java",
+                   "package com.acme;\npublic class OrderService { int f(LoanModel m) { return 1; } }\n")
+        repo.write("src/main/java/com/acme/LoanModel.java",
+                   "package com.acme;\npublic class LoanModel extends BaseAccount<String> { }\n")
+        repo.write("src/main/java/com/acme/BaseAccount.java",
+                   "package com.acme;\npublic abstract class BaseAccount<T> extends AbstractModel {\n"
+                   "  private Money balance;\n  public void setBalance(Money b) { balance = b; }\n}\n")
+        repo.write("src/main/java/com/acme/AbstractModel.java",
+                   "package com.acme;\npublic abstract class AbstractModel { private String id; }\n")
+        repo.write("src/main/java/com/acme/Money.java",
+                   "package com.acme;\npublic class Money {\n  public Money(String v) { }\n}\n")
+        pack = build(repo)
+        expect_true("the parent is in full", "private Money balance;" in pack)
+        expect_true("and its parent", "private String id;" in pack)
+        expect_true("an inherited field's type is there (signatures)", "public Money(String v)" in pack)
+
+
 def test_generated_sources_and_external_types():
     """An OpenAPI-style client generated into target/ is API the target calls."""
     with FixtureRepo() as repo:

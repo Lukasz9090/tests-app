@@ -26,8 +26,9 @@ MAX_TOTAL_CHARS = 150_000          # hard budget (~37k tokens)
 MAX_FILE_CHARS = 40_000            # per-file cap before truncation
 SPEC_BUDGET = 30_000               # the spec of a spec-driven run, before the sources
 SIG_RE = re.compile(
-    r"^\s*(?:public|protected)\s+[\w<>\[\],\s?]+\s+\w+\s*\([^;{]*\)", re.M)
+    r"^\s*(?:public|protected)\s+(?:[\w<>\[\],\s?]+\s+)?\w+\s*\([^;{]*\)", re.M)   # constructors too
 IMPORT_RE = re.compile(r"^import\s+(?:static\s+)?([\w.]+)\s*;", re.M)
+EXTENDS_RE = re.compile(r"\bclass\s+\w+(?:\s*<[^{]*?>)?\s+extends\s+(\w+)")
 CLASS_DECL = "(class|interface|enum|record)"
 # ... except generated sources, which are real API the target calls.
 GENERATED_DIRS = ("target/generated-sources", "target/generated-test-sources",
@@ -367,6 +368,13 @@ def main():
 
     # --- deps: level 1 full, level 2 signatures ---
     l1 = local_deps(target_text, all_by_name, own_pkg)
+    todo = list(l1)                            # superclasses of a dependency: their fields are its fields
+    while todo:
+        f = all_by_name.get(todo.pop())
+        for parent in EXTENDS_RE.findall(read(f)) if f else []:
+            if parent in all_by_name and parent not in l1 and parent != cname:
+                l1.add(parent)
+                todo.append(parent)
     l2 = set()
     for d in l1:
         f = all_by_name.get(d)

@@ -363,3 +363,7 @@ Rosnąć mogą tylko dev-testy (`tools/`) i dziennik decyzji (`docs/`).
   walidatora z repo, nigdy zgadywana; wartość oceniana przez mockowany walidator jest relacyjna; B5 mockuje
   wstrzykiwane walidatory i klasyfikatory, od których zależy strażnik; planer czyta je najpierw w escape hatch;
   wspólne pytanie dla scenariuszy z tą samą brakującą wartością, raport: `CONFIRM: <pytanie> — blocks: <metody>`.
+- 2026-11-02 (przebieg użytkownika: BLOCKED, bo planer zużył 5 dodatkowych plików na `LoanAccountModel`, jego
+  klasy bazowe i typ salda): context pack dokłada w całości klasy bazowe zależności poziomu 1 (ich pola są polami
+  zależności), sygnatury poziomu 2 obejmują konstruktory; brak typu po wyczerpaniu limitu nie jest już `BLOCKED` —
+  to lookup generatora (`contracts.md` §5), planer planuje z tym, co ma.

@@ -72,8 +72,8 @@ stop with `NEEDS_CLARIFICATION` and a `reason` naming the candidates.
 
 Escape hatch: when the pack clearly lacks something — first of all the validator or
 classifier a guard of the target calls when scenarios must pass that guard (§A4
-source 4) — read AT MOST 5 extra files and list each under `context.notes` with the reason. When 5 is not enough, stop
-with `BLOCKED`.
+source 4) — read AT MOST 5 extra files and list each under `context.notes` with the reason. When 5 is not enough,
+plan with what you have: a type you could not read is the generator's lookup (`contracts.md` §5), never `BLOCKED`.
 
 ### Phase 3 — evidence
 
