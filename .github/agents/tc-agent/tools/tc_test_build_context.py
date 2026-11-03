@@ -32,7 +32,7 @@ except ImportError as exc:  # pragma: no cover
 def build(repo: FixtureRepo) -> str:
     directory = c.runs_root(repo.root, "OrderService") / "r1"
     directory.mkdir(parents=True, exist_ok=True)
-    c.save_run(directory, {"run_id": "r1", "slug": "OrderService"})
+    c.save_run(directory, {"run_id": "r1", "target_name": "OrderService"})
     proc = subprocess.run([sys.executable, str(TC / "scripts" / "tc_build_context.py"), "OrderService",
                            "--repo", str(repo.root), "--run", "r1"], capture_output=True, text=True)
     if proc.returncode != 0:
@@ -64,10 +64,10 @@ def test_none_found():
 
 def test_test_data_files_are_included():
     with FixtureRepo() as repo:
-        repo.write("docs/test-data.md",
+        repo.write("docs/test-data-examples.md",
                    "customer id: 9 digits, e.g. 123456789\ntransfer type: ELIXIR | SORBNET\n")
         repo.write(".github/agents/tc-agent-project/profile.md",
-                   '# p\n\n```json\n{"schema_version": 1, "test_data_paths": ["docs/test-data.md"]}\n```\n')
+                   '# p\n\n```json\n{"schema_version": 1, "test_data_paths": ["docs/test-data-examples.md"]}\n```\n')
         c._PROFILE_CACHE.clear()
         pack = build(repo)
         expect_true("section is there", "## TEST DATA (repo-provided example business values)" in pack)
@@ -111,7 +111,7 @@ def test_spec_is_in_the_pack_of_a_spec_driven_run():
         repo.write("docs/order-spec.md", "# Orders\n\n## R1 Amount\nAn amount must be positive.\n")
         directory = c.runs_root(repo.root, "OrderService") / "r1"
         directory.mkdir(parents=True, exist_ok=True)
-        c.save_run(directory, {"run_id": "r1", "slug": "OrderService", "mode": "spec-driven",
+        c.save_run(directory, {"run_id": "r1", "target_name": "OrderService", "mode": "spec-driven",
                                "spec": "docs/order-spec.md"})
         subprocess.run([sys.executable, str(TC / "scripts" / "tc_build_context.py"), "OrderService",
                         "--repo", str(repo.root), "--run", "r1"], capture_output=True, text=True, check=True)
@@ -145,7 +145,7 @@ def test_multi_module_repository():
         expect("project profile read at the repo root", c.freshness_days(repo.root), 2.0)
         directory = c.runs_root(repo.root, "PaymentService") / "r1"
         directory.mkdir(parents=True, exist_ok=True)
-        c.save_run(directory, {"run_id": "r1", "slug": "PaymentService"})
+        c.save_run(directory, {"run_id": "r1", "target_name": "PaymentService"})
         subprocess.run([sys.executable, str(TC / "scripts" / "tc_build_context.py"), "PaymentService",
                         "--repo", str(repo.root), "--run", "r1"], capture_output=True, text=True, check=True)
         pack = (directory / "context-pack.md").read_text(encoding="utf-8")
@@ -157,8 +157,8 @@ def test_multi_module_repository():
 def test_source_blocks_carry_the_files_line_numbers():
     """A ref copied from the pack must name the same line in the file."""
     with FixtureRepo() as repo:
-        repo.write("docs/test-data.md", "customer id: 9 digits\n" * 30)    # pushes TARGET down the pack
-        repo.write(".github/agents/tc-agent-project/test-data.md", "x\n" * 30)
+        repo.write("docs/test-data-examples.md", "customer id: 9 digits\n" * 30)    # pushes TARGET down the pack
+        repo.write(".github/agents/tc-agent-project/test-data-examples.md", "x\n" * 30)
         c._PROFILE_CACHE.clear()
         pack = build(repo)
         source = (repo.root / repo.target_path).read_text(encoding="utf-8").splitlines()
@@ -173,35 +173,32 @@ def test_source_blocks_carry_the_files_line_numbers():
 
 def test_project_test_data_is_included_without_listing_it():
     with FixtureRepo() as repo:
-        repo.write(".github/agents/tc-agent-project/test-data.md", "account number: PL + 26 digits\n")
+        repo.write(".github/agents/tc-agent-project/test-data-examples.md", "account number: PL + 26 digits\n")
         c._PROFILE_CACHE.clear()
         pack = build(repo)
-        expect_true("project test-data.md is in TEST DATA", "PL + 26 digits" in pack)
-        expect_true("labelled as the project's file", "(project test-data.md)" in pack)
+        expect_true("project test-data-examples.md is in TEST DATA", "PL + 26 digits" in pack)
+        expect_true("labelled as the project's file", "(project test-data-examples.md)" in pack)
 
 
 def test_project_directory_resolution():
     with FixtureRepo() as repo:
-        expect("no project directory", (c.project_dir(repo.root), c.profile(repo.root)), (None, {}))
+        expect("no project directory", (c.project_file(repo.root, c.PROFILE_FILE), c.profile(repo.root)), (None, {}))
         repo.write(".github/agents/tc-agent-project/profile.md",
                    '# p\n\n```json\n{"schema_version": 1, "freshness_days": 3}\n```\n')
         c._PROFILE_CACHE.clear()
-        expect("current location", c.freshness_days(repo.root), 3.0)
-        repo.git("add", ".github")
-        repo.commit("project directory")
-        repo.git("mv", ".github/agents/tc-agent-project", ".github/tc-agent")
+        expect("project directory", c.freshness_days(repo.root), 3.0)
+        for other in (".github/tc-agent/profile.md", ".github/agents/tc-agent/references/tc-project-profile.md"):
+            repo.write(other, '# p\n\n```json\n{"schema_version": 1, "freshness_days": 1}\n```\n')
+            c._PROFILE_CACHE.clear()
+            expect(f"{other} is not read", c.freshness_days(repo.root), 3.0)
         c._PROFILE_CACHE.clear()
-        expect("after git mv to the target location", (c.project_dir(repo.root).as_posix().endswith(".github/tc-agent"),
-               c.freshness_days(repo.root)), (True, 3.0))
-        repo.write(".github/agents/tc-agent-project/profile.md",
-                   '# p\n\n```json\n{"schema_version": 1, "freshness_days": 9}\n```\n')
-        c._PROFILE_CACHE.clear()
-        expect("both present: .github/tc-agent wins", c.freshness_days(repo.root), 3.0)
-        repo.write(".github/agents/tc-agent/references/tc-project-profile.md",
-                   '# p\n\n```json\n{"schema_version": 1, "freshness_days": 1}\n```\n')
-        c._PROFILE_CACHE.clear()
-        expect("the old profile location is not read", c.freshness_days(repo.root), 3.0)
-        c._PROFILE_CACHE.clear()
+
+
+def test_unread_project_files_are_named():
+    with FixtureRepo() as repo:
+        repo.write(".github/agents/tc-agent-project/test-data.md", "old name\n")
+        repo.write(".github/agents/tc-agent-project/test-data-examples.md", "account: 26 digits\n")
+        expect("only the old name is reported", c.unread_project_files(repo.root), ["test-data.md"])
 
 
 def test_only_files_that_use_the_target_are_packed():

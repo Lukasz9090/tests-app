@@ -1,10 +1,10 @@
 """Shared helpers for the pipeline scripts.
 
 Nothing here reads a plan or a generation report. The target, its Maven module
-and the test classes that exercise it are derived from the slug and the file
+and the test classes that exercise it are derived from the target name and the file
 system, so the same checks run before a plan exists (derive-state) and inside a
 run (the Reviewer). Every file a script writes lands in the RUN directory,
-`.test-agent/runs/<slug>/<run-id>/`, never in a shared location.
+`.test-agent/runs/<target>/<run-id>/`, never in a shared location.
 
 Standard library only. Exit-code convention used by every check script:
   0 - check ran, gate satisfied
@@ -69,13 +69,13 @@ TEST_ANNOTATION = re.compile(r"@(?:[\w.]*\.)?(?:Test|ParameterizedTest|RepeatedT
 # --------------------------------------------------------------- run dirs ---
 
 
-def runs_root(repo: Path, slug: str) -> Path:
-    return repo / ".test-agent" / "runs" / slug
+def runs_root(repo: Path, target_name: str) -> Path:
+    return repo / ".test-agent" / "runs" / target_name
 
 
-def run_dir(repo: Path, slug: str, run: str) -> Path:
+def run_dir(repo: Path, target_name: str, run: str) -> Path:
     """The directory of one run. `latest` resolves to the newest existing run."""
-    root = runs_root(repo, slug)
+    root = runs_root(repo, target_name)
     if run == "latest":
         runs = sorted(p for p in root.glob("*") if (p / "run.json").is_file()) if root.is_dir() else []
         if not runs:
@@ -106,11 +106,11 @@ def checks_dir(directory: Path) -> Path:
 
 
 class Target:
-    """What a slug names: class, optional method, source file, FQCN, module."""
+    """What a target name points to: class, optional method, source file, FQCN, module."""
 
-    def __init__(self, repo: Path, slug: str, cls: str, method: str | None,
+    def __init__(self, repo: Path, name: str, cls: str, method: str | None,
                  file: Path, fqcn: str, module: str | None):
-        self.repo, self.slug, self.cls, self.method = repo, slug, cls, method
+        self.repo, self.name, self.cls, self.method = repo, name, cls, method
         self.file, self.fqcn, self.module = file, fqcn, module
 
     @property
@@ -122,7 +122,7 @@ class Target:
         return f"{self.fqcn}.{self.method}" if self.method else self.fqcn
 
     def as_dict(self) -> dict:
-        out = {"slug": self.slug, "class": self.cls, "fqcn": self.fqcn,
+        out = {"name": self.name, "class": self.cls, "fqcn": self.fqcn,
                "file": self.rel_file, "module": self.module}
         if self.method:
             out["method"] = self.method
@@ -130,7 +130,7 @@ class Target:
 
 
 class TargetError(CheckError):
-    """A slug that names no class, or more than one. `code` is machine-readable."""
+    """A target name that matches no class, or more than one. `code` is machine-readable."""
 
     def __init__(self, code: str, message: str):
         super().__init__(f"{code}: {message}")
@@ -225,8 +225,8 @@ def java_files(roots, use_git: bool = True) -> list:
     return out
 
 
-def resolve_target(repo: Path, slug: str) -> Target:
-    """Slug (`Class`, `Class.method` or a path to a .java file) -> Target.
+def resolve_target(repo: Path, name: str) -> Target:
+    """Target name (`Class`, `Class.method` or a path to a .java file) -> Target.
 
     Never guesses: no match is TARGET_NOT_FOUND, several are TARGET_AMBIGUOUS.
     """
@@ -235,11 +235,11 @@ def resolve_target(repo: Path, slug: str) -> Target:
         raise TargetError("UNSUPPORTED_REPOSITORY", "no pom.xml found - this pipeline is Maven-only")
     src_roots, _ = find_roots(repo)
     method = None
-    if slug.endswith(".java") and (repo / slug).is_file():
-        file = (repo / slug).resolve()
+    if name.endswith(".java") and (repo / name).is_file():
+        file = (repo / name).resolve()
         cls = file.stem
     else:
-        parts = slug.split(".")
+        parts = name.split(".")
         cls = parts[0]
         method = parts[1] if len(parts) > 1 else None
         hits = [f for f in java_files(src_roots) if f.stem == cls]
@@ -249,7 +249,7 @@ def resolve_target(repo: Path, slug: str) -> Target:
             listing = ", ".join(h.relative_to(repo).as_posix() for h in hits)
             raise TargetError("TARGET_AMBIGUOUS", f"{cls}.java exists in several places: {listing}")
         file = hits[0].resolve()
-    return Target(repo, slug, cls, method, file, fqcn_of_file(file), module_for_target(repo, file))
+    return Target(repo, name, cls, method, file, fqcn_of_file(file), module_for_target(repo, file))
 
 
 def mentions(text: str, name: str) -> bool:
@@ -931,31 +931,23 @@ def module_for_target(repo: Path, target_file: Path) -> str | None:
 # The project's own configuration lives OUTSIDE the shared agent package, so the
 # package can be the same in every repository. The first existing directory wins:
 # the target layout first, then where it lives while the package is in this repo.
-PROJECT_DIRS = (
-    Path(".github") / "tc-agent",
-    Path(".github") / "agents" / "tc-agent-project",
-)
+PROJECT_DIR = Path(".github") / "agents" / "tc-agent-project"
 PROFILE_FILE = "profile.md"
+PROJECT_FILES = ("README.md", PROFILE_FILE, "conventions.md", "test-data-examples.md")
 
 _PROFILE_CACHE = {}
-_WARNED_TWO_DIRS = set()
 
 
-def project_dir(repo: Path) -> Path | None:
-    """The project's tc-agent directory (profile.md, conventions.md, test-data.md)."""
-    found = [Path(repo) / d for d in PROJECT_DIRS if (Path(repo) / d).is_dir()]
-    if len(found) > 1 and str(repo) not in _WARNED_TWO_DIRS:
-        _WARNED_TWO_DIRS.add(str(repo))
-        print(f"WARNING: both {PROJECT_DIRS[0].as_posix()} and {PROJECT_DIRS[1].as_posix()} exist; "
-              f"using {PROJECT_DIRS[0].as_posix()}", file=sys.stderr)
-    return found[0] if found else None
+def unread_project_files(repo: Path) -> list:
+    """Files in the project directory the agent never reads (a misspelled or old name)."""
+    d = Path(repo) / PROJECT_DIR
+    return sorted(f.name for f in d.iterdir() if f.is_file() and f.name not in PROJECT_FILES) if d.is_dir() else []
 
 
 def project_file(repo: Path, name: str) -> Path | None:
-    """A file of the project directory, or None when it (or the directory) is absent."""
-    directory = project_dir(repo)
-    path = directory / name if directory else None
-    return path if path and path.is_file() else None
+    """A file of the project directory (profile.md, conventions.md, test-data-examples.md), or None."""
+    path = Path(repo) / PROJECT_DIR / name
+    return path if path.is_file() else None
 
 
 def profile(repo: Path) -> dict:
@@ -1258,7 +1250,7 @@ def fqcn_of_file(path: Path) -> str:
 
 
 def add_common_args(parser) -> None:
-    parser.add_argument("slug", help="target slug, e.g. OrderService or OrderService.createOrder")
+    parser.add_argument("target", help="class or Class.method, e.g. OrderService or OrderService.createOrder")
     parser.add_argument("--repo", default=".", help="repository root (default: .)")
     parser.add_argument("--run", default="latest", help="run id, or `latest` (default)")
     parser.add_argument("--module", default=None, help="override the maven module owning the target")
@@ -1269,8 +1261,8 @@ def add_common_args(parser) -> None:
 def open_run(args) -> tuple[Path, Path, "Target"]:
     """(repo, run directory, target) for a check script's arguments."""
     repo = Path(args.repo).resolve()
-    directory = run_dir(repo, args.slug, args.run)
-    target = resolve_target(repo, args.slug)
+    directory = run_dir(repo, args.target, args.run)
+    target = resolve_target(repo, args.target)
     if args.module:
         if not is_module(repo, args.module):
             raise CheckError(f"--module {args.module}: no {args.module}/pom.xml under {repo}")

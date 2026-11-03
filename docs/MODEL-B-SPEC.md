@@ -7,14 +7,14 @@
 
 **Prawda = zacommitowany kod + testy + historia git.** Między przebiegami agent niczego nie pamięta:
 każdy przebieg wyprowadza stan od nowa (`derive-state`). Wewnątrz przebiegu role wymieniają się plikami
-w `.test-agent/runs/<slug>/<run-id>/` (gitignored); żaden skrypt nie czyta katalogu innego przebiegu.
+w `.test-agent/runs/<target>/<run-id>/` (gitignored); żaden skrypt nie czyta katalogu innego przebiegu.
 
 ## 2. Układ
 
 | co | gdzie | czyje |
 |---|---|---|
 | prompty ról, `references/`, schematy, skrypty, dev-testy, `docs/` | `.github/agents/tc-agent/` | wspólne (w przyszłości submodule) |
-| `profile.md`, `conventions.md`, `test-data.md` (wszystkie opcjonalne) | `.github/tc-agent/` (docelowo) albo `.github/agents/tc-agent-project/` (teraz) — pierwszy istniejący | projektu |
+| `profile.md`, `conventions.md`, `test-data-examples.md` (wszystkie opcjonalne) | `.github/agents/tc-agent-project/` | projektu |
 | przebiegi, cache `env.json` | `.test-agent/` | lokalne |
 
 `references/`: `contracts.md`, `conventions.md` (§A integralność, §B domyślny styl), `junit4.md`,
@@ -79,12 +79,12 @@ planu decyduje recenzent; po limicie przebieg kończy się `ESCALATED`, testy zo
 
 Outcome: `DONE`, `DONE_PARTIAL` (placeholdery albo rozbieżności spec), `BLOCKED`, `RED`, `ESCALATED`.
 `--commit`: tylko przy DONE/DONE_PARTIAL, tylko pliki testowe przebiegu, nigdy na branchu z
-`protected_branches` (wtedy nowy `tc-agent/<slug>/<run-id>`), bez push.
+`protected_branches` (wtedy nowy `tc-agent/<target>/<run-id>`), bez push.
 
 ## 7. Dane biznesowe
 
 LLM nie jest źródłem prawdy o danych (`conventions.md` §A4). Kolejność źródeł: TEST DATA (pliki
-wskazane przez człowieka, w tym `test-data.md` projektu) → odpowiedzi z tego przebiegu → DATA EXAMPLES
+wskazane przez człowieka, w tym `test-data-examples.md` projektu) → odpowiedzi z tego przebiegu → DATA EXAMPLES
 (linie z całego drzewa testów i zasobów testowych, które ustawiają pola używane przez target) i testy w
 packu → buildery, fixture'y, seedery, ograniczenia walidacji → człowiek (interactive) → odroczenie.
 Kształt wartości dotyczy też wartości relacyjnych; neutralny literał (`"KEY-1"`) tylko dla pola bez

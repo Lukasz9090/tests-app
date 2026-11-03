@@ -1,18 +1,13 @@
 # tc-agent — project configuration
 
-Everything that belongs to ONE repository lives in its project directory, outside
-the shared agent package:
-
-    .github/tc-agent/                 target location
-    .github/agents/tc-agent-project/  current location (moves with one `git mv`)
-
-The first one that exists is used. Files, all optional:
+Everything that belongs to ONE repository lives in its project directory,
+`.github/agents/tc-agent-project/`, outside the shared agent package. Files, all optional:
 
 | file | what it holds | read by |
 |---|---|---|
 | `profile.md` | one ```json fence: gates, freshness, maven, junit, `max_rounds`, `protected_branches`, extra paths | the scripts |
 | `conventions.md` | this repo's test style (overrides the agent's §B defaults, never §A) | the context pack → REPO CONVENTIONS, first source |
-| `test-data.md` | example business values of this system | the context pack → TEST DATA |
+| `test-data-examples.md` | example business values of this system | the context pack → TEST DATA |
 
 Without a project directory the agent runs on its built-in defaults.
 
@@ -23,7 +18,7 @@ spend. A new plan version does not add rounds. `--max-rounds` overrides it for o
 
 **Protected branches** (`protected_branches`, default `["master"]`): branches
 `finish --commit` never commits to; globs allowed (`release/*`). On such a branch,
-or a detached HEAD, it creates `tc-agent/<slug>/<run-id>` instead. An empty list
+or a detached HEAD, it creates `tc-agent/<target>/<run-id>` instead. An empty list
 still protects `master`.
 
 **Quality gates** are the thresholds `tc_coverage.py` and `tc_mutation.py` must reach

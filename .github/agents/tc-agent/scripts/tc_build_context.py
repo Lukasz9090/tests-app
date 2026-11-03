@@ -14,7 +14,7 @@ repo instructions; whether the host also injects them is not relied on.
 Stdlib only. Usage:
     python tc_build_context.py <ClassName[.method]> --repo . --run <id|latest>
 Output:
-    .test-agent/runs/<slug>/<run-id>/context-pack.md
+    .test-agent/runs/<target>/<run-id>/context-pack.md
 """
 
 import argparse
@@ -226,7 +226,7 @@ def repo_instructions(repo: Path, relevant_paths: list) -> list:
 def test_data_files(repo: Path, run: dict) -> list:
     """(path, source) for every file of example business values.
 
-    Only files somebody put there on purpose: the project's `test-data.md`, the
+    Only files somebody put there on purpose: the project's `test-data-examples.md`, the
     profile's `test_data_paths` and this run's `--test-data`. Nothing is guessed
     from file names - a file the agent found by itself would be data nobody
     vouched for.
@@ -240,9 +240,9 @@ def test_data_files(repo: Path, run: dict) -> list:
         seen.add(key)
         out.append((path, source))
 
-    project_data = c.project_file(repo, "test-data.md")
+    project_data = c.project_file(repo, "test-data-examples.md")
     if project_data:
-        take(project_data, "project test-data.md")
+        take(project_data, "project test-data-examples.md")
     for rel in c.test_data_paths(repo):
         take(repo / rel, "profile.md test_data_paths")
     for rel in run.get("test_data_paths") or []:
@@ -393,7 +393,7 @@ def main():
         sys.exit(f"CANNOT_RUN: {exc}")
     src_roots, test_roots = c.find_roots(repo)
     src_roots = src_roots or [repo]
-    target_file, cname, method, slug = target.file, target.cls, target.method, target.slug
+    target_file, cname, method, target_name = target.file, target.cls, target.method, target.name
     target_text = read(target_file)
 
     # Module directories: the parent of src/main/java, plus the repo root.
@@ -471,7 +471,7 @@ def main():
                  "test class")
     if contract.get("junit_mixed"):
         framework += "; the module's tests use BOTH versions - match the class you extend"
-    out = [f"# Context Pack: {slug}", "",
+    out = [f"# Context Pack: {target_name}", "",
            f"Repo: {repo}", f"TEST FRAMEWORK: {framework} "
            f"(conventions.md A0: write the annotations of THIS version)",
            f"Target file: {rel_target}",

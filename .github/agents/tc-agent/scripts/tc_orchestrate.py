@@ -10,28 +10,28 @@ Two kinds of state, never mixed:
   * BETWEEN runs there is no stored state. `start` derives the truth from the
     code, the tests, git, coverage and mutations (tc_derive_state.py).
   * INSIDE a run the plan -> generate -> review loop is driven by the artifacts
-    of THAT run only, in `.test-agent/runs/<slug>/<run-id>/`. No script ever
+    of THAT run only, in `.test-agent/runs/<target>/<run-id>/`. No script ever
     reads another run's directory; old runs stay on disk for people to read.
 
 Subcommands
 -----------
-  start  <slug> --repo . --mode characterization|spec-driven [--interactive] [--spec P]
+  start  <target> --repo . --mode characterization|spec-driven [--interactive] [--spec P]
                 [--max-rounds 3] [--commit]
       Create the run directory and run.json (the ONLY place mode, interactive,
       spec, max_rounds and commit are given), then run derive-state. Prints run_id.
 
-  state  <slug> --repo . --run <id|latest>
+  state  <target> --repo . --run <id|latest>
       Print the in-run `next_action`: PLAN | GENERATE | REVIEW | RESEAL | FINISH,
       with `dispatch` (who to call, which files) and, on FINISH, the outcome.
 
-  reseal <slug> --repo . --run <id|latest>
+  reseal <target> --repo . --run <id|latest>
       Move the freeze point of stale-but-green characterization tests to the
       current sha. Touches only the `tc-agent-characterizes` line of those methods.
 
-  finish <slug> --repo . --run <id|latest>
+  finish <target> --repo . --run <id|latest>
       Write run-report.md and print it. With `commit: true` in run.json, commit
       the run's test files (only on DONE / DONE_PARTIAL; never on a protected
-      branch - a new `tc-agent/<slug>/<run-id>` branch is created instead).
+      branch - a new `tc-agent/<target>/<run-id>` branch is created instead).
 
 Exit codes: 0 ok; 2 usage / IO error / the run is not in a state to do that.
 """
@@ -279,13 +279,16 @@ def cmd_start(args) -> int:
     if args.spec and not (repo / args.spec).is_file() and not Path(args.spec).is_file():
         print(f"--spec {args.spec}: file not found", file=sys.stderr)
         return 2
-    root = c.runs_root(repo, args.slug)
+    for name in c.unread_project_files(repo):
+        print(f"WARNING: {c.PROJECT_DIR.as_posix()}/{name} is never read - the agent reads only "
+              f"{', '.join(c.PROJECT_FILES)}", file=sys.stderr)
+    root = c.runs_root(repo, args.target)
     run_id = new_run_id(root)
     directory = root / run_id
     directory.mkdir(parents=True)
     run = {
         "schema_version": 1,
-        "slug": args.slug,
+        "target_name": args.target,
         "run_id": run_id,
         "mode": args.mode,
         "interactive": bool(args.interactive),
@@ -299,7 +302,7 @@ def cmd_start(args) -> int:
     c.save_run(directory, run)
 
     def failed_state(detail: str, reason: str, pid: int | None = None) -> dict:
-        return {"schema_version": 1, "slug": args.slug, "mode": args.mode,
+        return {"schema_version": 1, "target_name": args.target, "mode": args.mode,
                 "pid": pid, "started": _now(),
                 "interactive": bool(args.interactive), "target": None, "git": None,
                 "tests": None, "reseal": [], "recharacterize": [], "red": [],
@@ -316,7 +319,7 @@ def cmd_start(args) -> int:
         "terminal (the checks can take minutes) or it was interrupted. Nothing has been "
         "planned or generated yet.", "START_INTERRUPTED", pid=os.getpid()))
     try:
-        state = ds.derive(repo, args.slug, run)
+        state = ds.derive(repo, args.target, run)
     except Exception as exc:                      # noqa: BLE001 - the reason must survive
         # derive-state is the run's first artifact; without it every later
         # command can only say "file not found" and the real cause (a maven
@@ -339,7 +342,7 @@ def cmd_start(args) -> int:
         "run_dir": rel(directory, repo),
         "derive_state": {"next_action": state["next_action"], "reasons": state["reasons"],
                          "detail": state.get("detail")},
-        "next": f"python .github/agents/tc-agent/scripts/tc_orchestrate.py state {args.slug} "
+        "next": f"python .github/agents/tc-agent/scripts/tc_orchestrate.py state {args.target} "
                 f"--repo . --run {run_id}",
     }, indent=2, ensure_ascii=False))
     return 0
@@ -353,7 +356,7 @@ def compute_state(repo: Path, directory: Path) -> dict:
     max_rounds = int(run.get("max_rounds") or c.DEFAULT_MAX_ROUNDS)
     rounds = rounds_spent(directory)
     out = {
-        "slug": run["slug"],
+        "target_name": run["target_name"],
         "run_id": run["run_id"],
         "run_dir": rel(directory, repo),
         "next_action": None,
@@ -365,7 +368,7 @@ def compute_state(repo: Path, directory: Path) -> dict:
 
     def finish(outcome: str, reason: str) -> dict:
         out["next_action"], out["outcome"], out["reason"] = "FINISH", outcome, reason
-        out["dispatch"] = {"command": f"tc_orchestrate.py finish {run['slug']} --repo . "
+        out["dispatch"] = {"command": f"tc_orchestrate.py finish {run['target_name']} --repo . "
                                       f"--run {run['run_id']}"}
         return out
 
@@ -383,7 +386,7 @@ def compute_state(repo: Path, directory: Path) -> dict:
             out["reason"] = (f"start (pid {derive.get('pid')}) is still deriving the state; "
                              f"it began at {derive.get('started')}. Wait for it to finish, "
                              f"then run `state` again - do NOT start another run")
-            out["dispatch"] = {"command": f"tc_orchestrate.py state {run['slug']} --repo . "
+            out["dispatch"] = {"command": f"tc_orchestrate.py state {run['target_name']} --repo . "
                                           f"--run {run['run_id']}"}
             return out
         return finish("ESCALATED",
@@ -409,7 +412,7 @@ def compute_state(repo: Path, directory: Path) -> dict:
     if derive.get("reseal") and not run.get("resealed"):
         out["next_action"] = "RESEAL"
         out["reason"] = f"{len(derive['reseal'])} stale characterization test(s) still pass"
-        out["dispatch"] = {"command": f"tc_orchestrate.py reseal {run['slug']} --repo . "
+        out["dispatch"] = {"command": f"tc_orchestrate.py reseal {run['target_name']} --repo . "
                                       f"--run {run['run_id']}"}
         return out
 
@@ -512,7 +515,7 @@ def compute_state(repo: Path, directory: Path) -> dict:
 def cmd_state(args) -> int:
     repo = Path(args.repo).resolve()
     try:
-        directory = c.run_dir(repo, args.slug, args.run)
+        directory = c.run_dir(repo, args.target, args.run)
     except c.CheckError as exc:
         print(str(exc), file=sys.stderr)
         return 2
@@ -546,7 +549,7 @@ def do_reseal(repo: Path, directory: Path) -> dict:
 def cmd_reseal(args) -> int:
     repo = Path(args.repo).resolve()
     try:
-        directory = c.run_dir(repo, args.slug, args.run)
+        directory = c.run_dir(repo, args.target, args.run)
         result = do_reseal(repo, directory)
     except c.CheckError as exc:
         print(str(exc), file=sys.stderr)
@@ -583,7 +586,7 @@ def collect(repo: Path, directory: Path, state: dict) -> dict:
     # Placeholders now in the code decide DONE vs DONE_PARTIAL.
     placeholders_in_code = []
     try:
-        target = c.resolve_target(repo, run["slug"])
+        target = c.resolve_target(repo, run["target_name"])
         placeholders_in_code = [m.key for m in ds.tier1(repo, target)["placeholders"]]
     except c.CheckError:
         target = None
@@ -628,7 +631,7 @@ def collect(repo: Path, directory: Path, state: dict) -> dict:
         "plan_status": plan.get("status"),
         "review": review if "__error__" not in review else {},
         "review_path": rel(r_path, repo) if r_path else None,
-        "target_class": (derive.get("target") or {}).get("class") or run["slug"].split(".")[0],
+        "target_class": (derive.get("target") or {}).get("class") or run["target_name"].split(".")[0],
         "sha": (derive.get("git") or {}).get("current_sha"),
         "written": written,
         "placeholders_written": placeholders_written,
@@ -712,7 +715,7 @@ def template_summary(info: dict, outcome: str) -> str:
 def commit_message(info: dict, summary: str) -> str:
     """Only what the repository can show: .test-agent/ (run id, report) is not in it."""
     run = info["run"]
-    lines = [f"[TC-AGENT] Add tests for {run['slug']}.", ""]
+    lines = [f"[TC-AGENT] Add tests for {run['target_name']}.", ""]
     lines += textwrap.wrap(summary, 72) or ["(no summary)"]
     lines.append("")
     mode = run["mode"] + (" (interactive)" if run.get("interactive") else "")
@@ -761,7 +764,7 @@ def do_commit(repo: Path, directory: Path, info: dict, outcome: str, message: st
     branch = g.current_branch(repo)
     created = None
     if is_protected(branch, patterns):
-        created = f"tc-agent/{run['slug']}/{run['run_id']}"
+        created = f"tc-agent/{run['target_name']}/{run['run_id']}"
         if g.branch_exists(repo, created):
             return {"status": "skipped", "reason": f"branch {created} already exists"}
         code, output = g.git(repo, "switch", "-c", created)
@@ -793,7 +796,7 @@ def do_commit(repo: Path, directory: Path, info: dict, outcome: str, message: st
 def render_report(info: dict, state: dict, outcome: str, summary: str, commit: dict | None,
                   report_rel: str) -> tuple[str, dict]:
     run = info["run"]
-    lines = [f"# Run report: {run['slug']} ({run['run_id']})", ""]
+    lines = [f"# Run report: {run['target_name']} ({run['run_id']})", ""]
     if info["red"]:
         lines.append("**THE WORKING TREE IS RED - the build is broken until someone acts.**")
         for f in info["red"].get("failures", []):
@@ -885,7 +888,7 @@ def render_report(info: dict, state: dict, outcome: str, summary: str, commit: d
         lines += [f"- {s}" for s in steps]
     data = {
         "schema_version": 1,
-        "slug": run["slug"],
+        "target_name": run["target_name"],
         "run_id": run["run_id"],
         "outcome": outcome,
         "reason": state.get("reason"),
@@ -949,7 +952,7 @@ def do_finish(repo: Path, directory: Path) -> tuple[int, str]:
 def cmd_finish(args) -> int:
     repo = Path(args.repo).resolve()
     try:
-        directory = c.run_dir(repo, args.slug, args.run)
+        directory = c.run_dir(repo, args.target, args.run)
         code, text = do_finish(repo, directory)
     except c.CheckError as exc:
         print(str(exc), file=sys.stderr)
@@ -967,7 +970,7 @@ def main() -> int:
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     s = sub.add_parser("start")
-    s.add_argument("slug")
+    s.add_argument("target")
     s.add_argument("--repo", default=".")
     s.add_argument("--mode", default="characterization")
     s.add_argument("--interactive", action="store_true")
@@ -982,7 +985,7 @@ def main() -> int:
 
     for name in ("state", "reseal", "finish"):
         p = sub.add_parser(name)
-        p.add_argument("slug")
+        p.add_argument("target")
         p.add_argument("--repo", default=".")
         p.add_argument("--run", default="latest")
 

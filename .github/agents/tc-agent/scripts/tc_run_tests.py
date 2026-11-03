@@ -11,7 +11,7 @@ human and AI tests alike, no plan or report needed. That is what lets
 derive-state run it before anything was planned.
 
 Usage:
-  python tc_run_tests.py <TargetSlug> --repo . --run <id|latest> [--label entry]
+  python tc_run_tests.py <target> --repo . --run <id|latest> [--label entry]
                       [--module M] [--repeat 2] [--tests A,B]
 Output:
   <run>/checks/tests-<label>.md, <run>/checks/jacoco-<label>.exec

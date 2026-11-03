@@ -12,7 +12,7 @@ Covered:
     template vs reviewer summary, idempotence,
   * --commit: only DONE/DONE_PARTIAL, only the run's test files, never a
     dirty index, protected branches (default master, profile list with globs,
-    detached HEAD) get a new tc-agent/<slug>/<run-id> branch, commit message
+    detached HEAD) get a new tc-agent/<target>/<run-id> branch, commit message
     shape (title, summary, facts).
 
 Usage:
@@ -40,7 +40,7 @@ except ImportError as exc:  # pragma: no cover
     print(f"CANNOT_RUN: {exc}", file=sys.stderr)
     sys.exit(2)
 
-SLUG = "OrderService"
+TARGET = "OrderService"
 
 
 def container(title: str, payload: dict) -> str:
@@ -53,16 +53,16 @@ class Run:
     def __init__(self, repo: FixtureRepo, run_id: str = "20260101-000000", commit: bool = False,
                  max_rounds: int = 3, mode: str = "characterization"):
         self.repo = repo
-        self.dir = c.runs_root(repo.root, SLUG) / run_id
+        self.dir = c.runs_root(repo.root, TARGET) / run_id
         self.dir.mkdir(parents=True)
-        self.run = {"schema_version": 1, "slug": SLUG, "run_id": run_id, "mode": mode,
+        self.run = {"schema_version": 1, "target_name": TARGET, "run_id": run_id, "mode": mode,
                     "interactive": False, "spec": None,
                     "max_rounds": max_rounds,
                     "commit": commit, "started": "x", "resealed": False}
         c.save_run(self.dir, self.run)
 
     def derive(self, runner=None, **run_overrides):
-        state = ds.derive(self.repo.root, SLUG, {**self.run, **run_overrides},
+        state = ds.derive(self.repo.root, TARGET, {**self.run, **run_overrides},
                           runner=runner or FakeRunner(), freshness_days=7)
         ds.write(self.dir, state)
         return state
@@ -70,7 +70,7 @@ class Run:
     def derive_raw(self, next_action: str, **extra):
         payload = {"next_action": next_action, "reasons": extra.pop("reasons", ["X"]),
                    "reseal": [], "git": {"current_sha": "abc1234", "dirty": False},
-                   "target": {"class": SLUG}, **extra}
+                   "target": {"class": TARGET}, **extra}
         (self.dir / "derive-state.md").write_text(container("derive", payload), encoding="utf-8")
 
     def put(self, name: str, payload: dict):
@@ -78,11 +78,11 @@ class Run:
 
     def plan(self, n: int, status: str = "READY", **extra):
         self.put(f"plan-v{n}.md", {"schema_version": 1, "plan_version": n, "status": status,
-                                    "target": {"class": SLUG}, "mode": "characterization", **extra})
+                                    "target": {"class": TARGET}, "mode": "characterization", **extra})
 
     def report(self, n: int, m: int = 1, results=None, test_files=None, suggestions=None):
         name = f"generation-report-v{n}.md" if m == 1 else f"generation-report-v{n}-r{m}.md"
-        self.put(name, {"schema_version": 1, "plan_version": n, "target": {"class": SLUG},
+        self.put(name, {"schema_version": 1, "plan_version": n, "target": {"class": TARGET},
                         "test_files": test_files or [],
                         "results": results or [{"id": "TC01", "status": "IMPLEMENTED", "test_method": "shouldA"}],
                         "suggestions": suggestions or []})
@@ -349,7 +349,7 @@ def test_runs_are_isolated():
         expect("a new run starts at PLAN v1, blind to the old run",
                (s["next_action"], s["dispatch"]["plan_path"].endswith("20260101-000000/plan-v1.md"),
                 s["dispatch"]["review_path"]), ("PLAN", True, None))
-        expect("latest resolves to the newest run", c.run_dir(repo.root, SLUG, "latest"), new.dir)
+        expect("latest resolves to the newest run", c.run_dir(repo.root, TARGET, "latest"), new.dir)
 
 
 # ------------------------------------------------------------ reseal/finish ---
@@ -424,7 +424,7 @@ def test_interrupted_start_leaves_a_readable_state():
     """
     import argparse
     with FixtureRepo() as repo:
-        args = argparse.Namespace(slug=SLUG, repo=str(repo.root), mode="characterization",
+        args = argparse.Namespace(target=TARGET, repo=str(repo.root), mode="characterization",
                                   interactive=False, spec=None, test_data=None,
                                   max_rounds=None, commit=False)
         original = ds.derive
@@ -435,7 +435,7 @@ def test_interrupted_start_leaves_a_readable_state():
             pass
         finally:
             ds.derive = original
-        root = c.runs_root(repo.root, SLUG)
+        root = c.runs_root(repo.root, TARGET)
         runs = sorted(p for p in root.iterdir())
         expect_true("a derive-state.md is there", (runs[-1] / "derive-state.md").is_file())
         written, _ = load_container(runs[-1] / "derive-state.md")
@@ -701,9 +701,9 @@ def test_commit_refusals():
 def test_start_cli_writes_run_json():
     with FixtureRepo() as repo:
         script = TC / "scripts" / "tc_orchestrate.py"
-        proc = subprocess.run([sys.executable, str(script), "start", SLUG, "--repo", str(repo.root),
+        proc = subprocess.run([sys.executable, str(script), "start", TARGET, "--repo", str(repo.root),
                                "--mode", "spec-driven", "--interactive", "--commit", "--max-rounds", "4",
-                               "--test-data", "docs/test-data.md"],
+                               "--test-data", "docs/test-data-examples.md"],
                               capture_output=True, text=True)
         expect("start exits 0", proc.returncode, 0)
         out = json.loads(proc.stdout)
@@ -712,8 +712,8 @@ def test_start_cli_writes_run_json():
                (run["mode"], run["interactive"], run["commit"], run["max_rounds"]),
                ("spec-driven", True, True, 4))
         expect("derive-state ran (no tests -> PLAN)", out["derive_state"]["next_action"], "PLAN")
-        expect("--test-data is stored for the pack", run["test_data_paths"], ["docs/test-data.md"])
-        bad = subprocess.run([sys.executable, str(script), "start", SLUG, "--repo", str(repo.root),
+        expect("--test-data is stored for the pack", run["test_data_paths"], ["docs/test-data-examples.md"])
+        bad = subprocess.run([sys.executable, str(script), "start", TARGET, "--repo", str(repo.root),
                               "--mode", "tdd"], capture_output=True, text=True)
         expect("tdd is refused", bad.returncode, 2)
 

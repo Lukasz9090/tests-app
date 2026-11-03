@@ -38,9 +38,9 @@ def run(mode="characterization", interactive=False) -> dict:
     return {"run_id": "r1", "mode": mode, "interactive": interactive}
 
 
-def derive(repo, runner=None, slug="OrderService", **kw):
+def derive(repo, runner=None, target="OrderService", **kw):
     fresh = kw.pop("freshness_days", 7)
-    return ds.derive(repo.root, slug, run(**kw), runner=runner or FakeRunner(), freshness_days=fresh)
+    return ds.derive(repo.root, target, run(**kw), runner=runner or FakeRunner(), freshness_days=fresh)
 
 
 def test_a_class_that_is_only_mocked_is_not_a_test():
@@ -62,7 +62,7 @@ def test_a_class_that_is_only_mocked_is_not_a_test():
 
 def test_unknown_target_escalates():
     with FixtureRepo() as repo:
-        state = derive(repo, slug="Nope")
+        state = derive(repo, target="Nope")
         expect("ESCALATE", (state["next_action"], state["reasons"]), ("ESCALATE", ["TARGET_NOT_FOUND"]))
 
 

@@ -28,7 +28,7 @@ From the run directory: `run.json` and `derive-state.md`. Its `reasons` set the 
 
 | reason | what to plan |
 |---|---|
-| `NO_TESTS` | the target (or the method of a `Class.method` slug) from scratch |
+| `NO_TESTS` | the target (or the method of a `Class.method` target) from scratch |
 | `COVERAGE_GAP` | the lines in `coverage.uncovered` |
 | `MUTATION_GAP` | the mutants in `mutation.survivors` |
 | `UNTESTED_METHODS` | every method in `coverage.untested_methods` — no test executes it, even when the class gate passes |
@@ -70,7 +70,7 @@ your mode file.
 
 Do not explore with ad-hoc grep or find. Run
 
-    python .github/agents/tc-agent/scripts/tc_build_context.py <slug> --repo . --run <run_id>
+    python .github/agents/tc-agent/scripts/tc_build_context.py <target> --repo . --run <run_id>
 
 and read `<run_dir>/context-pack.md` (`contracts.md` §5). On `TARGET_AMBIGUOUS`
 stop with `NEEDS_CLARIFICATION` and a `reason` naming the candidates.

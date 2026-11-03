@@ -6,7 +6,7 @@ the classes built by tc_run_tests.py and drives the tests itself. The tests are
 the same discovered set tc_run_tests.py ran (human and AI alike).
 
 Usage:
-  python tc_mutation.py <TargetSlug> --repo . --run <id|latest> [--label entry]
+  python tc_mutation.py <target> --repo . --run <id|latest> [--label entry]
                      [--module M] [--gate 0.7] [--tests A,B]
 Output:
   <run>/checks/mutation-<label>.md

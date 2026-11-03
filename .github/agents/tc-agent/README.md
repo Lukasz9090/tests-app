@@ -25,7 +25,7 @@ In Copilot Chat choose **tc-orchestrator** and say what you want, for example:
 
     Generate tests for SimpleCalculatorService, mode characterization, commit
     Generate tests for OrderService.create, mode spec-driven, spec docs/order-spec.md, interactive
-    Generate tests for TransferService, data examples in docs/test-data.md
+    Generate tests for TransferService, data examples in docs/test-data-examples.md
 
 The orchestrator turns this into `tc_orchestrate.py start` with these options:
 
@@ -36,7 +36,7 @@ The orchestrator turns this into `tc_orchestrate.py start` with these options:
 | `--mode spec-driven` | Tests follow the specification (`--spec`), only its requirements. Runs even when the gates are met (`SPEC_REVIEW`). A test that fails because the code does not do what the spec says is kept disabled (`AI spec-mismatch`) and listed at the top of the report. |
 | `--spec <path>` | The specification file for spec-driven mode. |
 | `--interactive` | The planner may ask questions (what to freeze, example data). Also turns off the freshness guard. |
-| `--test-data <path>` | A file of example business values, used in any mode (repeatable). Say it in the prompt: "examples are in docs/test-data.md". Without it, only `--interactive` makes the planner ask. |
+| `--test-data <path>` | A file of example business values, used in any mode (repeatable). Say it in the prompt: "examples are in docs/test-data-examples.md". Without it, only `--interactive` makes the planner ask. |
 | `--max-rounds <n>` (3) | Max generate + review rounds in the whole run; a new plan version uses up a round too. Default from the profile's `max_rounds`. |
 | `--commit` | Commit the new test files at the end — see **Commit**. |
 
@@ -56,9 +56,8 @@ Outcomes: `DONE`, `DONE_PARTIAL` (placeholders left), `BLOCKED`, `RED`, `ESCALAT
 
 ## Configuration
 
-Per-repository settings live in the **project directory** — `.github/tc-agent/`
-(target) or `.github/agents/tc-agent-project/` (current), first one found — never
-inside this package. All files are optional; all keys: `docs/configuration.md`.
+Per-repository settings live in the **project directory** `.github/agents/tc-agent-project/`,
+never inside this package. All files are optional; all keys: `docs/configuration.md`.
 
 - **`profile.md`** (json block): gates (`branch_coverage_target_scope` 0.80,
   `mutation_score_target_scope` 0.70), `max_rounds` (3), `freshness_days` (7),
@@ -66,7 +65,7 @@ inside this package. All files are optional; all keys: `docs/configuration.md`.
   `junit`, `tooling`, and the maven keys (`maven_timeout_seconds`, `maven_also_make`,
   `maven_skip_main_compile`, `maven_goals_only`, `maven_args`, `maven_snapshot_updates`).
 - **`conventions.md`** — this repo's test style; read first among the style rules.
-- **`test-data.md`** — example business values; always in the context pack.
+- **`test-data-examples.md`** — example business values; always in the context pack.
 - **Other style rules** — `.github/copilot-instructions.md`, `.github/instructions/*.instructions.md`
   (by `applyTo`) and `AGENTS.md`. Repo rules override the default style in
   `references/conventions.md` §B, never §A.

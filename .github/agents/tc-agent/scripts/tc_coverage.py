@@ -4,10 +4,10 @@
 Invokes the report goal directly, so nothing is compiled and no test is re-run.
 Emits the concrete uncovered lines/branches, which is what the Reviewer's
 attribution rule and the Planner's gap list consume - the percentage alone is
-not actionable. The scope is the class, or the method when the slug names one.
+not actionable. The scope is the class, or the method when the target names one.
 
 Usage:
-  python tc_coverage.py <TargetSlug> --repo . --run <id|latest> [--label entry]
+  python tc_coverage.py <target> --repo . --run <id|latest> [--label entry]
                      [--module M] [--gate 0.8]
 Output:
   <run>/checks/coverage-<label>.md

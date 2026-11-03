@@ -2,7 +2,7 @@
 """Plumbing tests for the maven-driven check scripts — DEV TOOL, not runtime.
 
 tc_run_tests.py, tc_coverage.py and tc_mutation.py no longer read a plan: they
-resolve the target from the slug, discover the test classes that exercise it
+resolve the target from its name, discover the test classes that exercise it
 and write into the run directory. This drives them for real — through
 `tc_orchestrate.py start`, which runs derive-state, which runs the scripts —
 against a fixture git repository, with a fake `mvn` (tools/fake_mvn/mvn) that
