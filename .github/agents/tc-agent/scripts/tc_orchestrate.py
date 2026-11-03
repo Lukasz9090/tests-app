@@ -55,6 +55,8 @@ import tc_git as g  # noqa: E402
 import tc_javadoc as j  # noqa: E402
 from tc_md_payload import load_payload  # noqa: E402
 
+PROFILE_SCHEMA = Path(__file__).resolve().parent.parent / "schemas" / "tc-project-profile.schema.json"
+
 MODES = ("characterization", "spec-driven")
 PLAN_STOP = {"BLOCKED": "BLOCKED", "NEEDS_CLARIFICATION": "ESCALATED",
              "UNSUPPORTED_REPOSITORY": "ESCALATED"}
@@ -268,6 +270,29 @@ def new_run_id(root: Path) -> str:
     return run_id
 
 
+def start_refusal(repo: Path, args) -> str | None:
+    """Why `start` creates no run: a missing spec or file, or a profile.md the schema rejects."""
+    if args.mode == "spec-driven" and not args.spec:
+        return "SPEC_REQUIRED: spec-driven mode needs --spec <file> - ask the user for the specification"
+    named = [("--spec", args.spec)] + [("--test-data", p) for p in args.test_data or []] \
+        + [("profile.md test_data_paths", p) for p in c.test_data_paths(repo)]
+    for flag, path in named:
+        if path and not (repo / path).is_file():
+            return f"FILE_NOT_FOUND: {flag} {path}"
+    profile = c.project_file(repo, c.PROFILE_FILE)
+    if profile:
+        import tc_validate_plan as vp
+        try:
+            errors = vp.validate(load_payload(profile)[0], json.loads(PROFILE_SCHEMA.read_text(encoding="utf-8")))
+        except RuntimeError as exc:
+            return f"CHECK_UNAVAILABLE: {exc}"
+        except ValueError as exc:
+            errors = [str(exc)]
+        if errors:
+            return f"INVALID_PROFILE: {rel(profile, repo)}: " + "; ".join(errors)
+    return None
+
+
 def cmd_start(args) -> int:
     repo = Path(args.repo).resolve()
     if args.mode not in MODES:
@@ -276,8 +301,9 @@ def cmd_start(args) -> int:
     if args.max_rounds is not None and args.max_rounds < 1:
         print("--max-rounds must be at least 1", file=sys.stderr)
         return 2
-    if args.spec and not (repo / args.spec).is_file() and not Path(args.spec).is_file():
-        print(f"--spec {args.spec}: file not found", file=sys.stderr)
+    problem = start_refusal(repo, args)
+    if problem:
+        print(problem, file=sys.stderr)
         return 2
     for name in c.unread_project_files(repo):
         print(f"WARNING: {c.PROJECT_DIR.as_posix()}/{name} is never read - the agent reads only "
@@ -750,7 +776,8 @@ def do_commit(repo: Path, directory: Path, info: dict, outcome: str, message: st
     for f in info["test_files"]:
         p = Path(f)
         # A changed src/main never gets here: compute_state ends such a run ESCALATED.
-        if p.is_absolute() or ".." in p.parts or ".test-agent" in p.parts or not (repo / p).exists():
+        if p.is_absolute() or ".." in p.parts or not g.is_test_path(p.as_posix()) \
+                or ".test-agent" in p.parts or not (repo / p).exists():
             continue
         if g.changed(repo, repo / p):
             files.append(p.as_posix())

@@ -35,6 +35,7 @@ try:
     import tc_common as c  # noqa: E402
     from tc_md_payload import load_payload as load_container  # noqa: E402
     import tc_derive_state as ds  # noqa: E402
+    import tc_git as g  # noqa: E402
     import tc_orchestrate as o  # noqa: E402
 except ImportError as exc:  # pragma: no cover
     print(f"CANNOT_RUN: {exc}", file=sys.stderr)
@@ -700,10 +701,12 @@ def test_commit_refusals():
 
 def test_start_cli_writes_run_json():
     with FixtureRepo() as repo:
+        repo.write("docs/spec.md", "# spec")
+        repo.write("docs/test-data-examples.md", "customer id: 9 digits")
         script = TC / "scripts" / "tc_orchestrate.py"
         proc = subprocess.run([sys.executable, str(script), "start", TARGET, "--repo", str(repo.root),
-                               "--mode", "spec-driven", "--interactive", "--commit", "--max-rounds", "4",
-                               "--test-data", "docs/test-data-examples.md"],
+                               "--mode", "spec-driven", "--spec", "docs/spec.md", "--interactive", "--commit",
+                               "--max-rounds", "4", "--test-data", "docs/test-data-examples.md"],
                               capture_output=True, text=True)
         expect("start exits 0", proc.returncode, 0)
         out = json.loads(proc.stdout)
@@ -716,6 +719,37 @@ def test_start_cli_writes_run_json():
         bad = subprocess.run([sys.executable, str(script), "start", TARGET, "--repo", str(repo.root),
                               "--mode", "tdd"], capture_output=True, text=True)
         expect("tdd is refused", bad.returncode, 2)
+
+
+
+def test_only_test_paths_are_committed():
+    expect("test paths", [g.is_test_path(n) for n in ("src/test/java/A.java", "mod/src/test/java/B.java",
+                                                      "src/main/java/A.java", "pom.xml")],
+           [True, True, False, False])
+
+
+def test_start_refuses_what_it_cannot_run():
+    script = TC / "scripts" / "tc_orchestrate.py"
+
+    def start(repo, *extra):
+        proc = subprocess.run([sys.executable, str(script), "start", TARGET, "--repo", str(repo.root), *extra],
+                              capture_output=True, text=True)
+        runs = c.runs_root(repo.root, TARGET)
+        return proc.returncode, proc.stderr, runs.is_dir() and any(runs.iterdir())
+
+    with FixtureRepo() as repo:
+        code, err, made = start(repo, "--mode", "spec-driven")
+        expect("spec-driven without a spec", (code, err.startswith("SPEC_REQUIRED"), made), (2, True, False))
+        code, err, _ = start(repo, "--mode", "spec-driven", "--spec", "docs/nope.md")
+        expect("missing spec file", (code, err.startswith("FILE_NOT_FOUND: --spec")), (2, True))
+        code, err, _ = start(repo, "--test-data", "docs/nope.md")
+        expect("missing --test-data file", (code, err.startswith("FILE_NOT_FOUND: --test-data")), (2, True))
+        repo.write(".github/agents/tc-agent-project/profile.md",
+                   '# p\n\n```json\n{"schema_version": 1, "max_round": 2}\n```\n')
+        c._PROFILE_CACHE.clear()
+        code, err, made = start(repo)
+        expect("a profile key the schema does not know",
+               (code, err.startswith("INVALID_PROFILE"), "max_round" in err, made), (2, True, True, False))
 
 
 def test_maven_time_is_recorded_per_check():

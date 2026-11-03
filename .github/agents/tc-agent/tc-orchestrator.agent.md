@@ -39,9 +39,9 @@ finish; if your terminal tool gives up on it, the command keeps running: never
 re-issue it and never open a second terminal for the same target — run `state`,
 which answers `WAIT` while that `start` is alive.
 
-`start` exiting 2 prints `START_FAILED: <reason>`: run `finish` for that run_id,
-show the report verbatim and STOP this target. Never start another run to get
-around it.
+`start` exiting 2: `SPEC_REQUIRED` → ask the user for the spec file, then start
+again; any other refusal → show it and STOP; `START_FAILED: <reason>` → run `finish`
+for that run_id, show the report verbatim, STOP. Never start a run around a stop.
 
 **2. Loop until FINISH:** `python $C/tc_orchestrate.py state <target> --repo . --run <run_id>`,
 then do exactly its `next_action`:

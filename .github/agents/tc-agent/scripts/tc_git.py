@@ -115,6 +115,12 @@ def changed_lines(repo: Path, path: Path, since: str) -> set | None:
     return lines
 
 
+def is_test_path(name: str) -> bool:
+    """A path under some module's src/test/, or the pipeline's own .test-agent/."""
+    name = name.replace("\\", "/")
+    return "/src/test/" in "/" + name or name.startswith(".test-agent/")
+
+
 def changed_contents(repo: Path, paths: list) -> dict:
     """{file: content hash} for files under `paths` that differ from HEAD or are untracked.
 
