@@ -9,17 +9,39 @@ Everything that belongs to ONE repository lives in its project directory,
 | `conventions.md` | this repo's test style (overrides the agent's §B defaults, never §A) | the context pack → REPO CONVENTIONS, first source |
 | `test-data-examples.md` | example business values of this system | the context pack → TEST DATA |
 
-Without a project directory the agent runs on its built-in defaults.
+Without a project directory the agent runs on its built-in defaults. A `profile.md` the
+schema rejects (an unknown or misspelled key included) stops `start` with `INVALID_PROFILE`.
 
 ## profile.md keys
+
+All optional — a key that is absent takes its default. Details below the table.
+
+| key | default | what it does |
+|---|---|---|
+| `quality_gates.branch_coverage_target_scope` | 0.80 | branch coverage the target must reach |
+| `quality_gates.mutation_score_target_scope` | 0.70 | PIT mutation score the target must reach |
+| `max_rounds` | 3 | generate + review rounds one run may spend |
+| `freshness_days` | 7 | characterization without `--interactive` refuses younger code |
+| `protected_branches` | `["master", "main"]` | branches `--commit` never commits to; a list replaces the default |
+| `flaky_repeat` | 1 | how many times a suite that did not fail is run |
+| `instruction_paths` | — | extra instruction files for REPO CONVENTIONS |
+| `test_data_paths` | — | files of example business values for TEST DATA |
+| `junit` | from the tests | `"4"` / `"5"` when the detection is wrong |
+| `tooling` | pom, then agent | `jacoco_version` / `pit_version` |
+| `maven_timeout_seconds` | 600 | limit of one maven call |
+| `maven_also_make` | `"auto"` | when `-am` is added (`true` / `false`) |
+| `maven_skip_main_compile` | `"auto"` | when src/main is not compiled (`true` / `false` / `"strict"`) |
+| `maven_goals_only` | `true` | lean goals instead of the `test` phase |
+| `maven_args` | — | extra flags for every maven call |
+| `maven_snapshot_updates` | `false` | re-resolve SNAPSHOTs (`-nsu` otherwise) |
 
 **Max rounds** (`max_rounds`, default 3): generate + review rounds one run may
 spend. A new plan version does not add rounds. `--max-rounds` overrides it for one run.
 
-**Protected branches** (`protected_branches`, default `["master"]`): branches
+**Protected branches** (`protected_branches`, default `["master", "main"]`): branches
 `finish --commit` never commits to; globs allowed (`release/*`). On such a branch,
 or a detached HEAD, it creates `tc-agent/<target>/<run-id>` instead. An empty list
-still protects `master`.
+still protects the default.
 
 **Quality gates** are the thresholds `tc_coverage.py` and `tc_mutation.py` must reach
 for the target scope — the class, or the single method when the plan names one.

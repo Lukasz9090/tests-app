@@ -280,15 +280,15 @@ def test_protected_branches():
 
     with FixtureRepo() as repo:
         c._PROFILE_CACHE.clear()
-        expect("no profile -> master only", c.protected_branches(repo.root), (["master"], "default"))
+        expect("no profile -> master and main", c.protected_branches(repo.root), (["master", "main"], "default"))
         profile_with(repo, None)
-        expect("no key -> master only", c.protected_branches(repo.root)[0], ["master"])
+        expect("no key -> master and main", c.protected_branches(repo.root)[0], ["master", "main"])
         profile_with(repo, '["master", "main", "release/*"]')
         expect("list with glob", c.protected_branches(repo.root), (["master", "main", "release/*"], "profile.md"))
         profile_with(repo, "[]")
-        expect("empty list -> master, never nothing", c.protected_branches(repo.root)[0], ["master"])
+        expect("empty list -> the default, never nothing", c.protected_branches(repo.root)[0], ["master", "main"])
         repo.write("AGENTS.md", "tc-agent-protected-branches: develop\n")
-        expect("AGENTS.md is not read any more", c.protected_branches(repo.root)[0], ["master"])
+        expect("AGENTS.md is not read any more", c.protected_branches(repo.root)[0], ["master", "main"])
         c._PROFILE_CACHE.clear()
 
 

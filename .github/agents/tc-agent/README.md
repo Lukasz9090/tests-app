@@ -3,6 +3,8 @@
 tc-agent writes JUnit tests for one Java class (or method) in a Maven project.
 It trusts only the committed code, the tests and git — no memory between runs.
 
+![tc-agent architecture](docs/architecture.svg)
+
 ## Agents
 
 | agent | job |
@@ -61,7 +63,7 @@ never inside this package. All files are optional; all keys: `docs/configuration
 
 - **`profile.md`** (json block): gates (`branch_coverage_target_scope` 0.80,
   `mutation_score_target_scope` 0.70), `max_rounds` (3), `freshness_days` (7),
-  `protected_branches` (default `["master"]`), `instruction_paths`, `test_data_paths`,
+  `protected_branches` (default `["master", "main"]`), `instruction_paths`, `test_data_paths`,
   `junit`, `tooling`, and the maven keys (`maven_timeout_seconds`, `maven_also_make`,
   `maven_skip_main_compile`, `maven_goals_only`, `maven_args`, `maven_snapshot_updates`).
 - **`conventions.md`** — this repo's test style; read first among the style rules.
@@ -85,7 +87,6 @@ Default style: `shouldXxxWhenYyy`, `// given / // when / // then`, AssertJ, Mock
 Every run has its own folder `.test-agent/runs/<target>/<run-id>/`:
 `run.json`, `derive-state.md`, `context-pack.md`, `plan-vN.md`,
 `generation-report-vN[-rM].md`, `review-vN-rM.md`, `checks/`, `run-report.md`. Old runs are never read again and never deleted.
-Agent's own files: role prompts, this README and `requirements.txt` at the top; what the roles read under `references/` (`contracts.md`, `conventions.md`, `junit4.md`, `modes/*.md` — each role gets the list that applies to the run in `dispatch.references`); plus `schemas/`, `scripts/`, `tools/`, and `docs/` for people.
 Each generated test method has a Javadoc with plain-text metadata:
 
     tc-agent-mode: characterization, interactive: false
@@ -100,4 +101,51 @@ placeholders — they tell the next run the gap is known.
 ## Good to know
 
 - Only the scripts run Maven; the agents never do; to start again, just run again.
-- In PowerShell, quote `-D` args: `mvn "-Dtest=FooTest"`. Dev tests: `tools/tc_test_*.py`; real Maven smoke test: `python .github/agents/tc-agent/tools/tc_smoke_pipeline.py`.
+- In PowerShell, quote `-D` args: `mvn "-Dtest=FooTest"`.
+
+## Files
+
+You edit only the project directory. Everything in `tc-agent/` is the agent itself: on an
+update, replace the folder as a whole. No agent reads this README.
+
+**`tc-agent-project/` — this repository's settings (all optional)**
+
+| file | what it is |
+|---|---|
+| `profile.md` | gates, rounds, freshness, protected branches, maven; every key in `docs/configuration.md` |
+| `conventions.md` | your test style; overrides the default style, never the fixed rules |
+| `test-data-examples.md` | example business values: what an id or an account number looks like |
+| `README.md` | what belongs in this folder |
+
+**`tc-agent/` — the agent**
+
+| file | what it is |
+|---|---|
+| `README.md` | this file |
+| `requirements.txt` | the only Python dependency, `jsonschema` |
+| `docs/configuration.md` | every `profile.md` key with its default |
+| `docs/architecture.svg` | the diagram at the top |
+| `tc-orchestrator.agent.md` | the agent you call: runs the scripts, hands work to the other agents, shows the report |
+| `tc-planner.agent.md` | decides what to test and with which data; writes the plan |
+| `tc-generator.agent.md` | writes the tests and placeholders the plan asks for |
+| `tc-reviewer.agent.md` | runs tests, coverage and mutations, judges the tests, accepts or sends them back |
+| `references/contracts.md` | rules for every agent: run files, rounds, which rule wins |
+| `references/conventions.md` | how tests are written: fixed rules (metadata, data, determinism) and the default style |
+| `references/junit4.md` | what differs in a JUnit 4 module |
+| `references/modes/characterization.md` | what freezing the current behavior means for each agent |
+| `references/modes/spec-driven.md` | what testing only the specification means for each agent |
+| `references/modes/interactive.md` | when and what the planner asks you |
+| `schemas/*.schema.json` | the shape of the plan, the generator's report, the review and `profile.md` |
+| `scripts/tc_orchestrate.py` | the state machine: `start`, `state`, `reseal`, `finish`; round limit, report, commit |
+| `scripts/tc_derive_state.py` | at start: what the target needs (git, tests, coverage, mutations) |
+| `scripts/tc_build_context.py` | builds the context pack the planner and the generator read |
+| `scripts/tc_run_tests.py` | runs the target's tests with JaCoCo; the only script that builds |
+| `scripts/tc_coverage.py` | branch coverage of the target against the gate; uncovered lines |
+| `scripts/tc_mutation.py` | PIT on the target only; surviving mutants against the gate |
+| `scripts/tc_javadoc.py` | reads the `tc-agent-*` lines of generated tests; updates the sha on reseal |
+| `scripts/tc_git.py` | git facts: sha, uncommitted changes, commit age, changed lines |
+| `scripts/tc_common.py` | shared code: finding the target and its module, the profile, maven calls |
+| `scripts/tc_evidence_strength.py` | grades the evidence of each planned scenario |
+| `scripts/tc_verify_refs.py` | checks that every reference in a plan points at real lines |
+| `scripts/tc_validate_plan.py` | checks a plan, report or review against its schema |
+| `scripts/tc_md_payload.py` | reads and writes the json block inside the run's `.md` files |

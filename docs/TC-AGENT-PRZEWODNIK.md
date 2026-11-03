@@ -13,6 +13,10 @@ tylko to, w czym jest dobry:** planuje scenariusze, pisze kod testu i ocenia jeg
 przebiegami agent nic nie pamięta — **prawdą jest zacommitowany kod, testy i historia gita**, a metadane
 każdego wygenerowanego testu siedzą w jego Javadocu.
 
+![Architektura tc-agent](../.github/agents/tc-agent/docs/architecture.svg)
+
+*Role LLM (fioletowe) decydują o treści, skrypty (zielone) o przebiegu; wymieniają się tylko plikami w katalogu przebiegu, a commit obejmuje wyłącznie `src/test`.*
+
 ## 2. Co umie
 
 | możliwość | jak |
@@ -25,7 +29,7 @@ każdego wygenerowanego testu siedzą w jego Javadocu.
 | **Limit 3 rund** | generacja + review najwyżej 3 razy na przebieg; potem `ESCALATED`, testy zostają w drzewie |
 | **Zaślepki** | scenariusz nietestowalny (np. `LocalDateTime.now()` bez `Clock`) → pusta metoda `@Disabled("AI deferred: …")` + sugestia zmiany w kodzie |
 | **Reseal** | po zmianie kodu, która nie zmieniła zachowania, skrypt tylko przesuwa sha w testach — bez LLM |
-| **Commit (`--commit`)** | tylko pliki testowe przebiegu, tylko przy DONE / DONE_PARTIAL; na chronionym branchu tworzy `tc-agent/<klasa>/<run-id>`; nigdy push |
+| **Commit (`--commit`)** | tylko pliki testowe przebiegu, tylko przy DONE / DONE_PARTIAL; na chronionym branchu tworzy `tc-agent/<cel>/<run-id>`; nigdy push |
 | **Ochrona kodu produkcyjnego** | zmiana w `src/main` w trakcie przebiegu → `ESCALATED`, bez commita |
 | **Wielomodułowość, JUnit 4 i 5** | moduł z najbliższego `pom.xml`, `-pl <moduł>`; wersja JUnit z importów istniejących testów |
 | **JaCoCo i PIT bez zmian w pomie** | wołane po pełnych koordynatach z CLI (wyjątek: PIT na JUnit 5 wymaga `pitest-junit5-plugin` w pomie) |
@@ -127,19 +131,6 @@ dotyczące jej przebiegu; każda reguła ma jednego właściciela)
 | `tc_verify_refs.py` | sprawdza, że każdy ref w planie wskazuje istniejące linie i że nazwy metod nie kolidują |
 | `tc_validate_plan.py` | waliduje artefakt (plan, raport, review) jego schematem JSON |
 | `tc_md_payload.py` | czyta/zapisuje jedyny blok ```json w artefakcie `.md` |
-
-**`tools/` — testy samego agenta (bez Mavena, na fałszywym `mvn`)**
-
-| plik | co sprawdza |
-|---|---|
-| `tc_test_run_state.py` | maszyna stanów, limit rund, raport, commit, references, „jeden właściciel reguły”, ochrona `src/main` |
-| `tc_test_derive_state.py` | decyzje derive-state (dirty, świeży kod, stale, reseal, spec) |
-| `tc_test_check_scripts.py` | skrypty mavenowe: skip kompilacji, gole vs faza, agent JaCoCo, timeout, `-am` |
-| `tc_test_build_context.py` | context pack: konwencje, dane, DATA EXAMPLES, numery linii, wielomodułowość |
-| `tc_test_javadoc.py` | parser metadanych, sha, dirty |
-| `tc_check_examples.py` | przykłady JSON w promptach i profil projektu przechodzą schematy |
-| `tc_smoke_pipeline.py` | test z PRAWDZIWYM Mavenem na wskazanym repo |
-| `tc_testkit.py`, `fake_mvn/` | harness i fałszywy `mvn` piszący raporty surefire/JaCoCo/PIT |
 
 **`docs/configuration.md`** — opis wszystkich kluczy `profile.md` (dla ludzi).
 

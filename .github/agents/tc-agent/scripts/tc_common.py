@@ -1014,7 +1014,7 @@ def test_data_paths(repo: Path) -> list:
     return [str(p) for p in profile(repo).get("test_data_paths", []) or []]
 
 
-DEFAULT_PROTECTED = ["master"]
+DEFAULT_PROTECTED = ["master", "main"]
 
 
 def protected_branches(repo: Path) -> tuple[list, str]:
