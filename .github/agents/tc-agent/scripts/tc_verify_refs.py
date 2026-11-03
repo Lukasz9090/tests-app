@@ -27,9 +27,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import tc_common as c  # noqa: E402
 from tc_md_payload import load_payload  # noqa: E402
 
-# Build output holds generated and copied sources; a ref that resolves there
-# points at a file nobody edits.
-SKIP_DIRS = {"target", "build", "out", ".git", ".idea", ".test-agent", "node_modules"}
 LINE_SUFFIX = re.compile(r":(\d+)(?:-(\d+))?$")
 
 
@@ -71,7 +68,7 @@ def verify_path(ref: str, repo: Repo):
     match = LINE_SUFFIX.search(ref)
     rel = ref[: match.start()] if match else ref
     path = repo.root / rel
-    if SKIP_DIRS.intersection(Path(rel).parts):
+    if c.SKIP_DIRS.intersection(Path(rel).parts):
         return False, f"{rel} is under build output, not source"
     if not path.exists():
         return False, f"no such path: {rel}"

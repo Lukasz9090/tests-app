@@ -71,7 +71,7 @@ def main() -> int:
     except c.CheckError as exc:
         print(f"CANNOT_RUN: {exc}", file=sys.stderr)
         return 2
-    classes = c.discover_test_classes(repo, target)
+    classes, _ = c.discover_test_classes(repo, target)
     if not classes:
         print(f"CANNOT_RUN: no test class exercises {target.cls}; write one first "
               f"(the scripts discover test classes from the code)", file=sys.stderr)

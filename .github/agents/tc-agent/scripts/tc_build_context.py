@@ -37,9 +37,6 @@ SIG_RE = re.compile(
     r"^\s*(?:public|protected)\s+[\w<>\[\],\s?]+\s+\w+\s*\([^;{]*\)", re.M)
 IMPORT_RE = re.compile(r"^import\s+(?:static\s+)?([\w.]+)\s*;", re.M)
 CLASS_DECL = "(class|interface|enum|record)"
-# Build output holds generated and copied sources. A ref that "verifies" against
-# target/generated-sources points at a file nobody edits.
-SKIP_DIRS = {"target", "build", "out", ".git", ".idea", ".test-agent", "node_modules"}
 # ... with one exception: code GENERATED into the build directory (an OpenAPI
 # client, MapStruct mappers, protobuf) is real API the target calls, and without
 # it every scenario that touches such a type looks unevidenced.
@@ -49,11 +46,6 @@ GENERATED_DIRS = ("target/generated-sources", "target/generated-test-sources",
 # not in the pack.
 STDLIB_PREFIXES = ("java.", "javax.", "jakarta.", "org.junit", "org.mockito",
                    "org.assertj", "org.hamcrest", "lombok.")
-
-
-def java_files(roots, use_git: bool = True):
-    """Shared with the other scripts: git's index when it can answer, else a walk."""
-    return c.java_files(roots, use_git=use_git)
 
 
 _CACHE = {}
@@ -91,12 +83,6 @@ def read(f: Path):
     return t
 
 
-def mentions(text: str, *names) -> bool:
-    """Does the text use any of these simple names as a whole word?"""
-    pattern = "|".join(re.escape(n) for n in names if n)
-    return bool(pattern) and re.search(rf"\b(?:{pattern})\b", text) is not None
-
-
 def numbered(text: str) -> str:
     """The text with each line prefixed by its line number in the FILE.
 
@@ -124,7 +110,7 @@ def local_deps(text, all_by_name, own_pkg_files):
         if simple in all_by_name:
             deps.add(simple)
     for f in own_pkg_files:                       # same-package, no import needed
-        if f.stem != "package-info" and mentions(text, f.stem):
+        if f.stem != "package-info" and c.mentions(text, f.stem):
             deps.add(f.stem)
     return deps
 
@@ -403,9 +389,9 @@ def main():
         if "src" in parts:
             modules.add(Path(*parts[:parts.index("src")]))
     _say(f"{len(src_roots)} source root(s), {len(test_roots)} test root(s)")
-    all_src = list(java_files(src_roots))
+    all_src = list(c.java_files(src_roots))
     gen_roots = generated_roots(repo, sorted(modules))
-    generated = list(java_files(gen_roots, use_git=False))   # git ignores build output
+    generated = list(c.java_files(gen_roots, use_git=False))   # git ignores build output
     all_by_name = {f.stem: f for f in all_src}
     for f in generated:                        # generated code never shadows source
         all_by_name.setdefault(f.stem, f)
@@ -431,11 +417,11 @@ def main():
         """Files of `pool` that use any of these names - one git grep for all."""
         found = c.grep_files(repo, list(names))
         if found is None:                          # no git: read the pool instead
-            return [f for f in pool if mentions(read(f), *names)]
+            return [f for f in pool if c.mentions(read(f), *names)]
         hits = {str(f) for f in found}
         return [f for f in pool if str(f) in hits]
 
-    test_pool = java_files(test_roots)
+    test_pool = c.java_files(test_roots)
     _say(f"{len(test_pool)} test file(s) in scope; asking git which ones use {cname}")
     tests = sorted({f for f in test_pool if cname in f.stem} | set(uses([cname], test_pool)))
     builder_pat = re.compile(r"(Builder|Factory|Fixtures?|TestData|Mother)$")

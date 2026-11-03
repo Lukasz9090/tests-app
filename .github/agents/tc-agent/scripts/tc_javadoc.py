@@ -52,7 +52,7 @@ ANN_NAME = re.compile(r"@([A-Za-z_][\w.]*)")
 CLASS_DECL = re.compile(r"\b(class|interface|enum|record)\s+([A-Za-z_$][\w$]*)")
 # JUnit 5 disables with @Disabled, JUnit 4 with @Ignore. Both carry the reason
 # as their single string value, so one pattern reads either.
-DISABLED = re.compile(r'@(?:[\w.]*\.)?(?:Disabled|Ignore)\s*(?:\(\s*(?:value\s*=\s*)?"((?:[^"\\]|\\.)*)"\s*\))?')
+DISABLED = re.compile(r'@(?:[\w.]*\.)?(?:Disabled|Ignore)\b\s*(?:\(\s*(?:value\s*=\s*)?"((?:[^"\\]|\\.)*)"\s*\))?')
 DISABLE_ANNOTATION = "@Disabled / @Ignore"
 
 

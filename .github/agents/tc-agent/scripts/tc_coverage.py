@@ -51,9 +51,14 @@ def find_class(root, fqcn: str):
 
 
 def method_ranges(klass, method_name: str) -> list:
-    """JaCoCo gives a method's first line only; a method spans up to the next one."""
+    """(first, last, element) per overload: a method spans up to the next real method.
+
+    Synthetic methods (lambda$..., access$...) start INSIDE another method, so they
+    are no boundary; the lambdas of this method are returned with it.
+    """
     methods = sorted(
-        ((int(m.get("line", 0)), m) for m in klass.findall("method") if m.get("line")),
+        ((int(m.get("line", 0)), m) for m in klass.findall("method")
+         if m.get("line") and "$" not in m.get("name", "")),
         key=lambda pair: pair[0],
     )
     ranges = []
@@ -62,7 +67,9 @@ def method_ranges(klass, method_name: str) -> list:
             continue
         end = methods[index + 1][0] - 1 if index + 1 < len(methods) else 10**9
         ranges.append((line, end, element))
-    return ranges
+    lambdas = [(0, 0, m) for m in klass.findall("method")
+               if m.get("name", "").startswith(f"lambda${method_name}$")]
+    return ranges + lambdas if ranges else []
 
 
 def main() -> int:
@@ -147,10 +154,8 @@ def main() -> int:
             ]
             started = time.time() - 2
             clock = time.time()
-            code, output = c.run(command, repo, timeout=c.maven_timeout(repo),
-                                 log_path=c.checks_dir(directory) / f"maven-coverage-{args.label}.log")
+            code, output = c.run(command, repo, timeout=c.maven_timeout(repo), log_path=log)
             maven_seconds += time.time() - clock
-            log = c.checks_dir(directory) / f"maven-coverage-{args.label}.log"   # written live by c.run
             jacoco = newest
 
         if reused is not None:
@@ -194,7 +199,7 @@ def main() -> int:
                     missed, covered = found.get(key, (0, 0))
                     acc[0] += missed
                     acc[1] += covered
-            spans = [(start, end) for start, end, _ in ranges]
+            spans = [(start, end) for start, end, _ in ranges if end]
         else:
             found = counters(klass)
             branch = list(found.get("BRANCH", (0, 0)))

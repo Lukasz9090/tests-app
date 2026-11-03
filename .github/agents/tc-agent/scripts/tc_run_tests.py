@@ -97,7 +97,7 @@ def main() -> int:
         tests = (
             [t.strip() for t in args.tests.split(",") if t.strip()]
             if args.tests
-            else [fqcn for fqcn, _ in c.discover_test_classes(repo, target)]
+            else [fqcn for fqcn, _ in c.discover_test_classes(repo, target)[0]]
         )
         if not tests:
             raise c.CheckError(f"no test class exercises {target.cls} - nothing to run")
@@ -129,7 +129,7 @@ def main() -> int:
             print("[tc-agent] this pom bound the JaCoCo agent on an earlier run - leaving "
                   "prepare-agent to it", file=sys.stderr, flush=True)
 
-        def agent_goals(goals: list) -> list:
+        def agent_goals() -> list:
             return [] if drop_agent else [prepare_agent]
         also_make = c.maven_also_make(repo)
 
@@ -147,7 +147,8 @@ def main() -> int:
                 # source in the module. The other answer is still printed, so a
                 # decision is never silent about what it ignored.
                 mine = c.stale_target(repo, module, classes, target.file)
-                anyone = c.stale_classes(repo, module, classes)
+                # Walking the whole module is only needed when "strict" decides on it.
+                anyone = c.stale_classes(repo, module, classes) if mode == "strict" else None
                 decisive = anyone if mode == "strict" else mine
                 if decisive and mode is not True:
                     print(f"[tc-agent] {c.describe_stale(decisive)} - rebuilding src/main so the "
@@ -159,12 +160,6 @@ def main() -> int:
                               "measures the classes as they are "
                               "(maven_skip_main_compile: true). Run `mvn -DskipTests install` if "
                               "the results look wrong.", file=sys.stderr, flush=True)
-                    elif anyone:
-                        print(f"[tc-agent] {target.cls} itself is compiled and unchanged, so "
-                              "src/main is not rebuilt. Another source in the module is stale "
-                              f"({c.describe_stale(anyone)}), which changes nothing here unless "
-                              "the tests depend on it - set maven_skip_main_compile: \"strict\" "
-                              "to rebuild on that too.", file=sys.stderr, flush=True)
                     else:
                         print("[tc-agent] src/main is already compiled and unchanged - running "
                               "against target/classes", file=sys.stderr, flush=True)
@@ -194,7 +189,7 @@ def main() -> int:
                 "-Dsurefire.failIfNoSpecifiedTests=false",
                 f"-Dtest={','.join(selectors)}",
                 f"-Djacoco.destFile={exec_file}",
-                *agent_goals(goals),
+                *agent_goals(),
                 *goals,
                 *report_goal,
             ]
@@ -213,13 +208,17 @@ def main() -> int:
         run_started = time.time() - 2
         log_path = c.checks_dir(directory) / f"maven-tests-{args.label}.log"
 
+        attempts = 0
+
         def attempt():
-            """One maven call, with the reports it wrote."""
-            nonlocal maven_seconds
+            """One maven call, with the reports it wrote; every attempt goes into the same log."""
+            nonlocal maven_seconds, attempts
             started = time.time() - 2  # filesystem mtime granularity slack
             exec_file.unlink(missing_ok=True)
             clock = time.time()
-            code, output = c.run(command, repo, timeout=c.maven_timeout(repo), log_path=log_path)
+            code, output = c.run(command, repo, timeout=c.maven_timeout(repo), log_path=log_path,
+                                 append=attempts > 0)
+            attempts += 1
             maven_seconds += time.time() - clock
             files = c.recent_files(search_root, "target/surefire-reports/TEST-*.xml", started,
                                    prefer=("target/surefire-reports/TEST-*.xml",))
@@ -344,8 +343,10 @@ def main() -> int:
                                   prefer=("target/site/jacoco/jacoco.xml",))
         jacoco_xml = produced[-1] if produced else None
 
-        flaky = sorted(set().union(*(failed_ids(r) for r in runs)) - set.intersection(*(failed_ids(r) for r in runs))) if len(runs) > 1 else []
-        failures = [r for r in results if r["status"] in ("FAILED", "ERROR")]
+        # A failure is a test that failed in EVERY run; one that failed in some runs is flaky.
+        always = set.intersection(*(failed_ids(r) for r in runs))
+        flaky = sorted(set().union(*(failed_ids(r) for r in runs)) - always)
+        failures = [r for r in results if r["test"] in always]
         data = {
             "status": "FAILED" if failures else "PASSED",
             "tests": tests,
@@ -361,6 +362,7 @@ def main() -> int:
             "maven_seconds": round(maven_seconds, 1),
             "lifecycle": " ".join(lifecycle) if goals_only else "test",
             "compiled_src_main": not skip_main,
+            "dependencies_missing": retried_with_am,
             "module": module,
             "label": args.label,
             "exec_file": str(exec_file),

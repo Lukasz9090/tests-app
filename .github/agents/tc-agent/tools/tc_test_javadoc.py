@@ -163,6 +163,15 @@ def test_defects():
         expect(f"defect: {label}", wanted in m.meta.defects, True)
 
 
+def test_conditional_disable_is_not_a_disable():
+    text = ("class T {\n  @Test\n  @DisabledOnOs(OS.WINDOWS)\n  void a() { x(); }\n"
+            "  @Test\n  @DisabledIfEnvironmentVariable(named = \"CI\", matches = \"true\")\n  void b() { x(); }\n"
+            "  @Test\n  @Disabled(\"why\")\n  void c() { x(); }\n}\n")
+    methods, _ = j.parse_text(text, "T.java")
+    expect("only @Disabled disables", [(m.name, m.disabled) for m in methods],
+           [("a", False), ("b", False), ("c", True)])
+
+
 def test_junit4_ignore_is_a_placeholder():
     body = doc(L, "tc-agent-characterizes: OrderService@29aeef6a", "tc-agent-deferred: needs a seam") \
         + '@Test @Ignore("AI deferred: needs a seam") public void a() {}'
@@ -294,7 +303,7 @@ def test_discovery_and_target():
         expect("fqcn", target.fqcn, "com.acme.OrderService")
         expect("method", target.method, "create")
         expect("root module", target.module, None)
-        found = [fq for fq, _ in c.discover_test_classes(repo.root, target)]
+        found = [fq for fq, _ in c.discover_test_classes(repo.root, target)[0]]
         expect("tests by name and by mention, not builders or unrelated",
                found, ["com.acme.OrderServiceTest", "com.acme.UsesOrderServiceIT"])
         try:

@@ -189,15 +189,20 @@ def _under(root: Path, files: list, suffix: str) -> list:
     return out
 
 
-def find_roots(repo: Path) -> tuple[list, list]:
-    """Maven source and test roots of every module (Maven only)."""
-    src, test = [], []
+def pom_dirs(repo: Path) -> list:
+    """Directories that own a pom.xml, from git's index when it can answer."""
     index = git_index(repo)
     if index is not None:
         poms = (p for p in _under(repo, index, ".xml") if p.name == "pom.xml")
     else:
         poms = (p for p in repo.rglob("pom.xml") if not SKIP_DIRS.intersection(p.relative_to(repo).parts))
-    for pom_dir in sorted({p.parent for p in poms}):
+    return sorted({p.parent for p in poms})
+
+
+def find_roots(repo: Path) -> tuple[list, list]:
+    """Maven source and test roots of every module (Maven only)."""
+    src, test = [], []
+    for pom_dir in pom_dirs(repo):
         m, t = pom_dir / "src/main/java", pom_dir / "src/test/java"
         if m.is_dir():
             src.append(m)
@@ -231,7 +236,7 @@ def resolve_target(repo: Path, name: str) -> Target:
     Never guesses: no match is TARGET_NOT_FOUND, several are TARGET_AMBIGUOUS.
     """
     repo = Path(repo).resolve()
-    if not any(p for p in repo.rglob("pom.xml") if not SKIP_DIRS.intersection(p.relative_to(repo).parts)):
+    if not pom_dirs(repo):
         raise TargetError("UNSUPPORTED_REPOSITORY", "no pom.xml found - this pipeline is Maven-only")
     src_roots, _ = find_roots(repo)
     method = None
@@ -252,8 +257,10 @@ def resolve_target(repo: Path, name: str) -> Target:
     return Target(repo, name, cls, method, file, fqcn_of_file(file), module_for_target(repo, file))
 
 
-def mentions(text: str, name: str) -> bool:
-    return re.search(rf"\b{re.escape(name)}\b", text) is not None
+def mentions(text: str, *names) -> bool:
+    """Does the text use any of these simple names as a whole word?"""
+    pattern = "|".join(re.escape(n) for n in names if n)
+    return bool(pattern) and re.search(rf"\b(?:{pattern})\b", text) is not None
 
 
 def grep_files(repo: Path, word, pathspec: str = "*.java") -> list | None:
@@ -317,13 +324,14 @@ def exercises(text: str, cls: str) -> bool:
     return False
 
 
-def discover_test_classes(repo: Path, target: Target) -> list:
+def discover_test_classes(repo: Path, target: Target) -> tuple[list, list]:
     """Test classes that exercise the target: human and AI tests alike.
 
     A file under a test root counts when its name contains the target's class
     name or its source uses that name as a whole word, AND it declares at least
     one test method (so builders and fixtures that merely mention the class are
-    not handed to surefire). Returns [(fqcn, path), ...] sorted by path.
+    not handed to surefire). Returns ([(fqcn, path), ...] sorted by path, [fqcn of
+    test classes that only mock the target]).
     """
     repo = Path(repo).resolve()
     _, test_roots = find_roots(repo)
@@ -344,8 +352,7 @@ def discover_test_classes(repo: Path, target: Target) -> list:
             found.append((fqcn_of_file(f), f))
         else:
             mocked_only.append(fqcn_of_file(f))
-    discover_test_classes.mocked_only = sorted(mocked_only)
-    return sorted(found, key=lambda pair: str(pair[1]))
+    return sorted(found, key=lambda pair: str(pair[1])), sorted(mocked_only)
 
 
 def write_container(path: Path, title: str, summary: list, data: dict) -> None:
@@ -376,21 +383,6 @@ def parse_xml(path: Path):
 
 
 # ------------------------------------------------------------------ maven ---
-
-
-def write_log(directory: Path, name: str, command: list, output: str) -> Path:
-    """Keep the full maven output next to the check result.
-
-    Terminals truncate, error messages are summaries, and re-running a failed
-    maven goal to see what it said costs minutes. The log is the ground truth.
-    """
-    path = checks_dir(directory) / f"maven-{name}.log"
-    path.write_text(
-        "$ " + " ".join(str(part) for part in command) + "\n\n" + output,
-        encoding="utf-8",
-        errors="replace",
-    )
-    return path
 
 
 def pid_alive(pid) -> bool:
@@ -672,7 +664,8 @@ def _wait_with_heartbeat(proc: subprocess.Popen, timeout: float | None, loud: bo
             print(f"[tc-agent] still running ({elapsed})", file=sys.stderr, flush=True)
 
 
-def run(cmd: list, cwd: Path, timeout: float | None = None, log_path: Path | None = None) -> tuple:
+def run(cmd: list, cwd: Path, timeout: float | None = None, log_path: Path | None = None,
+        append: bool = False) -> tuple:
     """Run a command, returning (returncode, combined output).
 
     Output goes to a FILE, not to a pipe. Maven leaves grandchildren behind (a
@@ -693,7 +686,7 @@ def run(cmd: list, cwd: Path, timeout: float | None = None, log_path: Path | Non
     # needs to read it. Without it a temporary file is enough.
     if log_path is not None:
         Path(log_path).parent.mkdir(parents=True, exist_ok=True)
-        handle = open(log_path, "w+", encoding="utf-8", errors="replace", newline="")
+        handle = open(log_path, "a+" if append else "w+", encoding="utf-8", errors="replace", newline="")
         handle.write("$ " + " ".join(cmd) + "\n\n")
         handle.flush()
     else:
@@ -1176,17 +1169,26 @@ def repo_contract(repo: Path, module: str | None) -> dict:
 
 
 def pom_plugin_version(repo: Path, module: str | None, artifact_id: str) -> str | None:
-    """Version declared for a plugin in the module pom or the root pom, if any."""
+    """Version declared for a plugin in the module pom or the root pom, `${property}` resolved."""
     pattern = re.compile(
         r"<artifactId>\s*%s\s*</artifactId>\s*<version>\s*([^<\s]+)\s*</version>" % re.escape(artifact_id)
     )
-    for pom in (module_dir(repo, module) / "pom.xml", repo / "pom.xml"):
-        if not pom.exists():
-            continue
-        text = re.sub(r"\s+", " ", pom.read_text(encoding="utf-8", errors="replace"))
+    texts = [re.sub(r"\s+", " ", pom.read_text(encoding="utf-8", errors="replace"))
+             for pom in _poms(repo, module)]
+    for text in texts:
         match = pattern.search(text)
-        if match and not match.group(1).startswith("${"):
-            return match.group(1)
+        if not match:
+            continue
+        version = match.group(1)
+        prop = re.fullmatch(r"\$\{([\w.-]+)\}", version)
+        if not prop:
+            return version
+        for t in texts:                                    # module properties first, then the root's
+            name = re.escape(prop.group(1))
+            defined = re.search(rf"<{name}>\s*([^<\s$]+)\s*</{name}>", t)
+            if defined:
+                return defined.group(1)
+        return None
     return None
 
 
