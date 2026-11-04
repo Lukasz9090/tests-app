@@ -87,9 +87,9 @@ placeholders in §A2.
 - **Traceability:** a scenario id (`TC01`) exists only in the run's artifacts,
   never in the code. Scenario and test are linked by the method name
   (`implementation_hints.test_method` ↔ `results[].test_method`).
-- **Stale** = a characterization test whose `tc-agent-characterizes` sha no
-  longer names the last commit of the target. Still green: a script moves the
-  sha (`reseal`). Red: it goes back to the planner.
+- **Stale** = a characterization test whose target changed in git after the newest
+  commit of the test's own lines (its freeze point, `frozen_at`). Still green:
+  nothing to do. Red: it goes back to the planner.
 
 ## 5. The context pack
 

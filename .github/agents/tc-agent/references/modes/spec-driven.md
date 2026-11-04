@@ -26,9 +26,8 @@ does not describe are left to a characterization run.
 ## Generator
 
 - First Javadoc line: `AI-generated test. Based on the specification <spec file>.`
-- Metadata (`conventions.md` §A1): `tc-agent-mode: spec-driven, interactive: <run.json>`
-  and `tc-agent-spec: <spec file>#<requirement>` from the scenario's
-  `requirement`; never `tc-agent-characterizes`.
+- Metadata (`conventions.md` §A1): `tc-agent-mode: spec-driven, interactive: <run.json>`.
+  The requirement a test comes from stays in the plan (`requirement`), not in the code.
 - Feedback with `scope: "disable"`: the code does not do what the spec says. Keep
   the method and its body, add `@Disabled("AI spec-mismatch: <short>")` and
   `tc-agent-note: spec mismatch: <spec says X, code does Y>`; change nothing else.
@@ -36,8 +35,8 @@ does not describe are left to a characterization run.
 
 ## Reviewer
 
-- Stage 1: every method of this run carries `tc-agent-spec`, none carries
-  `tc-agent-characterizes`. A method disabled with `AI spec-mismatch:` after your
+- Stage 1: every method of this run carries `tc-agent-mode: spec-driven` and matches a
+  scenario with a `requirement`. A method disabled with `AI spec-mismatch:` after your
   own `disable` feedback is conformant.
 - A failing assertion in a test THIS run wrote, with a setup that is correct and an
   expectation that matches the spec text: a `spec_mismatch` finding (quote the

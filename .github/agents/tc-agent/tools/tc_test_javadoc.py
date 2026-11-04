@@ -2,14 +2,14 @@
 """Tests for the in-code metadata (tc_javadoc.py) and the git facts (tc_git.py) — DEV TOOL.
 
 The Javadoc tags ARE the pipeline's database, so a parser that
-attaches a Javadoc to the wrong method, loses a tag, or rewrites more than the
-`tc-agent-characterizes` line corrupts state silently. Covered:
+attaches a Javadoc to the wrong method, loses a tag, or dates a test wrongly
+corrupts state silently. Covered:
 
   * attaching Javadoc to test methods (annotations with strings and parens,
     braces inside string literals, javadoc after annotations, nested classes),
   * every metadata defect the parser reports,
   * placeholders (@Disabled + tc-agent-deferred + empty body),
-  * reseal: one line changes, CRLF preserved, nothing else touched,
+  * the freeze point: the newest commit of a test's own lines (git blame),
   * sha prefix matching, dirty / age / branch helpers on a real git repo,
   * protected branches read from the project profile.
 
@@ -95,8 +95,7 @@ def test_attaches_javadoc_to_the_right_methods():
                   "OrderServiceTest#paramTest", "OrderServiceTest$Inner#innerHuman"])
     first = methods[0]
     expect("characterization mode", first.meta.mode, "characterization")
-    expect("characterizes class", first.meta.characterizes_class, "OrderService")
-    expect("characterizes sha", first.meta.characterizes_sha, "29aeef6a")
+    expect("an older version's tc-agent-characterizes line is ignored", first.meta.defects, [])
     expect("continuation line joins the note",
            first.meta.notes[0], "business-hours guard rejects 17:00 exactly — reported as a defect")
     expect("repeatable tc-agent-note", len(first.meta.notes), 2)
@@ -127,7 +126,6 @@ L, SD = "tc-agent-mode: characterization, interactive: false", "tc-agent-mode: s
 
 def test_defects():
     cases = {
-        "characterization without sha": (doc(L) + "@Test void a() {}", "tc-agent-mode characterization without tc-agent-characterizes"),
         "no mode": (doc("tc-agent-note: x") + "@Test void a() {}", "tc-agent metadata without tc-agent-mode"),
         "bad mode": (doc("tc-agent-mode: tdd") + "@Test void a() {}",
                      "tc-agent-mode: 'tdd' is not '<mode>, interactive: true|false' "
@@ -138,19 +136,15 @@ def test_defects():
         "mode without interactive": (doc("tc-agent-mode: characterization") + "@Test void a() {}",
                                      "tc-agent-mode: 'characterization' is not '<mode>, interactive: true|false' "
                                      "with a mode in characterization, spec-driven"),
-        "bad sha": (doc(L, "tc-agent-characterizes: OrderService") + "@Test void a() {}",
-                    "tc-agent-characterizes: 'OrderService' is not <Class>@<sha>"),
         "unknown key": (doc(SD, "tc-agent-foo: x") + "@Test void a() {}",
                         "unknown metadata key 'tc-agent-foo:' (allowed: tc-agent-mode, "
-                        "tc-agent-characterizes, tc-agent-deferred, tc-agent-spec, tc-agent-note)"),
+                        "tc-agent-deferred, tc-agent-note)"),
         "old marker line": (doc("tc-agent: generated", SD) + "@Test void a() {}",
                             "unknown metadata key 'tc-agent:' (allowed: tc-agent-mode, "
-                            "tc-agent-characterizes, tc-agent-deferred, tc-agent-spec, tc-agent-note)"),
+                            "tc-agent-deferred, tc-agent-note)"),
         "old interactive line": (doc(SD, "tc-agent-interactive: true") + "@Test void a() {}",
                                  "unknown metadata key 'tc-agent-interactive:' (allowed: tc-agent-mode, "
-                                 "tc-agent-characterizes, tc-agent-deferred, tc-agent-spec, tc-agent-note)"),
-        "spec-driven with sha": (doc(SD, "tc-agent-characterizes: X@1234567") + "@Test void a() {}",
-                                 "tc-agent-mode spec-driven must not carry tc-agent-characterizes"),
+                                 "tc-agent-deferred, tc-agent-note)"),
         "deferred without Disabled": (doc(SD, "tc-agent-deferred: why") + "@Test void a() {}",
                                       "tc-agent-deferred placeholder without @Disabled / @Ignore"),
         "deferred with body": (doc(SD, "tc-agent-deferred: why") + '@Test @Disabled("AI deferred: why") void a() { x(); }',
@@ -180,15 +174,12 @@ def test_junit4_ignore_is_a_placeholder():
     expect("no defects", m.meta.defects, [])
 
 
-def test_spec_line():
-    ok = doc(SD, "tc-agent-spec: docs/order-spec.md#R3") + "@Test void a() {}"
-    (m,), _ = parse("class T {\n" + ok + "\n}\n")
-    expect("spec read, no defects", (m.meta.spec, m.meta.defects, m.as_dict()["spec"]),
-           ("docs/order-spec.md#R3", [], "docs/order-spec.md#R3"))
-    (m,), _ = parse("class T {\n" + doc(SD) + "@Test void a() {}\n}\n")
-    expect_true("spec-driven without tc-agent-spec", "tc-agent-mode spec-driven without tc-agent-spec" in m.meta.defects)
-    (m,), _ = parse("class T {\n" + doc(SD, "tc-agent-spec: R3") + "@Test void a() {}\n}\n")
-    expect_true("spec without a file", "tc-agent-spec: 'R3' is not <spec file>#<requirement>" in m.meta.defects)
+def test_lines_of_older_versions_are_ignored():
+    body = doc(SD, "tc-agent-spec: docs/order-spec.md#R3", "tc-agent-characterizes: X@1234567") + "@Test void a() {}"
+    (m,), _ = parse("class T {\n" + body + "\n}\n")
+    expect("no defects, nothing kept", (m.meta.mode, m.meta.defects, "spec" in m.as_dict()), ("spec-driven", [], False))
+    (m,), _ = parse("class T {\n" + doc(L) + "@Test void a() {}\n}\n")
+    expect("two lines are a complete test", (m.meta.ai, m.meta.defects), (True, []))
 
 
 def test_old_at_format_is_not_metadata():
@@ -219,23 +210,22 @@ def test_human_javadoc_is_not_ai():
     expect("human javadoc", (m.meta.ai, m.meta.has_ai_tags, m.meta.defects), (False, False, []))
 
 
-def test_reseal_changes_one_line_and_keeps_crlf():
+def test_freeze_point_is_the_newest_commit_of_the_tests_own_lines():
     with FixtureRepo() as repo:
-        text = make_test_class("OrderServiceTest", ai_test("a", "29aeef6a"), ai_test("b", "29aeef6a"))
-        path = repo.root / "T.java"
-        path.write_bytes(text.replace("\n", "\r\n").encode("utf-8"))
-        changed, detail = j.reseal(path, "OrderServiceTest#a", "OrderService", "4b1c2aa9")
-        expect("reseal reports a change", changed, True)
-        after = path.read_bytes().decode("utf-8")
-        expect("CRLF preserved", after.count("\r\n"), text.count("\n"))
-        expect("method a moved", "tc-agent-characterizes: OrderService@4b1c2aa9" in after.split("void a()")[0], True)
-        expect("method b untouched", after.split("void a()")[1].count("OrderService@29aeef6a"), 1)
-        expect("only that sha changed", after.replace("4b1c2aa9", "29aeef6a"),
-               text.replace("\n", "\r\n"))
-        again, _ = j.reseal(path, "OrderServiceTest#a", "OrderService", "4b1c2aa9")
-        expect("resealing to the same sha is a no-op", again, False)
-        missing, _ = j.reseal(path, "OrderServiceTest#nope", "OrderService", "4b1c2aa9")
-        expect("unknown method is reported, not guessed", missing, False)
+        rel = repo.write_test("OrderServiceTest", ai_test("a", None), ai_test("b", None))
+        first = repo.commit("tests", days_ago=20) and repo.git("rev-parse", "HEAD")
+        repo.write(rel, repo.read(rel).replace("void b() {", "void b() {\n        int x = 1;"))
+        repo.commit("edit b", days_ago=10)
+        second = repo.git("rev-parse", "HEAD")
+        (a, b), _ = j.parse_file(repo.root / rel, rel)
+        fa = g.last_commit_of_lines(repo.root, repo.root / rel, a.first_line, a.last_line)
+        fb = g.last_commit_of_lines(repo.root, repo.root / rel, b.first_line, b.last_line)
+        expect("a froze at the first commit, b at its edit", (first.startswith(fa), second.startswith(fb)),
+               (True, True))
+        repo.write(rel, repo.read(rel).replace("void a() {", "void a() {\n        int y = 2;"))
+        expect("an uncommitted edit has no freeze point yet",
+               g.last_commit_of_lines(repo.root, repo.root / rel, a.first_line, a.last_line + 1), None)
+        expect("target changed after a's freeze?", g.changed_after(repo.root, repo.root / repo.target_path, fa), False)
 
 
 def test_sha_matches():

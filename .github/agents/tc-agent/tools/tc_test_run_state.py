@@ -3,11 +3,10 @@
 
 Covered:
 
-  * the in-run state machine (derive verdicts,
-    RESEAL, plan statuses, generation/review loop, the round limit),
+  * the in-run state machine (derive verdicts, plan statuses,
+    generation/review loop, the round limit),
   * that a run only ever reads its own directory (an older run's artifacts do
     not leak into a new one),
-  * reseal through the orchestrator (one line per test, recorded in run.json),
   * finish: outcome DONE vs DONE_PARTIAL, red tree first, report contents,
     template vs reviewer summary, idempotence,
   * --commit: only DONE/DONE_PARTIAL, only the run's test files, never a
@@ -59,7 +58,7 @@ class Run:
         self.run = {"schema_version": 1, "target_name": TARGET, "run_id": run_id, "mode": mode,
                     "interactive": False, "spec": None,
                     "max_rounds": max_rounds,
-                    "commit": commit, "started": "x", "resealed": False}
+                    "commit": commit, "started": "x"}
         c.save_run(self.dir, self.run)
 
     def derive(self, runner=None, **run_overrides):
@@ -70,7 +69,7 @@ class Run:
 
     def derive_raw(self, next_action: str, **extra):
         payload = {"next_action": next_action, "reasons": extra.pop("reasons", ["X"]),
-                   "reseal": [], "git": {"current_sha": "abc1234", "dirty": False},
+                   "git": {"current_sha": "abc1234", "dirty": False},
                    "target": {"class": TARGET}, **extra}
         (self.dir / "derive-state.md").write_text(container("derive", payload), encoding="utf-8")
 
@@ -124,15 +123,24 @@ def test_derive_verdicts_route_straight_to_finish():
         expect("unreadable derive-state escalates", step(run.state()), ("FINISH", "ESCALATED"))
 
 
-def test_reseal_comes_first():
+def test_a_stale_green_test_needs_no_step():
     with FixtureRepo() as repo:
+        rel = repo.write_test("OrderServiceTest", ai_test("shouldA", None), ai_test("shouldB", None))
+        repo.commit("tests", days_ago=20)
+        repo.change_target()
+        repo.commit("refactor", days_ago=10)
         run = Run(repo)
-        run.derive_raw("DONE", reseal=[{"method": "T#a", "file": "T.java", "from": "1234567", "to": "abc1234"}])
-        expect("RESEAL before anything", step(run.state()), ("RESEAL", None))
-        run.derive_raw("PLAN", reseal=[{"method": "T#a", "file": "T.java", "from": "1234567", "to": "abc1234"}])
-        expect("RESEAL before PLAN too", step(run.state()), ("RESEAL", None))
-        run.derive_raw("RED", reseal=[{"method": "T#a", "file": "T.java", "from": "1234567", "to": "abc1234"}])
-        expect("never reseal on RED", step(run.state()), ("FINISH", "RED"))
+        state = run.derive()
+        expect("both are stale", len(state["tests"]["stale"]), 2)
+        expect("straight to FINISH DONE", step(run.state()), ("FINISH", "DONE"))
+        before = repo.read(rel)
+        code, prose = run.finish()
+        expect("finish ok", code, 0)
+        expect("the tests are not touched", repo.read(rel), before)
+        payload = json.loads((run.dir / "run-report.md").read_text().split("```json")[1].split("```")[0])
+        expect("report outcome", payload["outcome"], "DONE")
+        code2, prose2 = run.finish()
+        expect_true("finish is idempotent", "(already finished)" in prose2)
 
 
 def test_plan_generate_review_loop():
@@ -353,34 +361,7 @@ def test_runs_are_isolated():
         expect("latest resolves to the newest run", c.run_dir(repo.root, TARGET, "latest"), new.dir)
 
 
-# ------------------------------------------------------------ reseal/finish ---
-
-
-def test_reseal_and_finish_done():
-    with FixtureRepo() as repo:
-        old = repo.sha()
-        rel = repo.write_test("OrderServiceTest", ai_test("shouldA", old), ai_test("shouldB", old))
-        repo.commit("tests", days_ago=20)
-        repo.change_target()
-        new = repo.commit("refactor", days_ago=10)
-        run = Run(repo)
-        run.derive()
-        expect("RESEAL", step(run.state()), ("RESEAL", None))
-        result = o.do_reseal(repo.root, run.dir)
-        expect("both methods resealed", [r["changed"] for r in result["resealed"]], [True, True])
-        text = repo.read(rel)
-        expect("the new sha is in the file twice", text.count(f"OrderService@{new}"), 2)
-        expect("run.json records it", run.reload()["resealed"], True)
-        expect("then FINISH DONE", step(run.state()), ("FINISH", "DONE"))
-        code, prose = run.finish()
-        expect("finish ok", code, 0)
-        expect_true("template summary for a reseal-only run", "Resealed 2 characterization test(s)" in prose)
-        expect_true("tells the human to commit", "review and commit" in prose)
-        payload = json.loads((run.dir / "run-report.md").read_text().split("```json")[1].split("```")[0])
-        expect("report outcome", payload["outcome"], "DONE")
-        expect("report files", payload["test_files"], [rel])
-        code2, prose2 = run.finish()
-        expect_true("finish is idempotent", "(already finished)" in prose2)
+# ----------------------------------------------------------------- finish ---
 
 
 def test_start_that_could_not_derive_says_why():

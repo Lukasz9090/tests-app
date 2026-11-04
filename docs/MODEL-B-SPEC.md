@@ -33,8 +33,8 @@ po `applyTo`, `AGENTS.md`, `instruction_paths`) > domyślne §B.
 
 | | wyrocznia | metadane | gdy test pada |
 |---|---|---|---|
-| `characterization` (domyślny) | obecny kod, błędy włącznie | `tc-agent-characterizes: <Class>@<sha>` | naprawa testu (albo planu) |
-| `spec-driven` | specyfikacja `--spec` (sekcja SPEC w packu), tylko jej wymagania | `tc-agent-spec: <plik>#<wymaganie>` | rozbieżność: test zostaje wyłączony `AI spec-mismatch` z ciałem, raport ją wymienia |
+| `characterization` (domyślny) | obecny kod, błędy włącznie | `tc-agent-mode: characterization, …` | naprawa testu (albo planu) |
+| `spec-driven` | specyfikacja `--spec` (sekcja SPEC w packu), tylko jej wymagania | `tc-agent-mode: spec-driven, …` (wymaganie tylko w planie) | rozbieżność: test zostaje wyłączony `AI spec-mismatch` z ciałem, raport ją wymienia |
 
 `--interactive` to modyfikator obu trybów: planer pyta człowieka (najpierw o dane, potem o to, co zamrozić
 albo jak rozumieć wymaganie) i zapisuje pytania także jako `CONFIRM:`. W characterization zdejmuje
@@ -42,17 +42,15 @@ blokadę świeżego kodu.
 
 ## 4. Metadane w kodzie
 
-Javadoc nad METODĄ testu (nigdy nad klasą), linie `tc-agent-<klucz>: <wartość>`:
+Javadoc nad METODĄ testu (nigdy nad klasą): linia prozy, a pod nią bez pustej linii `tc-agent-<klucz>: <wartość>`:
 
 | linia | kiedy |
 |---|---|
 | `tc-agent-mode: <characterization\|spec-driven>, interactive: <true\|false>` | zawsze — marker testu agenta |
-| `tc-agent-characterizes: <Class>@<sha>` | characterization |
-| `tc-agent-spec: <plik spec>#<wymaganie>` | spec-driven |
 | `tc-agent-deferred: <powód>` | placeholder: pusta metoda `@Disabled("AI deferred: …")` (`@Ignore` w JUnit 4) |
 | `tc-agent-note: <tekst>` | fakt o tym teście (znany błąd, odpowiedź człowieka, spec mismatch) |
 
-Inny klucz `tc-agent…:` = defekt metadanych. Każdy scenariusz planu kończy w kodzie jako test albo
+Inny klucz `tc-agent…:` = defekt metadanych (`tc-agent-characterizes` / `tc-agent-spec` ze starszych wersji są ignorowane). Każdy scenariusz planu kończy w kodzie jako test albo
 placeholder. Scenariusz ↔ test łączy nazwa metody; id scenariusza nigdy nie trafia do kodu.
 
 ## 5. derive-state
@@ -68,13 +66,13 @@ Wynik `next_action`:
 | `BLOCKED` | characterization: target zmieniony (treść, nie końcówki linii), niezacommitowany albo młodszy niż `freshness_days` bez interactive |
 | `ESCALATE` | target nie istnieje / niejednoznaczny, brak gita, check nie mógł się wykonać |
 
-Stale test characterization, który nadal przechodzi, dostaje mechanicznie nowy sha (`reseal`); czerwony
-wraca do planera.
+Moment zamrożenia testu = najnowszy commit jego własnych linii (`git blame`); test jest stale, gdy target
+zmienił się w gicie po tym commicie. Stale i zielony: nic do zrobienia; stale i czerwony: wraca do planera.
 
 ## 6. Przebieg
 
 `tc_orchestrate.py`: `start` (jedyne miejsce na tryb, interactive, spec, `--test-data`, `--max-rounds`,
-`--commit`) → `state` (`PLAN | GENERATE | REVIEW | RESEAL | WAIT | FINISH`) → `finish` (raport, opcjonalny commit).
+`--commit`) → `state` (`PLAN | GENERATE | REVIEW | WAIT | FINISH`) → `finish` (raport, opcjonalny commit).
 Orchestrator wykonuje tylko `next_action`. Pętla PLAN → GENERATE → REVIEW ma limit `max_rounds` (domyślnie 3)
 rund w całym przebiegu; runda = generacja + review, nowa wersja planu też ją zużywa. O naprawie testu albo
 planu decyduje recenzent; po limicie przebieg kończy się `ESCALATED`, testy zostają w drzewie.

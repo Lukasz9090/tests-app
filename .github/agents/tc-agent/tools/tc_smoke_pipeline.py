@@ -86,7 +86,7 @@ def main() -> int:
     c.save_run(directory, {"schema_version": 1, "target_name": args.target, "run_id": run_id,
                            "mode": "spec-driven", "interactive": False, "spec": None,
                            "max_rounds": 1, "commit": False,
-                           "started": "smoke", "resealed": False})
+                           "started": "smoke"})
     print(f"smoke target: {target.fqcn} (tests: {', '.join(fq for fq, _ in classes)}), run {directory}")
 
     failures = []

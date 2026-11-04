@@ -20,30 +20,27 @@ below are written for JUnit 5; on JUnit 4 `junit4.md` replaces the
 framework-specific parts.
 
 **A1. Metadata.** Every test method you write carries a Javadoc: one prose line,
-a blank line, then one `tc-agent-<key>: <value>` line per fact — plain text,
+then, with no blank line, one `tc-agent-<key>: <value>` line per fact — plain text,
 lowercase key, a colon, a space; never Javadoc `@tags`. On METHODS only, never
 on the test class.
 
 ```java
 /**
  * AI-generated test. Characterizes current behavior of OrderService (a freeze, not a spec).
- *
  * tc-agent-mode: characterization, interactive: false
- * tc-agent-characterizes: OrderService@29aeef6a
  */
 ```
 
 | line | when |
 |---|---|
 | `tc-agent-mode: <mode>, interactive: <true\|false>` | always; both values from `run.json`, `interactive` written also when false |
-| `tc-agent-characterizes: <Class>@<sha>` | characterization mode only; `<sha>` = the plan's `context.target_sha` |
-| `tc-agent-spec: <spec file>#<requirement>` | spec-driven mode only; the requirement id or heading the test comes from |
 | `tc-agent-deferred: <reason>` | placeholders only (A2) |
 | `tc-agent-note: <text>` | optional, repeatable: a fact about THIS test (a frozen known bug, a human's answer) |
 
 First prose line: the mode file gives it for tests; for placeholders it is
 `AI-generated placeholder. Scenario deliberately NOT tested — see tc-agent-deferred.`
-Any other `tc-agent...:` key is a defect. Never add these lines to a method you
+Any other `tc-agent...:` key is a defect (a `tc-agent-characterizes` or `tc-agent-spec`
+line an older version wrote is ignored: leave it). Never add these lines to a method you
 did not write, never remove them from one you repair, and when you rewrite a
 method (`replaces`) replace its whole Javadoc.
 
@@ -53,9 +50,7 @@ soundly, becomes an empty, disabled method:
 ```java
 /**
  * AI-generated placeholder. Scenario deliberately NOT tested — see tc-agent-deferred.
- *
  * tc-agent-mode: characterization, interactive: false
- * tc-agent-characterizes: AppointmentService@29aeef6a
  * tc-agent-deferred: business-hours guard reads LocalDateTime.now() directly; needs an injected java.time.Clock
  */
 @Test

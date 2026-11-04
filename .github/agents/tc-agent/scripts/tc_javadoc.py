@@ -5,16 +5,16 @@ agent writes carries a Javadoc with metadata lines (conventions §A1):
 
     /**
      * AI-generated test. Characterizes current behavior of OrderService (a freeze, not a spec).
-     *
      * tc-agent-mode: characterization, interactive: false
-     * tc-agent-characterizes: OrderService@29aeef6a
      */
     @Test
     void shouldCreateOrderWhenCustomerActive() { ... }
 
 `tc-agent-mode` is the marker: a method that has one was written by the agent.
 The lines are plain text, not Javadoc `@tags`, so no IDE or doclint flags them.
-Any other `tc-agent...:` key is a defect.
+Any other `tc-agent...:` key is a defect, except the lines older versions wrote
+(`tc-agent-characterizes`, `tc-agent-spec`), which are ignored. A test's freeze point
+is the newest commit of its own lines (git blame), not a line in the code.
 
 This module finds test methods in a Java source file, attaches the Javadoc that
 belongs to each one and parses its tags. It is a small character scanner, not a
@@ -38,7 +38,6 @@ MODES = ("characterization", "spec-driven")
 MODE_LINE = re.compile(r"^(characterization|spec-driven)\s*,\s*interactive\s*:\s*(true|false)$")
 TEST_ANNOTATIONS = {"Test", "ParameterizedTest", "RepeatedTest", "TestFactory", "TestTemplate"}
 PLACEHOLDER_PREFIX = "AI deferred:"
-CHARACTERIZES = re.compile(r"^([A-Za-z_$][\w$]*)@([0-9a-fA-F]{7,40})$")
 
 ANN = r"@[A-Za-z_][\w.]*(?:\s*\((?:[^()]|\([^()]*\))*\))?"
 METHOD = re.compile(
@@ -66,10 +65,7 @@ class Meta:
     ai: bool = False
     mode: str | None = None
     interactive: bool = False
-    characterizes_class: str | None = None
-    characterizes_sha: str | None = None
     deferred: str | None = None
-    spec: str | None = None
     notes: list = field(default_factory=list)
     has_ai_tags: bool = False
     defects: list = field(default_factory=list)
@@ -88,6 +84,9 @@ class TestMethod:
     prose: str
     meta: Meta
     javadoc_span: tuple | None = None
+    first_line: int = 0            # Javadoc (or first annotation) .. closing brace: the lines git blame reads
+    last_line: int = 0
+    freeze: str | None = None      # newest commit of those lines, set by derive-state
 
     @property
     def key(self) -> str:
@@ -108,12 +107,10 @@ class TestMethod:
             out["mode"] = self.meta.mode
             if self.meta.interactive:
                 out["interactive"] = True
-            if self.meta.characterizes_class:
-                out["characterizes"] = f"{self.meta.characterizes_class}@{self.meta.characterizes_sha}"
+            if self.freeze:
+                out["frozen_at"] = self.freeze
             if self.meta.deferred is not None:
                 out["deferred"] = self.meta.deferred
-            if self.meta.spec:
-                out["spec"] = self.meta.spec
             if self.meta.notes:
                 out["notes"] = list(self.meta.notes)
         if self.disabled:
@@ -200,12 +197,11 @@ def _enclosing(spans: list, pos: int) -> str:
 # Line keys as written in the code -> internal tag names.
 KEYS = {
     "tc-agent-mode": "mode",
-    "tc-agent-characterizes": "characterizes",
     "tc-agent-deferred": "deferred",
-    "tc-agent-spec": "spec",
     "tc-agent-note": "note",
+    "tc-agent-characterizes": "legacy",            # written by older versions: ignored
+    "tc-agent-spec": "legacy",
 }
-LABEL = {v: k for k, v in KEYS.items()}
 KEY_LINE = re.compile(r"^(tc-agent(?:-[a-z]+)*)\s*:\s*(.*)$")
 
 
@@ -244,7 +240,8 @@ def build_meta(tags: list, unknown: list | None = None) -> Meta:
     if not meta.has_ai_tags:
         return meta
     for key in unknown or []:
-        meta.defects.append(f"unknown metadata key '{key}:' (allowed: {', '.join(KEYS)})")
+        meta.defects.append(f"unknown metadata key '{key}:' (allowed: tc-agent-mode, tc-agent-deferred, "
+                            f"tc-agent-note)")
     for name, value in tags:
         if name == "mode":
             m = MODE_LINE.match(value)
@@ -253,34 +250,16 @@ def build_meta(tags: list, unknown: list | None = None) -> Meta:
             else:
                 meta.defects.append(f"tc-agent-mode: '{value}' is not '<mode>, interactive: true|false' "
                                     f"with a mode in {', '.join(MODES)}")
-        elif name == "characterizes":
-            m = CHARACTERIZES.match(value)
-            if m:
-                meta.characterizes_class, meta.characterizes_sha = m.group(1), m.group(2).lower()
-            else:
-                meta.defects.append(f"tc-agent-characterizes: '{value}' is not <Class>@<sha>")
         elif name == "deferred":
             meta.deferred = value
             if not value:
                 meta.defects.append("tc-agent-deferred: has no reason")
-        elif name == "spec":
-            meta.spec = value
-            if "#" not in value:
-                meta.defects.append(f"tc-agent-spec: '{value}' is not <spec file>#<requirement>")
         elif name == "note":
             if value:
                 meta.notes.append(value)
     meta.ai = True
     if meta.mode is None and not any("tc-agent-mode" in d for d in meta.defects):
         meta.defects.append("tc-agent metadata without tc-agent-mode")
-    if meta.mode == "characterization" and meta.characterizes_class is None \
-            and not any("characterizes" in d for d in meta.defects):
-        meta.defects.append("tc-agent-mode characterization without tc-agent-characterizes")
-    if meta.mode == "spec-driven" and meta.characterizes_class is not None:
-        meta.defects.append("tc-agent-mode spec-driven must not carry tc-agent-characterizes")
-    if meta.mode == "spec-driven" and meta.spec is None \
-            and not any("tc-agent-spec" in d for d in meta.defects):
-        meta.defects.append("tc-agent-mode spec-driven without tc-agent-spec")
     return meta
 
 
@@ -318,6 +297,7 @@ def parse_text(text: str, file: str = "") -> tuple[list, list]:
         brace = masked.find("{", close)
         semi = masked.find(";", close)
         body_empty = False
+        end = close
         if brace != -1 and (semi == -1 or brace < semi):
             end = _match_brace(masked, brace)
             body_empty = masked[brace + 1:end].strip() == ""
@@ -345,6 +325,8 @@ def parse_text(text: str, file: str = "") -> tuple[list, list]:
             prose=prose,
             meta=meta,
             javadoc_span=span,
+            first_line=text.count("\n", 0, span[0] if span else block_start) + 1,
+            last_line=text.count("\n", 0, max(end, name_pos)) + 1,
         ))
 
     defects = []
@@ -362,36 +344,3 @@ def parse_text(text: str, file: str = "") -> tuple[list, list]:
 def parse_file(path: Path, display: str | None = None) -> tuple[list, list]:
     text = Path(path).read_text(encoding="utf-8", errors="replace")
     return parse_text(text, display or Path(path).as_posix())
-
-
-# ----------------------------------------------------------------- reseal ---
-
-
-def reseal(path: Path, method_key: str, target_class: str, new_sha: str) -> tuple[bool, str]:
-    """Move one test's freeze point to `new_sha`, touching only that Javadoc line.
-
-    Returns (changed, detail). Line endings of the file are preserved.
-    """
-    path = Path(path)
-    with open(path, encoding="utf-8", newline="") as handle:
-        text = handle.read()
-    methods, _ = parse_text(text, path.as_posix())
-    hit = next((m for m in methods if m.key == method_key), None)
-    if hit is None:
-        return False, f"{method_key} not found in {path}"
-    if hit.javadoc_span is None:
-        return False, f"{method_key} has no Javadoc"
-    start, end = hit.javadoc_span
-    doc = text[start:end]
-    pattern = re.compile(rf"(tc-agent-characterizes[ \t]*:[ \t]*"
-                         rf"{re.escape(target_class)}@)([0-9a-fA-F]{{7,40}})")
-    found = pattern.search(doc)
-    if not found:
-        return False, f"{method_key} does not characterize {target_class}"
-    old = found.group(2)
-    if old.lower() == new_sha.lower():
-        return False, f"{method_key} already at {new_sha}"
-    new_doc = doc[:found.start(2)] + new_sha + doc[found.end(2):]
-    with open(path, "w", encoding="utf-8", newline="") as handle:
-        handle.write(text[:start] + new_doc + text[end:])
-    return True, f"{method_key}: {target_class}@{old} -> @{new_sha}"

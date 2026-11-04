@@ -140,7 +140,7 @@
         "target_sha": {
           "type": "string",
           "pattern": "^[0-9a-f]{7,40}$",
-          "description": "Abbreviated sha (%h) of the last commit that touched the target - copy git.current_sha from derive-state.md. Every characterization test written from this plan quotes it in tc-agent-characterizes."
+          "description": "Abbreviated sha (%h) of the last commit that touched the target - copy git.current_sha from derive-state.md."
         },
         "test_data": {
           "type": "array",
@@ -422,7 +422,7 @@
           }
         }
       },
-      "errorMessage": "a characterization plan freezes one version of the code, so `context.target_sha` must name it (git.current_sha from derive-state.md). Every test written from the plan quotes it in tc-agent-characterizes."
+      "errorMessage": "a characterization plan freezes one version of the code, so `context.target_sha` must name it (git.current_sha from derive-state.md)."
     }
   ],
   "$defs": {
@@ -495,7 +495,7 @@
         "requirement": {
           "type": "string",
           "minLength": 1,
-          "description": "Spec-driven: the id or heading of the spec requirement this scenario comes from; it becomes tc-agent-spec: <spec file>#<requirement>."
+          "description": "Spec-driven: the id or heading of the spec requirement this scenario comes from; it links the test to the spec within this run."
         },
         "replaces": {
           "allOf": [
@@ -588,7 +588,7 @@
         "requirement": {
           "type": "string",
           "minLength": 1,
-          "description": "Spec-driven: the id or heading of the spec requirement this scenario comes from; it becomes tc-agent-spec: <spec file>#<requirement>."
+          "description": "Spec-driven: the id or heading of the spec requirement this scenario comes from; it links the test to the spec within this run."
         },
         "replaces": {
           "type": "string",

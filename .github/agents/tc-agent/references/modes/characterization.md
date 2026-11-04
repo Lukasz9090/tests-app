@@ -94,13 +94,11 @@ Example (`context.test_data` shows the shape of a human answer):
 
 - First Javadoc line: `AI-generated test. Characterizes current behavior of <Class> (a freeze, not a spec).`
 - Metadata (`conventions.md` §A1): `tc-agent-mode: characterization, interactive: <run.json>`
-  and `tc-agent-characterizes: <TargetClass>@<plan.context.target_sha>` — on
-  tests AND placeholders. A rewritten method (`replaces`) gets the new sha.
+  — on tests AND placeholders.
 
 ## Reviewer
 
-- Stage 1: every method this run wrote carries `tc-agent-characterizes:
-  <TargetClass>@<sha>` with the plan's `context.target_sha`.
+- Stage 1: every method this run wrote carries `tc-agent-mode: characterization`.
 - A failing assertion in a test this run wrote is **REPAIR_IMPLEMENTATION** —
   unless the plan misread the code and the expectation itself is wrong:
   **REPAIR_PLAN**. A failing test this run did NOT touch (human, or older AI) is

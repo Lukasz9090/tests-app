@@ -544,7 +544,7 @@ def main():
         if len(text) > SPEC_BUDGET:
             text = text[:SPEC_BUDGET] + f"\n... TRUNCATED at {SPEC_BUDGET} chars - read the rest of the file\n"
         block = (f"\n## SPEC: {spec_rel} (the oracle of this spec-driven run)\n\n"
-                 f"Cite requirements as `tc-agent-spec: {spec_rel}#<id or heading>`.\n\n"
+                 f"Cite requirements in the plan as `{spec_rel}#<id or heading>`.\n\n"
                  f"```text\n{numbered(text)}\n```\n")
         out.append(block)
         budget -= len(block)

@@ -122,20 +122,19 @@ def test_mutation_gap_plans():
         expect("survivors kept", state["mutation"]["survivors"], [{"line": 5, "mutator": "X"}])
 
 
-def test_stale_green_is_resealed_not_planned():
+def test_stale_green_needs_nothing():
     """Case 1a: the code moved, the frozen behavior did not."""
     with FixtureRepo() as repo:
-        old = repo.sha()
-        repo.write_test("OrderServiceTest", ai_test("shouldA", old))
+        repo.write_test("OrderServiceTest", ai_test("shouldA", None))
         repo.commit("tests", days_ago=20)
+        frozen = repo.git("rev-parse", "HEAD")
         repo.change_target()
-        new = repo.commit("refactor", days_ago=10)
+        repo.commit("refactor", days_ago=10)
         state = derive(repo)
         expect("still DONE", state["next_action"], "DONE")
         expect("stale detected", state["tests"]["stale"], ["OrderServiceTest#shouldA"])
-        expect("reseal entry", state["reseal"],
-               [{"method": "OrderServiceTest#shouldA", "file": "src/test/java/com/acme/OrderServiceTest.java",
-                 "from": old, "to": new}])
+        expect_true("the freeze point is the test's own commit",
+                    frozen.startswith(state["tests"]["ai"][0]["frozen_at"]))
         expect("nothing to recharacterize", state["recharacterize"], [])
 
 
@@ -189,28 +188,29 @@ def test_changed_code_since_freeze_must_be_covered():
         expect("changed lines found", state["coverage"]["changed_lines"], [8, 9, 10])
         expect("PLAN / CHANGED_CODE_UNCOVERED", (state["next_action"], state["reasons"]),
                ("PLAN", ["CHANGED_CODE_UNCOVERED"]))
-        expect("reseal still offered for the green stale test", [r["method"] for r in state["reseal"]],
-               ["OrderServiceTest#shouldA"])
         state = derive(repo, FakeRunner(coverage=cov(uncovered=[])))
         expect("changed lines all covered -> DONE", state["next_action"], "DONE")
 
 
-def test_sha_prefix_is_not_stale():
+def test_a_test_written_after_the_change_is_not_stale():
     with FixtureRepo() as repo:
-        full = repo.git("rev-parse", "HEAD")
-        repo.write_test("OrderServiceTest", ai_test("shouldA", full[:12]))
-        repo.commit("tests", days_ago=20)
-        state = derive(repo)
-        expect("a longer abbreviation still matches", state["tests"]["stale"], [])
+        repo.change_target()
+        repo.commit("refactor", days_ago=20)
+        repo.write_test("OrderServiceTest", ai_test("shouldA", None))
+        repo.commit("tests", days_ago=10)
+        expect("committed after the change", derive(repo)["tests"]["stale"], [])
+        repo.write_test("OrderServiceTest", ai_test("shouldA", None), ai_test("shouldB", None))
+        expect("not committed yet: fresh", derive(repo)["tests"]["stale"], [])
 
 
 def test_other_class_characterization_is_ignored():
     with FixtureRepo() as repo:
-        repo.write_test("OrderServiceTest", ai_test("shouldA", "1234567", cls="PaymentService"),
-                        "    OrderService s;\n")
+        repo.write_test("PaymentServiceTest", ai_test("shouldA", None), "    OrderService s;\n")
         repo.commit("tests", days_ago=20)
+        repo.change_target()
+        repo.commit("refactor", days_ago=10)
         state = derive(repo)
-        expect("staleness only for tc-agent-characterizes <Target>", state["tests"]["stale"], [])
+        expect("staleness only for the target's own test class", state["tests"]["stale"], [])
 
 
 def test_red_human_test_stops():
@@ -273,8 +273,6 @@ def test_placeholders_are_reported_and_stale_ones_replanned():
         state = derive(repo)
         expect("stale placeholder goes to the planner", [r["method"] for r in state["recharacterize"]],
                ["OrderServiceTest#shouldB"])
-        expect("stale green test is resealed", [r["method"] for r in state["reseal"]],
-               ["OrderServiceTest#shouldA"])
         expect("PLAN / STALE", (state["next_action"], state["reasons"]), ("PLAN", ["STALE"]))
 
 
@@ -311,25 +309,24 @@ def test_guard_only_when_something_would_be_frozen():
         expect("RED wins over the guard", state["next_action"], "RED")
 
 
-def test_dirty_stale_green_is_not_resealed():
+def test_dirty_target_makes_tests_stale():
     with FixtureRepo() as repo:
         repo.write_test("OrderServiceTest", ai_test("shouldA", repo.sha()))
         repo.commit("tests", days_ago=20)
         repo.change_target()
         state = derive(repo)
         expect("stale because dirty", state["tests"]["stale"], ["OrderServiceTest#shouldA"])
-        expect("no sha to reseal to", state["reseal"], [])
         expect("DONE (nothing would be frozen)", state["next_action"], "DONE")
 
 
 def test_metadata_defects_are_reported():
     with FixtureRepo() as repo:
-        bad = ("    /**\n     * tc-agent-mode: characterization, interactive: false\n     */\n"
+        bad = ("    /**\n     * tc-agent-mode: characterization, interactive: false\n     * tc-agent-foo: bar\n     */\n"
                "    @Test\n    void shouldA() { }\n")
         repo.write_test("OrderServiceTest", bad)
         repo.commit("tests", days_ago=20)
         state = derive(repo)
-        expect_true("defect surfaces", any("without tc-agent-characterizes" in d
+        expect_true("defect surfaces", any("unknown metadata key 'tc-agent-foo:'" in d
                                            for d in state["tests"]["metadata_defects"]))
 
 

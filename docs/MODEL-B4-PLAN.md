@@ -21,6 +21,14 @@ pokaże, że nie pogarsza wyniku (tyle samo lub mniej zaślepek, nie więcej run
 Prompty ról, `references/` i schematy różnią się od B2 tylko nazwami oraz dwoma zdaniami orkiestratora
 (ostrzeżenia `start`, `SPEC_REQUIRED`).
 
+## Zmiany własne B4
+
+- 2026-11-04 (decyzja użytkownika): metadane testu w dwóch liniach, bez pustej linii — proza + `tc-agent-mode`.
+  `tc-agent-characterizes` i `tc-agent-spec` znikają (starsze testy: linie ignorowane, bez defektu). Moment
+  zamrożenia = najnowszy commit własnych linii metody testowej (`git blame`); stale = target zmieniony w gicie
+  po tym commicie (albo brudny), tylko dla klasy testowej celu. Stale i zielony: nic (krok RESEAL usunięty);
+  stale i czerwony: `recharacterize` jak dotąd. Wymaganie spec-driven zostaje w planie (`requirement`).
+
 ## Nie przeniesione (kandydaci, każdy osobno i tylko po porównaniu)
 
 - plan naprawczy tylko ze zmianami, generator bez recenzji przy nowym planie, `gate_checks` (B3 E0, D98);

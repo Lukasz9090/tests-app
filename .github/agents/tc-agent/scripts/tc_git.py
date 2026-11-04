@@ -1,11 +1,10 @@
 """Git facts for the pipeline: the version of the code a test froze, and whether
 the code has moved since.
 
-The pipeline keeps no state between runs. What a characterization test froze is
-recorded in the test itself (`tc-agent-characterizes: <Class>@<sha>`), and this module
-answers the only questions that record needs: which commit last touched the
-target, is the target dirty, how old is that commit, and does a recorded sha
-still name it.
+The pipeline keeps no state between runs. A characterization test froze the code
+as it was at the newest commit of the test's own lines (git blame); this module
+answers which commit that is, whether the target changed after it, is the target
+dirty, and how old its last commit is.
 
 Standard library only. Every helper degrades to None/False instead of raising
 when the directory is not a git checkout; callers decide what that means.
@@ -94,6 +93,33 @@ def sha_matches(recorded: str | None, current: str | None) -> bool:
     if min(len(a), len(b)) < MIN_SHA:
         return False
     return a.startswith(b) or b.startswith(a)
+
+
+BLAME_HEAD = re.compile(r"^([0-9a-f]{40}) \d+ \d+", re.M)
+BLAME_TIME = re.compile(r"^committer-time (\d+)$", re.M)
+
+
+def last_commit_of_lines(repo: Path, path: Path, start: int, end: int) -> str | None:
+    """Short sha of the newest commit among lines start..end of `path` (None: some line is
+    uncommitted, or git cannot tell)."""
+    code, out = git(repo, "blame", "--porcelain", "-L", f"{start},{end}", "--", rel(repo, path))
+    if code != 0:
+        return None
+    newest, best = None, -1
+    for block in re.split(r"(?m)^(?=[0-9a-f]{40} \d+ \d+)", out):
+        head, when = BLAME_HEAD.match(block), BLAME_TIME.search(block)
+        if not head:
+            continue
+        if set(head.group(1)) == {"0"}:
+            return None
+        if when and int(when.group(1)) > best:
+            newest, best = head.group(1), int(when.group(1))
+    return newest[:MIN_SHA + 3] if newest else None
+
+
+def changed_after(repo: Path, path: Path, since: str) -> bool:
+    """Did a commit after `since` change `path`?"""
+    return bool(_out(repo, "rev-list", "-1", f"{since}..HEAD", "--", rel(repo, path)))
 
 
 HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@", re.M)

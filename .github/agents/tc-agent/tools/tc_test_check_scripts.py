@@ -223,7 +223,7 @@ def test_mutation_gap_plans():
         expect("survivors", len(out["state"]["mutation"]["survivors"]), 3)
 
 
-def test_stale_and_failing_goes_to_planner_then_reseal_path():
+def test_stale_and_failing_goes_to_planner():
     with fixture() as repo:
         repo.change_target("return amount * 2;")
         repo.commit("behavior change", days_ago=10)
@@ -233,8 +233,8 @@ def test_stale_and_failing_goes_to_planner_then_reseal_path():
         expect("recharacterize", sorted(r["method"] for r in state["recharacterize"]),
                ["OrderServiceTest#shouldA", "OrderServiceTest#shouldC"])
         out2 = start(repo)
-        expect("green again -> reseal list", [r["method"] for r in out2["state"]["reseal"]],
-               ["OrderServiceTest#shouldA"])
+        expect("green again -> nothing to recharacterize but the stale placeholder",
+               [r["method"] for r in out2["state"]["recharacterize"]], ["OrderServiceTest#shouldC"])
 
 
 def test_untested_method_plans_even_when_gate_passes():

@@ -51,7 +51,6 @@ then do exactly its `next_action`:
 | `PLAN` | invoke the `tc-planner` custom agent with `run_subagent` |
 | `GENERATE` | invoke the `tc-generator` custom agent with `run_subagent` |
 | `REVIEW` | invoke the `tc-reviewer` custom agent with `run_subagent` |
-| `RESEAL` | `python $C/tc_orchestrate.py reseal <target> --repo . --run <run_id>` |
 | `WAIT` | wait (a minute is a reasonable step) and run `state` again; never start or finish the run meanwhile |
 | `FINISH` | `python $C/tc_orchestrate.py finish <target> --repo . --run <run_id>`, then stop this target |
 

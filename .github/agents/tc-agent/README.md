@@ -46,13 +46,13 @@ The orchestrator turns this into `tc_orchestrate.py start` with these options:
 
 1. **start** — derive-state checks the target: git state, tests, JaCoCo, PIT. Verdict:
    - `DONE` — tests exist, green, gates met, code unchanged → nothing to do;
-   - `PLAN` — something is missing (no tests, coverage/mutation gap, untested or changed methods, stale tests);
+   - `PLAN` — something is missing (no tests, coverage/mutation gap, untested or changed methods, stale tests
+     that fail — a test is stale when the target changed in git after the test's own last commit);
    - `RED` — existing tests fail → a human must look;
    - `BLOCKED` — target has uncommitted changes, is not committed, or is too fresh (characterization only).
 2. **PLAN → GENERATE → REVIEW**, repeated until the reviewer accepts or `--max-rounds` (3) review
    rounds are spent. The reviewer's decision picks the next step: repair the code, repair the plan, or accept.
-3. **RESEAL** — still-green tests get the new sha after a code change.
-4. **FINISH** — writes `run-report.md`, prints it, and commits if `--commit` was given.
+3. **FINISH** — writes `run-report.md`, prints it, and commits if `--commit` was given.
 
 Outcomes: `DONE`, `DONE_PARTIAL` (placeholders left), `BLOCKED`, `RED`, `ESCALATED` (round limit reached or a human decision is needed). Commit your production code first — a dirty target is always BLOCKED.
 
@@ -87,12 +87,12 @@ Default style: `shouldXxxWhenYyy`, `// given / // when / // then`, AssertJ, Mock
 Every run has its own folder `.test-agent/runs/<target>/<run-id>/`:
 `run.json`, `derive-state.md`, `context-pack.md`, `plan-vN.md`,
 `generation-report-vN[-rM].md`, `review-vN-rM.md`, `checks/`, `run-report.md`. Old runs are never read again and never deleted.
-Each generated test method has a Javadoc with plain-text metadata:
+Each generated test method has a two-line Javadoc:
 
+    AI-generated test. Characterizes current behavior of SimpleCalculatorService (a freeze, not a spec).
     tc-agent-mode: characterization, interactive: false
-    tc-agent-characterizes: SimpleCalculatorService@29aeef6a
 
-(spec-driven tests carry `tc-agent-spec: <spec file>#<requirement>` instead of `tc-agent-characterizes`.)
+What the test froze is the code at the test's own last commit — git has it.
 
 A scenario that cannot be tested (e.g. code reads `LocalDateTime.now()`) becomes an empty
 `@Disabled("AI deferred: …")` method with `tc-agent-deferred: <reason>`. Do not delete
@@ -136,13 +136,13 @@ update, replace the folder as a whole. No agent reads this README.
 | `references/modes/spec-driven.md` | what testing only the specification means for each agent |
 | `references/modes/interactive.md` | when and what the planner asks you |
 | `schemas/*.schema.json` | the shape of the plan, the generator's report, the review and `profile.md` |
-| `scripts/tc_orchestrate.py` | the state machine: `start`, `state`, `reseal`, `finish`; round limit, report, commit |
+| `scripts/tc_orchestrate.py` | the state machine: `start`, `state`, `finish`; round limit, report, commit |
 | `scripts/tc_derive_state.py` | at start: what the target needs (git, tests, coverage, mutations) |
 | `scripts/tc_build_context.py` | builds the context pack the planner and the generator read |
 | `scripts/tc_run_tests.py` | runs the target's tests with JaCoCo; the only script that builds |
 | `scripts/tc_coverage.py` | branch coverage of the target against the gate; uncovered lines |
 | `scripts/tc_mutation.py` | PIT on the target only; surviving mutants against the gate |
-| `scripts/tc_javadoc.py` | reads the `tc-agent-*` lines of generated tests; updates the sha on reseal |
+| `scripts/tc_javadoc.py` | reads the `tc-agent-*` lines of generated tests |
 | `scripts/tc_git.py` | git facts: sha, uncommitted changes, commit age, changed lines |
 | `scripts/tc_common.py` | shared code: finding the target and its module, the profile, maven calls |
 | `scripts/tc_evidence_strength.py` | grades the evidence of each planned scenario |

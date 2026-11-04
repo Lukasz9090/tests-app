@@ -16,13 +16,14 @@ never from an artifact an earlier run left behind:
 It works in tiers, cheapest first, and stops at the first tier that decides:
 
     tier 0  target        name -> file, FQCN, module
-    tier 1  git + Javadoc discovery, tc-agent-mode: / tc-agent-characterizes: / tc-agent-deferred,
-                          current sha, dirty, age           (no build)
+    tier 1  git + Javadoc discovery, tc-agent-mode: / tc-agent-deferred, current sha, dirty,
+                          age, each test's freeze point     (no build)
     tier 2  tests + coverage                                (build)
     tier 3  mutations (PIT)                                 (slow)
 
-A stale characterization test that still PASSES only needs its freeze point
-moved (`reseal`); one that FAILS goes to the planner (`recharacterize`).
+A characterization test is stale when the target changed in git after the newest
+commit of the test's own lines (its freeze point). A stale test that still PASSES
+needs nothing; one that FAILS goes to the planner (`recharacterize`).
 
 The run's mode and interactive flag come from <run>/run.json (written by
 `tc_orchestrate.py start`). Output: <run>/derive-state.md. This script changes
@@ -132,8 +133,9 @@ def tier1(repo: Path, target: c.Target) -> dict:
     for m in ai:
         if m.is_placeholder:
             placeholders.append(m)
-        if m.meta.mode == "characterization" and m.meta.characterizes_class == target.cls:
-            if dirty or not g.sha_matches(m.meta.characterizes_sha, current):
+        if m.meta.mode == "characterization" and m.class_name.split("$")[0].startswith(target.cls):
+            m.freeze = g.last_commit_of_lines(repo, repo / m.file, m.first_line, m.last_line)
+            if dirty or (m.freeze and g.changed_after(repo, target.file, m.freeze)):
                 stale.append(m)
     return {
         "classes": classes,
@@ -176,7 +178,6 @@ def derive(repo: Path, target_name: str, run: dict, runner=None,
         "target": None,
         "git": None,
         "tests": None,
-        "reseal": [],
         "recharacterize": [],
         "red": [],
         "compile_errors": [],
@@ -284,9 +285,6 @@ def derive(repo: Path, target_name: str, run: dict, runner=None,
             continue
         if m.is_placeholder:
             out["recharacterize"].append({"method": m.key, "reason": "stale placeholder: re-evaluate"})
-        elif not t1["git"]["dirty"] and t1["git"]["current_sha"]:
-            out["reseal"].append({"method": m.key, "file": m.file,
-                                  "from": m.meta.characterizes_sha, "to": t1["git"]["current_sha"]})
     if out["red"]:
         return conclude("RED", ["TESTS_FAILING"])
 
@@ -310,7 +308,7 @@ def derive(repo: Path, target_name: str, run: dict, runner=None,
         out["coverage"]["untested_methods"] = untested
         reasons.append("UNTESTED_METHODS")
 
-    freeze_shas = sorted({m.meta.characterizes_sha for m in t1["stale"] if m.meta.characterizes_sha})
+    freeze_shas = sorted({m.freeze for m in t1["stale"] if getattr(m, "freeze", None)})
     if freeze_shas and not t1["git"]["dirty"]:
         changed = set()
         for sha in freeze_shas:
@@ -363,7 +361,7 @@ def summary_lines(state: dict) -> list:
     if tests:
         lines.append(f"test classes: {len(tests.get('classes', []))}; AI tests: {len(tests.get('ai', []))}; "
                      f"placeholders: {len(tests.get('placeholders', []))}; human tests: {tests.get('human_count')}")
-    for key in ("reseal", "recharacterize", "red"):
+    for key in ("recharacterize", "red"):
         if state.get(key):
             lines.append(f"{key}: {len(state[key])}")
     for gate in ("coverage", "mutation"):

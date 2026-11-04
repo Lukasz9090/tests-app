@@ -21,12 +21,8 @@ Subcommands
       spec, max_rounds and commit are given), then run derive-state. Prints run_id.
 
   state  <target> --repo . --run <id|latest>
-      Print the in-run `next_action`: PLAN | GENERATE | REVIEW | RESEAL | FINISH,
+      Print the in-run `next_action`: PLAN | GENERATE | REVIEW | FINISH,
       with `dispatch` (who to call, which files) and, on FINISH, the outcome.
-
-  reseal <target> --repo . --run <id|latest>
-      Move the freeze point of stale-but-green characterization tests to the
-      current sha. Touches only the `tc-agent-characterizes` line of those methods.
 
   finish <target> --repo . --run <id|latest>
       Write run-report.md and print it. With `commit: true` in run.json, commit
@@ -323,7 +319,6 @@ def cmd_start(args) -> int:
         "max_rounds": args.max_rounds or c.max_rounds(repo),
         "commit": bool(args.commit),
         "started": _now(),
-        "resealed": False,
     }
     c.save_run(directory, run)
 
@@ -331,7 +326,7 @@ def cmd_start(args) -> int:
         return {"schema_version": 1, "target_name": args.target, "mode": args.mode,
                 "pid": pid, "started": _now(),
                 "interactive": bool(args.interactive), "target": None, "git": None,
-                "tests": None, "reseal": [], "recharacterize": [], "red": [],
+                "tests": None, "recharacterize": [], "red": [],
                 "compile_errors": [], "coverage": None, "mutation": None,
                 "tiers_run": [], "next_action": "ESCALATE", "reasons": [reason],
                 "detail": detail}
@@ -434,13 +429,6 @@ def compute_state(repo: Path, directory: Path) -> dict:
         return finish(DERIVE_TERMINAL[d_action],
                       f"derive-state: {d_action} ({', '.join(derive.get('reasons', []))})"
                       + (f" - {derive['detail']}" if derive.get("detail") else ""))
-
-    if derive.get("reseal") and not run.get("resealed"):
-        out["next_action"] = "RESEAL"
-        out["reason"] = f"{len(derive['reseal'])} stale characterization test(s) still pass"
-        out["dispatch"] = {"command": f"tc_orchestrate.py reseal {run['target_name']} --repo . "
-                                      f"--run {run['run_id']}"}
-        return out
 
     if d_action == "DONE":
         return finish("DONE", "derive-state: gates met on the current code, nothing stale is red")
@@ -549,41 +537,6 @@ def cmd_state(args) -> int:
     return 0
 
 
-# ----------------------------------------------------------------- reseal ---
-
-
-def do_reseal(repo: Path, directory: Path) -> dict:
-    run = c.load_run(directory)
-    derive = _safe(directory / "derive-state.md")
-    if "__error__" in derive:
-        raise c.CheckError(f"derive-state.md is unreadable: {derive['__error__']}")
-    if run.get("resealed"):
-        return {"resealed": run.get("resealed_methods", []), "note": "already resealed in this run"}
-    if (derive.get("git") or {}).get("dirty"):
-        raise c.CheckError("the target is dirty; there is no sha to reseal to")
-    target_class = (derive.get("target") or {}).get("class")
-    done = []
-    for item in derive.get("reseal", []) or []:
-        changed, detail = j.reseal(repo / item["file"], item["method"], target_class, item["to"])
-        done.append({**item, "changed": changed, "detail": detail})
-    run["resealed"] = True
-    run["resealed_methods"] = done
-    c.save_run(directory, run)
-    return {"resealed": done}
-
-
-def cmd_reseal(args) -> int:
-    repo = Path(args.repo).resolve()
-    try:
-        directory = c.run_dir(repo, args.target, args.run)
-        result = do_reseal(repo, directory)
-    except c.CheckError as exc:
-        print(str(exc), file=sys.stderr)
-        return 2
-    print(json.dumps(result, indent=2, ensure_ascii=False))
-    return 0
-
-
 # ----------------------------------------------------------------- finish ---
 
 
@@ -604,10 +557,6 @@ def collect(repo: Path, directory: Path, state: dict) -> dict:
 
     written = [k for k, r in results.items() if r.get("status") == "IMPLEMENTED"]
     placeholders_written = [k for k, r in results.items() if r.get("status") == "PLACEHOLDER"]
-    resealed = [x for x in run.get("resealed_methods", []) if x.get("changed")]
-    for x in resealed:
-        if x["file"] not in test_files:
-            test_files.append(x["file"])
 
     # Placeholders now in the code decide DONE vs DONE_PARTIAL.
     placeholders_in_code = []
@@ -662,7 +611,6 @@ def collect(repo: Path, directory: Path, state: dict) -> dict:
         "written": written,
         "placeholders_written": placeholders_written,
         "placeholders_in_code": placeholders_in_code,
-        "resealed": resealed,
         "test_files": test_files,
         "suggestions": suggestions,
         "unimplementable": (review.get("unimplementable") or []) if "__error__" not in review else [],
@@ -721,9 +669,6 @@ def confirm_lines(notes: list) -> list:
 def template_summary(info: dict, outcome: str) -> str:
     cls, sha = info["target_class"], info["sha"] or "?"
     parts = []
-    if info["resealed"]:
-        parts.append(f"Resealed {len(info['resealed'])} characterization test(s) of {cls} to {sha}; "
-                     f"they still pass, so the behavior they froze did not change.")
     if info["plan_status"] == "COMPLETE":
         k = len(info["placeholders_in_code"])
         parts.append(f"No new tests were generated for {cls}: the planner found the remaining "
@@ -747,7 +692,7 @@ def commit_message(info: dict, summary: str) -> str:
     mode = run["mode"] + (" (interactive)" if run.get("interactive") else "")
     lines.append(f"Mode: {mode} | target: {info['target_class']}@{info['sha'] or '?'}")
     lines.append(f"Tests: +{len(info['written'])} written, {len(info['placeholders_written'])} "
-                 f"placeholders, {len(info['resealed'])} resealed")
+                 f"placeholders")
     gate_parts = []
     if "coverage" in info["gates"]:
         gc = info["gates"]["coverage"]
@@ -850,7 +795,7 @@ def render_report(info: dict, state: dict, outcome: str, summary: str, commit: d
         lines.append(f"- rounds ({len(info['history'])} of {run.get('max_rounds', c.DEFAULT_MAX_ROUNDS)}): "
                      + " -> ".join(info["history"]))
     lines.append(f"- tests written: {len(info['written'])}; placeholders written: "
-                 f"{len(info['placeholders_written'])}; resealed: {len(info['resealed'])}; "
+                 f"{len(info['placeholders_written'])}; "
                  f"placeholders now in the code: {len(info['placeholders_in_code'])}")
     if info["test_files"]:
         lines.append(f"- files changed in the working tree: {', '.join(info['test_files'])}")
@@ -924,7 +869,6 @@ def render_report(info: dict, state: dict, outcome: str, summary: str, commit: d
         "written": info["written"],
         "placeholders_written": info["placeholders_written"],
         "placeholders_in_code": info["placeholders_in_code"],
-        "resealed": [x["method"] for x in info["resealed"]],
         "test_files": info["test_files"],
         "red": info["red"],
         "spec_mismatches": info.get("spec_mismatches", []),
@@ -1010,14 +954,14 @@ def main() -> int:
     s.add_argument("--commit", action="store_true",
                    help="commit the run's test files on DONE / DONE_PARTIAL (never on a protected branch)")
 
-    for name in ("state", "reseal", "finish"):
+    for name in ("state", "finish"):
         p = sub.add_parser(name)
         p.add_argument("target")
         p.add_argument("--repo", default=".")
         p.add_argument("--run", default="latest")
 
     args = parser.parse_args()
-    return {"start": cmd_start, "state": cmd_state, "reseal": cmd_reseal,
+    return {"start": cmd_start, "state": cmd_state,
             "finish": cmd_finish}[args.cmd](args)
 
 
