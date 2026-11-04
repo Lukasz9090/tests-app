@@ -1,7 +1,7 @@
-# tc-agent — project directory of tests-app
+# tc-agent — settings of tests-app
 
-This directory holds what belongs to THIS repository; the shared agent package is
-`.github/agents/tc-agent/`.
+Optional: this folder holds what belongs to THIS repository; the agent itself is
+`.github/agents/tc-agent/` and is replaced as a whole on update.
 
 - `profile.md` — gates, freshness, rounds, protected branches (scripts read its ```json fence)
 - `conventions.md` — optional: this repo's test style, overriding the agent's §B defaults

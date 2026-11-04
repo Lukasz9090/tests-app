@@ -133,7 +133,7 @@ dotyczące jej przebiegu; każda reguła ma jednego właściciela)
 
 **`docs/configuration.md`** — opis wszystkich kluczy `profile.md` (dla ludzi).
 
-### 5.2 `.github/agents/tc-agent-project/` — konfiguracja tego repo
+### 5.2 `.github/tc-agent-project-config/` — konfiguracja tego repo
 
 | plik | zawartość |
 |---|---|

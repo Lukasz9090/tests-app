@@ -621,7 +621,7 @@ def test_commit_on_master_creates_a_branch():
 
 def test_commit_on_unprotected_branch_stays():
     with FixtureRepo() as repo:
-        repo.write(".github/agents/tc-agent-project/profile.md", '# p\n\n```json\n{"schema_version": 1, "protected_branches": ["master", "develop"]}\n```\n')
+        repo.write(".github/tc-agent-project-config/profile.md", '# p\n\n```json\n{"schema_version": 1, "protected_branches": ["master", "develop"]}\n```\n')
         c._PROFILE_CACHE.clear()
         repo.commit("profile", days_ago=25)
         repo.git("switch", "-q", "-c", "feature/x")
@@ -634,7 +634,7 @@ def test_commit_on_unprotected_branch_stays():
 
 def test_commit_protected_glob_and_detached():
     with FixtureRepo() as repo:
-        repo.write(".github/agents/tc-agent-project/profile.md", '# p\n\n```json\n{"schema_version": 1, "protected_branches": ["release/*"]}\n```\n')
+        repo.write(".github/tc-agent-project-config/profile.md", '# p\n\n```json\n{"schema_version": 1, "protected_branches": ["release/*"]}\n```\n')
         c._PROFILE_CACHE.clear()
         repo.commit("profile", days_ago=25)
         repo.git("switch", "-q", "-c", "release/1.0")
@@ -725,7 +725,7 @@ def test_start_refuses_what_it_cannot_run():
         expect("missing spec file", (code, err.startswith("FILE_NOT_FOUND: --spec")), (2, True))
         code, err, _ = start(repo, "--test-data", "docs/nope.md")
         expect("missing --test-data file", (code, err.startswith("FILE_NOT_FOUND: --test-data")), (2, True))
-        repo.write(".github/agents/tc-agent-project/profile.md",
+        repo.write(".github/tc-agent-project-config/profile.md",
                    '# p\n\n```json\n{"schema_version": 1, "max_round": 2}\n```\n')
         c._PROFILE_CACHE.clear()
         code, err, made = start(repo)

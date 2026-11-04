@@ -1,7 +1,8 @@
 # tc-agent — project configuration
 
-Everything that belongs to ONE repository lives in its project directory,
-`.github/agents/tc-agent-project/`, outside the shared agent package. Files, all optional:
+Everything that belongs to ONE repository lives in the optional folder
+`.github/tc-agent-project-config/`, outside the agent package (`.github/agents/tc-agent/`).
+Create it only to change a default; every file in it is optional:
 
 | file | what it holds | read by |
 |---|---|---|
@@ -9,8 +10,42 @@ Everything that belongs to ONE repository lives in its project directory,
 | `conventions.md` | this repo's test style (overrides the agent's §B defaults, never §A) | the context pack → REPO CONVENTIONS, first source |
 | `test-data-examples.md` | example business values of this system | the context pack → TEST DATA |
 
-Without a project directory the agent runs on its built-in defaults. A `profile.md` the
-schema rejects (an unknown or misspelled key included) stops `start` with `INVALID_PROFILE`.
+Without that folder the agent runs on its built-in defaults. A `profile.md` the
+schema rejects (an unknown or misspelled key included) stops `start` with `INVALID_PROFILE`;
+a file the agent does not read (a typo in its name) makes `start` print a warning.
+
+Examples — copy what you need and keep only the lines that differ from the defaults:
+
+`profile.md` (only the ```json fence is read):
+
+````markdown
+# tc-agent settings of this repository
+
+```json
+{
+  "schema_version": 1,
+  "quality_gates": { "branch_coverage_target_scope": 0.85 },
+  "protected_branches": ["main", "release/*"]
+}
+```
+````
+
+`conventions.md` (plain text, read as REPO CONVENTIONS):
+
+```markdown
+- Test class names end with `Tests`, not `Test`.
+- Build domain objects with the builders in `src/test/java/.../fixtures`.
+```
+
+`test-data-examples.md` (plain text, read as TEST DATA):
+
+```markdown
+## customerId
+Example: `123456789`. A 9-digit number.
+
+## accountNumber
+Example: `63249000050000400001071727`. 26 digits (IBAN without the country code).
+```
 
 ## profile.md keys
 

@@ -66,7 +66,7 @@ def test_test_data_files_are_included():
     with FixtureRepo() as repo:
         repo.write("docs/test-data-examples.md",
                    "customer id: 9 digits, e.g. 123456789\ntransfer type: ELIXIR | SORBNET\n")
-        repo.write(".github/agents/tc-agent-project/profile.md",
+        repo.write(".github/tc-agent-project-config/profile.md",
                    '# p\n\n```json\n{"schema_version": 1, "test_data_paths": ["docs/test-data-examples.md"]}\n```\n')
         c._PROFILE_CACHE.clear()
         pack = build(repo)
@@ -136,7 +136,7 @@ def test_multi_module_repository():
                    "    public int pay(String customerId, int amount) { return amount; }\n}\n")
         repo.write("customers/src/test/java/com/acme/cust/CustomerServiceTest.java",
                    "class CustomerServiceTest {\n    String customerId = \"123456789\";\n}\n")
-        repo.write(".github/agents/tc-agent-project/profile.md",
+        repo.write(".github/tc-agent-project-config/profile.md",
                    '# p\n\n```json\n{"schema_version": 1, "freshness_days": 2}\n```\n')
         repo.commit("modules", days_ago=20)
         c._PROFILE_CACHE.clear()
@@ -158,7 +158,7 @@ def test_source_blocks_carry_the_files_line_numbers():
     """A ref copied from the pack must name the same line in the file."""
     with FixtureRepo() as repo:
         repo.write("docs/test-data-examples.md", "customer id: 9 digits\n" * 30)    # pushes TARGET down the pack
-        repo.write(".github/agents/tc-agent-project/test-data-examples.md", "x\n" * 30)
+        repo.write(".github/tc-agent-project-config/test-data-examples.md", "x\n" * 30)
         c._PROFILE_CACHE.clear()
         pack = build(repo)
         source = (repo.root / repo.target_path).read_text(encoding="utf-8").splitlines()
@@ -173,7 +173,7 @@ def test_source_blocks_carry_the_files_line_numbers():
 
 def test_project_test_data_is_included_without_listing_it():
     with FixtureRepo() as repo:
-        repo.write(".github/agents/tc-agent-project/test-data-examples.md", "account number: PL + 26 digits\n")
+        repo.write(".github/tc-agent-project-config/test-data-examples.md", "account number: PL + 26 digits\n")
         c._PROFILE_CACHE.clear()
         pack = build(repo)
         expect_true("project test-data-examples.md is in TEST DATA", "PL + 26 digits" in pack)
@@ -183,7 +183,7 @@ def test_project_test_data_is_included_without_listing_it():
 def test_project_directory_resolution():
     with FixtureRepo() as repo:
         expect("no project directory", (c.project_file(repo.root, c.PROFILE_FILE), c.profile(repo.root)), (None, {}))
-        repo.write(".github/agents/tc-agent-project/profile.md",
+        repo.write(".github/tc-agent-project-config/profile.md",
                    '# p\n\n```json\n{"schema_version": 1, "freshness_days": 3}\n```\n')
         c._PROFILE_CACHE.clear()
         expect("project directory", c.freshness_days(repo.root), 3.0)
@@ -196,8 +196,8 @@ def test_project_directory_resolution():
 
 def test_unread_project_files_are_named():
     with FixtureRepo() as repo:
-        repo.write(".github/agents/tc-agent-project/test-data.md", "old name\n")
-        repo.write(".github/agents/tc-agent-project/test-data-examples.md", "account: 26 digits\n")
+        repo.write(".github/tc-agent-project-config/test-data.md", "old name\n")
+        repo.write(".github/tc-agent-project-config/test-data-examples.md", "account: 26 digits\n")
         expect("only the old name is reported", c.unread_project_files(repo.root), ["test-data.md"])
 
 
@@ -249,9 +249,9 @@ def test_pickup_and_applyto():
                    '---\napplyTo: "web/**/*.ts"\n---\nFRONTEND ONLY')
         repo.write(".github/instructions/general.instructions.md", "No front-matter: always.")
         repo.write("AGENTS.md", "Agent notes for humans.\n")
-        repo.write(".github/agents/tc-agent-project/conventions.md", "Project style: BDDMockito.")
+        repo.write(".github/tc-agent-project-config/conventions.md", "Project style: BDDMockito.")
         repo.write("docs/code-conventions.instruction.md", "Outside .github.")
-        repo.write(".github/agents/tc-agent-project/profile.md",
+        repo.write(".github/tc-agent-project-config/profile.md",
                    '# p\n\n```json\n{"schema_version": 1, "instruction_paths": ["docs/code-conventions.instruction.md"]}\n```\n')
         c._PROFILE_CACHE.clear()
         pack = build(repo)

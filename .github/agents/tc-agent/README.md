@@ -58,8 +58,19 @@ Outcomes: `DONE`, `DONE_PARTIAL` (placeholders left), `BLOCKED`, `RED`, `ESCALAT
 
 ## Configuration
 
-Per-repository settings live in the **project directory** `.github/agents/tc-agent-project/`,
-never inside this package. All files are optional; all keys: `docs/configuration.md`.
+The agent works without any configuration: every setting has a default. To change one,
+create the **optional** folder `.github/tc-agent-project-config/` in your repository —
+next to the agent, never inside it, so updating the agent never touches your settings:
+
+    .github/
+    ├── agents/tc-agent/               ← the agent (this folder): replaced as a whole on update
+    └── tc-agent-project-config/       ← optional, yours: only the files you need
+        ├── profile.md                 ← values that differ from the defaults
+        ├── conventions.md             ← your test style
+        └── test-data-examples.md      ← example business values
+
+Each file is optional; an example of each, and every key with its default, is in
+`docs/configuration.md`. `start` warns about a file in that folder the agent does not read.
 
 - **`profile.md`** (json block): gates (`branch_coverage_target_scope` 0.80,
   `mutation_score_target_scope` 0.70), `max_rounds` (3), `freshness_days` (7),
@@ -105,17 +116,17 @@ placeholders — they tell the next run the gap is known.
 
 ## Files
 
-You edit only the project directory. Everything in `tc-agent/` is the agent itself: on an
-update, replace the folder as a whole. No agent reads this README.
+You edit only `.github/tc-agent-project-config/`, if you need it. Everything in
+`.github/agents/tc-agent/` is the agent itself: on an update, replace the folder as a whole. No agent reads this README.
 
-**`tc-agent-project/` — this repository's settings (all optional)**
+**`.github/tc-agent-project-config/` — this repository's settings (optional folder, every file optional)**
 
 | file | what it is |
 |---|---|
 | `profile.md` | gates, rounds, freshness, protected branches, maven; every key in `docs/configuration.md` |
 | `conventions.md` | your test style; overrides the default style, never the fixed rules |
 | `test-data-examples.md` | example business values: what an id or an account number looks like |
-| `README.md` | what belongs in this folder |
+| `README.md` | optional: a note for your team about this folder |
 
 **`tc-agent/` — the agent**
 

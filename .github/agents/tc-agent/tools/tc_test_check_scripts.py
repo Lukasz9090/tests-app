@@ -296,7 +296,7 @@ def test_also_make_is_auto_by_default():
                tc.module_args("mod", also_make=(tc.maven_also_make(repo.root) is True)),
                ["-pl", "mod"])
         for value, wanted in ((True, True), (False, False)):
-            repo.write(".github/agents/tc-agent-project/profile.md",
+            repo.write(".github/tc-agent-project-config/profile.md",
                        '# p\n\n```json\n{"schema_version": 1, "maven_also_make": %s}\n```\n'
                        % str(value).lower())
             tc._PROFILE_CACHE.clear()
@@ -384,7 +384,7 @@ def test_skipping_main_compile_needs_built_classes():
     import tc_common as tc
     with FixtureRepo() as repo:
         expect("auto by default", tc.maven_skip_main_compile(repo.root), "auto")
-        repo.write(".github/agents/tc-agent-project/profile.md",
+        repo.write(".github/tc-agent-project-config/profile.md",
                    '# p\n\n```json\n{"schema_version": 1, "maven_skip_main_compile": true}\n```\n')
         tc._PROFILE_CACHE.clear()
         expect("forced from the profile", tc.maven_skip_main_compile(repo.root), True)
@@ -452,7 +452,7 @@ def test_auto_asks_about_the_class_under_test():
                tc.stale_target(repo.root, None, built, repo.root / "pom.xml"), None)
         expect("strict is still available",
                tc.maven_skip_main_compile(repo.root), "auto")
-        repo.write(".github/agents/tc-agent-project/profile.md",
+        repo.write(".github/tc-agent-project-config/profile.md",
                    '# p\n\n```json\n{"schema_version": 1, '
                    '"maven_skip_main_compile": "strict"}\n```\n')
         tc._PROFILE_CACHE.clear()
@@ -471,7 +471,7 @@ def test_goals_only_needs_a_built_src_main():
                     "resources:testResources" in tc.LEAN_GOALS)
         expect("but never when src/main still has to be compiled",
                tc.maven_lifecycle(repo.root, skip_main=False), ["test"])
-        repo.write(".github/agents/tc-agent-project/profile.md",
+        repo.write(".github/tc-agent-project-config/profile.md",
                    '# p\n\n```json\n{"schema_version": 1, "maven_goals_only": false}\n```\n')
         tc._PROFILE_CACHE.clear()
         expect("a repo that needs the phase can say so", tc.maven_goals_only(repo.root), False)
@@ -528,7 +528,7 @@ def test_junit_version_follows_the_existing_tests():
         expect("the majority decides", contract["junit"], "5")
         expect("and both present is flagged", contract["junit_mixed"], True)
 
-        repo.write(".github/agents/tc-agent-project/profile.md",
+        repo.write(".github/tc-agent-project-config/profile.md",
                    '# p\n\n```json\n{"schema_version": 1, "junit": "4"}\n```\n')
         tc._PROFILE_CACHE.clear()
         contract = tc.repo_contract(repo.root, None)
@@ -563,7 +563,7 @@ def test_a_pom_bound_agent_still_has_to_be_asked_for_on_the_lean_path():
 
         # ... and when the pom's own execution DOES fire on top of ours, the
         # forked VM dies - which the run recognises and heals by itself.
-        repo.write(".github/agents/tc-agent-project/profile.md",
+        repo.write(".github/tc-agent-project-config/profile.md",
                    '# p\n\n```json\n{"schema_version": 1, "maven_goals_only": false}\n```\n')
         (repo.root / "mvn.log").unlink()           # only the next run's calls
         out = start(repo, {"FAKE_MVN_POM_AGENT": "1"})
@@ -637,7 +637,7 @@ def test_failing_or_broken_tests_never_fall_back_to_the_phase():
 def test_maven_args_from_the_profile_reach_the_command():
     import tc_common as tc
     with FixtureRepo() as repo:
-        repo.write(".github/agents/tc-agent-project/profile.md",
+        repo.write(".github/tc-agent-project-config/profile.md",
                    '# p\n\n```json\n{"schema_version": 1, "maven_args": ["-o", "-T", "1C"], '
                    '"maven_timeout_seconds": 60}\n```\n')
         tc._PROFILE_CACHE.clear()
@@ -654,12 +654,12 @@ def test_a_run_does_not_re_resolve_snapshots():
     with FixtureRepo() as repo:
         expect("off by default", tc.maven_snapshot_updates(repo.root), False)
         expect("so -nsu is on every call", tc.mvn_base(repo.root)[1:], ["-B", "-nsu"])
-        repo.write(".github/agents/tc-agent-project/profile.md",
+        repo.write(".github/tc-agent-project-config/profile.md",
                    '# p\n\n```json\n{"schema_version": 1, "maven_snapshot_updates": true}\n```\n')
         tc._PROFILE_CACHE.clear()
         expect("the profile can give maven its usual behavior back",
                tc.mvn_base(repo.root)[1:], ["-B"])
-        repo.write(".github/agents/tc-agent-project/profile.md",
+        repo.write(".github/tc-agent-project-config/profile.md",
                    '# p\n\n```json\n{"schema_version": 1, "maven_args": ["-nsu"]}\n```\n')
         tc._PROFILE_CACHE.clear()
         expect("and it is never passed twice", tc.mvn_base(repo.root)[1:], ["-B", "-nsu"])

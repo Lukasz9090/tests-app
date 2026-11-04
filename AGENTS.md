@@ -19,4 +19,4 @@ Reading a generated test:
   agent try again.
 
 Project configuration for the agent (gates, protected branches, test style,
-example data): `.github/agents/tc-agent-project/`.
+example data): `.github/tc-agent-project-config/`.

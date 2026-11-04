@@ -264,7 +264,7 @@ def test_git_facts():
 
 def test_protected_branches():
     def profile_with(repo, value):
-        repo.write(".github/agents/tc-agent-project/profile.md", '# p\n\n```json\n{"schema_version": 1%s}\n```\n'
+        repo.write(".github/tc-agent-project-config/profile.md", '# p\n\n```json\n{"schema_version": 1%s}\n```\n'
                    % ("" if value is None else ', "protected_branches": ' + value))
         c._PROFILE_CACHE.clear()
 

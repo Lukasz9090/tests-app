@@ -16,7 +16,7 @@ w `.test-agent/runs/<target>/<run-id>/` (gitignored); żaden skrypt nie czyta ka
 | co | gdzie | czyje |
 |---|---|---|
 | prompty ról, `references/`, schematy, skrypty, `docs/` | `.github/agents/tc-agent/` | wspólne (w przyszłości submodule) |
-| `profile.md`, `conventions.md`, `test-data-examples.md` (wszystkie opcjonalne) | `.github/agents/tc-agent-project/` | projektu |
+| `profile.md`, `conventions.md`, `test-data-examples.md` (wszystkie opcjonalne) | `.github/tc-agent-project-config/` | projektu |
 | przebiegi, cache `env.json` | `.test-agent/` | lokalne |
 
 `references/`: `contracts.md`, `conventions.md` (§A integralność, §B domyślny styl), `junit4.md`,

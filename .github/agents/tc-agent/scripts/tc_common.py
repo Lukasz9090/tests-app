@@ -924,7 +924,7 @@ def module_for_target(repo: Path, target_file: Path) -> str | None:
 # The project's own configuration lives OUTSIDE the shared agent package, so the
 # package can be the same in every repository. The first existing directory wins:
 # the target layout first, then where it lives while the package is in this repo.
-PROJECT_DIR = Path(".github") / "agents" / "tc-agent-project"
+PROJECT_DIR = Path(".github") / "tc-agent-project-config"
 PROFILE_FILE = "profile.md"
 PROJECT_FILES = ("README.md", PROFILE_FILE, "conventions.md", "test-data-examples.md")
 

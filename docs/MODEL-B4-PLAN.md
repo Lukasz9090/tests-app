@@ -29,6 +29,10 @@ Prompty ról, `references/` i schematy różnią się od B2 tylko nazwami oraz d
   po tym commicie (albo brudny), tylko dla klasy testowej celu. Stale i zielony: nic (krok RESEAL usunięty);
   stale i czerwony: `recharacterize` jak dotąd. Wymaganie spec-driven zostaje w planie (`requirement`).
 
+- 2026-11-04 (decyzja użytkownika, pod instalację agenta submodułem): konfiguracja projektu przeniesiona z
+  `.github/agents/tc-agent-project/` do opcjonalnego `.github/tc-agent-project-config/` — poza folderem agenta,
+  więc aktualizacja agenta jej nie dotyka; przykłady plików w `docs/configuration.md`, bez szablonu do kopiowania.
+
 ## Nie przeniesione (kandydaci, każdy osobno i tylko po porównaniu)
 
 - plan naprawczy tylko ze zmianami, generator bez recenzji przy nowym planie, `gate_checks` (B3 E0, D98);
