@@ -25,7 +25,8 @@ does not describe are left to a characterization run.
 
 ## Generator
 
-- First Javadoc line: `AI-generated test. Based on the specification <spec file>.`
+- First Javadoc line: `AI-generated test. Based on the specification.` — never the spec's
+  path or name: the spec need not be in the repository.
 - Metadata (`conventions.md` §A1): `tc-agent-mode: spec-driven, interactive: <run.json>`.
   The requirement a test comes from stays in the plan (`requirement`), not in the code.
 - Feedback with `scope: "disable"`: the code does not do what the spec says. Keep
