@@ -33,6 +33,11 @@ Prompty ról, `references/` i schematy różnią się od B2 tylko nazwami oraz d
   `.github/agents/tc-agent-project/` do opcjonalnego `.github/tc-agent-project-config/` — poza folderem agenta,
   więc aktualizacja agenta jej nie dotyka; przykłady plików w `docs/configuration.md`, bez szablonu do kopiowania.
 
+- 2026-11-09 (zgłoszenie użytkownika: mała klasa, pack ~150k): BUILDER/FIXTURE w packu tylko z drzewa testów i
+  tylko gdy używa celu albo jego TYPU DANYCH z poziomu 1 — nazwy kolaboratorów (`…Service`, `…Repository`,
+  `…Client`, …) nie wciągają już każdej fabryki, która wstrzykuje np. serwis słownikowy; najwyżej 8 builderów,
+  najtrafniejsze pierwsze, reszta odnotowana w NOTES.
+
 ## Nie przeniesione (kandydaci, każdy osobno i tylko po porównaniu)
 
 - plan naprawczy tylko ze zmianami, generator bez recenzji przy nowym planie, `gate_checks` (B3 E0, D98);

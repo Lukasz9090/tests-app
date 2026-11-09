@@ -201,6 +201,32 @@ def test_unread_project_files_are_named():
         expect("only the old name is reported", c.unread_project_files(repo.root), ["test-data.md"])
 
 
+def test_builders_are_for_data_not_for_shared_services():
+    """A dictionary service injected everywhere must not drag every factory into the pack."""
+    with FixtureRepo() as repo:
+        repo.write("src/main/java/com/acme/DictionaryService.java",
+                   "package com.acme;\npublic class DictionaryService { }\n")
+        repo.write("src/main/java/com/acme/Order.java", "package com.acme;\npublic class Order { }\n")
+        repo.write("src/main/java/com/acme/OrderService.java",
+                   "package com.acme;\npublic class OrderService {\n  DictionaryService d;\n"
+                   "  int f(Order o) { return 1; }\n}\n")
+        for k in range(12):
+            repo.write(f"src/main/java/com/acme/Thing{k}Factory.java",
+                       f"package com.acme;\nclass Thing{k}Factory {{ DictionaryService d; }}\n")
+            repo.write(f"src/test/java/com/acme/Other{k}Fixture.java",
+                       f"package com.acme;\nclass Other{k}Fixture {{ DictionaryService d; }}\n")
+        for k in range(10):
+            repo.write(f"src/test/java/com/acme/Order{k}Builder.java",
+                       f"package com.acme;\nclass Order{k}Builder {{ Order o; }}\n")
+        c._GIT_INDEX_CACHE.clear()
+        pack = build(repo)
+        expect_true("production factories are not builders", "Thing0Factory" not in pack)
+        expect_true("a fixture that only injects a service is not packed", "Other0Fixture" not in pack)
+        expect("data builders, at most 8", pack.count("## BUILDER/FIXTURE"), 8)
+        expect_true("the cut is noted", "BUILDERS: 2 less relevant" in pack)
+        c._GIT_INDEX_CACHE.clear()
+
+
 def test_only_files_that_use_the_target_are_packed():
     """git grep shortlists them; an unrelated test must not enter the pack."""
     with FixtureRepo() as repo:

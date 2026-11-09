@@ -32,6 +32,11 @@ import tc_javadoc as tj  # noqa: E402
 # the agent's own reasoning; the old 400k could not be read at all.
 MAX_TOTAL_CHARS = 150_000          # hard budget (~37k tokens)
 MAX_FILE_CHARS = 40_000            # per-file cap before truncation
+MAX_BUILDERS = 8                   # the most relevant builders/fixtures only
+# Collaborators, not data: a builder that merely injects a dictionary service says
+# nothing about the values the target works with, and such a service is used everywhere.
+SERVICE_LIKE = re.compile(r"(Service|Repository|Repo|Dao|Client|Gateway|Provider|Facade|Manager|"
+                          r"Mapper|Validator|Helper|Utils?|Config(?:uration)?|Properties)$")
 SPEC_BUDGET = 30_000               # the spec of a spec-driven run, before the sources
 SIG_RE = re.compile(
     r"^\s*(?:public|protected)\s+[\w<>\[\],\s?]+\s+\w+\s*\([^;{]*\)", re.M)
@@ -425,11 +430,20 @@ def main():
     _say(f"{len(test_pool)} test file(s) in scope; asking git which ones use {cname}")
     tests = sorted({f for f in test_pool if cname in f.stem} | set(uses([cname], test_pool)))
     builder_pat = re.compile(r"(Builder|Factory|Fixtures?|TestData|Mother)$")
-    # One name per dependency would be one git grep per dependency; the target
-    # plus its level-1 deps is a single alternation, and 25 names is plenty.
-    wanted = [cname] + sorted(l1)[:24]
-    builder_pool = [f for f in test_pool + all_src if builder_pat.search(f.stem)]
+    # Builders of the DATA the target works with: test-side builders/fixtures that use
+    # the target or one of its level-1 data types (one git grep for all names).
+    data_types = sorted(n for n in l1 if not SERVICE_LIKE.search(n))
+    wanted = [cname] + data_types[:24]
+    builder_pool = [f for f in test_pool if builder_pat.search(f.stem)]
     builders = uses(wanted, builder_pool)
+    skipped_builders = 0
+    if len(builders) > MAX_BUILDERS:
+        def relevance(f):
+            text, base = read(f), builder_pat.sub("", f.stem)
+            return (c.mentions(text, cname), base == cname or base in l1,
+                    sum(c.mentions(text, n) for n in data_types))
+        skipped_builders = len(builders) - MAX_BUILDERS
+        builders = sorted(builders, key=relevance, reverse=True)[:MAX_BUILDERS]
     enums = [all_by_name[d] for d in (l1 | l2)
              if d in all_by_name
              and re.search(rf"\benum\s+{re.escape(d)}\b", read(all_by_name[d]))]
@@ -468,7 +482,7 @@ def main():
            "left column - cite refs as `path:NN` from that column, never by counting lines "
            "of this pack. Signature-only blocks have no numbers: open the file for a ref.", ""]
     budget = MAX_TOTAL_CHARS
-    notes = []
+    notes = [f"BUILDERS: {skipped_builders} less relevant builder(s)/fixture(s) left out"] if skipped_builders else []
 
     def add(title, f, body, with_numbers=True):
         nonlocal budget
