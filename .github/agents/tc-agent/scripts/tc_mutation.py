@@ -118,9 +118,9 @@ def main() -> int:
                 reason = f"{install}; full log: {log}"
             elif any(marker in lowered for marker in UNAVAILABLE_MARKERS):
                 reason = (
-                    "PIT could not run the tests - with JUnit 5 the pitest-junit5-plugin "
-                    "must be declared as a plugin dependency in the pom (it cannot be added "
-                    f"from the CLI); full log: {log}"
+                    "PIT could not run the tests - with JUnit 5 add org.pitest:pitest-junit5-plugin "
+                    "to the pom (a test-scoped dependency is enough); "
+                    f"full log: {log}"
                 )
             else:
                 reason = "mutations.xml not produced (maven exit %s, full log: %s):\n%s" % (

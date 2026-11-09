@@ -17,7 +17,7 @@ It trusts only the committed code, the tests and git — no memory between runs.
 ## Setup (once per repo)
 
 1. Maven project with JUnit 5 or JUnit 4 — taken from what the module's tests import, from the poms only if it has none (`junit` in the profile overrides both).
-2. **JaCoCo and PIT need no pom entry.** The checks call their goals by full coordinates, so an untouched pom works; a version declared in the pom is used, otherwise the agent's default. One exception: on **JUnit 5**, PIT needs `pitest-junit5-plugin` as a plugin dependency in the pom — that cannot be added from the CLI, and without it mutation testing is reported as unavailable.
+2. **JaCoCo and PIT need no pom entry.** The checks call their goals by full coordinates, so an untouched pom works; a version declared in the pom is used, otherwise the agent's default. One exception: on **JUnit 5**, PIT needs `org.pitest:pitest-junit5-plugin` in the pom — a plain dependency with `<scope>test</scope>` is enough (a dependency of the `pitest-maven` plugin works too); without it mutation testing is reported as unavailable.
 3. Git, and Python 3 with `pip install -r .github/agents/tc-agent/requirements.txt`.
 4. Copilot custom agents enabled; `.test-agent/` in `.gitignore` (run files live there).
 

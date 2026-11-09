@@ -241,7 +241,7 @@ so, and REMEMBERS it in `.test-agent/env.json`, so the next round goes straight
 to the working command. That file is a cache, not configuration: it is
 gitignored, and the moment the pom's agent stops attaching anything the run
 takes the agent back and forgets the hint. The exception that pom alone can solve: on JUnit 5, PIT needs
-`pitest-junit5-plugin` as a plugin dependency - the CLI cannot add it.
+`pitest-junit5-plugin` in the pom - a test-scoped dependency is enough.
 
 **Tooling** is deliberately absent. `tool_version()` resolves a version as
 CLI flag → this file → the version declared in the pom → the agent default, so a
