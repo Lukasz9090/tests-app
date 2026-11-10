@@ -98,16 +98,16 @@ Default style: `shouldXxxWhenYyy`, `// given / // when / // then`, AssertJ, Mock
 Every run has its own folder `.test-agent/runs/<target>/<run-id>/`:
 `run.json`, `derive-state.md`, `context-pack.md`, `plan-vN.md`,
 `generation-report-vN[-rM].md`, `review-vN-rM.md`, `checks/`, `run-report.md`. Old runs are never read again and never deleted.
-Each generated test method has a two-line Javadoc:
+Each generated test method has a one-line Javadoc:
 
-    AI-generated test. Characterizes current behavior of SimpleCalculatorService (a freeze, not a spec).
-    tc-agent-mode: characterization, interactive: false
+    AI-generated test. Mode: characterization, interactive: false
 
+Optionally followed by `Note: …` — only for a frozen known bug or a human's answer.
 What the test froze is the code at the test's own last commit — git has it.
 
 A scenario that cannot be tested (e.g. code reads `LocalDateTime.now()`) becomes an empty
-`@Disabled("AI deferred: …")` method with `tc-agent-deferred: <reason>`. Do not delete
-placeholders — they tell the next run the gap is known.
+method with `AI-generated placeholder. Mode: …` and `@Disabled("AI deferred: <reason>")`.
+Do not delete placeholders — they tell the next run the gap is known.
 
 ## Good to know
 
@@ -153,7 +153,7 @@ You edit only `.github/tc-agent-project-config/`, if you need it. Everything in
 | `scripts/tc_run_tests.py` | runs the target's tests with JaCoCo; the only script that builds |
 | `scripts/tc_coverage.py` | branch coverage of the target against the gate; uncovered lines |
 | `scripts/tc_mutation.py` | PIT on the target only; surviving mutants against the gate |
-| `scripts/tc_javadoc.py` | reads the `tc-agent-*` lines of generated tests |
+| `scripts/tc_javadoc.py` | reads the `AI-generated …` Javadoc line of generated tests |
 | `scripts/tc_git.py` | git facts: sha, uncommitted changes, commit age, changed lines |
 | `scripts/tc_common.py` | shared code: finding the target and its module, the profile, maven calls |
 | `scripts/tc_evidence_strength.py` | grades the evidence of each planned scenario |

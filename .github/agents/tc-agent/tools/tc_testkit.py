@@ -87,12 +87,10 @@ public class OrderService {
 def ai_test(name: str, sha: str | None, mode: str = "characterization", deferred: str | None = None,
             notes: list | None = None, interactive: bool = False, cls: str = "OrderService") -> str:
     """`sha` and `cls` are kept for the callers' readability: the freeze point comes from git."""
-    tags = [f"tc-agent-mode: {mode}, interactive: {'true' if interactive else 'false'}"]
-    if deferred:
-        tags.append(f"tc-agent-deferred: {deferred}")
-    for n in notes or []:
-        tags.append(f"tc-agent-note: {n}")
-    doc = "    /**\n     * AI-generated test.\n" + "".join(f"     * {t}\n" for t in tags) + "     */\n"
+    kind = "placeholder" if deferred else "test"
+    lines = [f"AI-generated {kind}. Mode: {mode}, interactive: {'true' if interactive else 'false'}"]
+    lines += [f"Note: {n}" for n in notes or []]
+    doc = "    /**\n" + "".join(f"     * {t}\n" for t in lines) + "     */\n"
     if deferred:
         return doc + (f'    @Test\n    @Disabled("AI deferred: {deferred}")\n'
                       f"    void {name}() {{\n    }}\n")

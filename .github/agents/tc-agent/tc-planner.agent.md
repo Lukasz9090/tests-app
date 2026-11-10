@@ -107,7 +107,7 @@ Every scenario gets a `priority` and `implementation_hints`:
   outcome names the operation. It is the ONLY link between scenario and code.
 - `test_file` — §B7: the target's existing test class, else `<Target>Test` in the
   target's package under the test root.
-- `notes` are FACTS that become `tc-agent-note` lines (a frozen known bug, a
+- `notes` are FACTS that become `Note:` lines in the Javadoc (a frozen known bug, a
   human's answer), never instructions for the generator.
 
 ### Phase 5 — evidence strength (script, not judgement)

@@ -123,7 +123,7 @@ dotyczące jej przebiegu; każda reguła ma jednego właściciela)
 | `tc_run_tests.py` | jedyny skrypt budujący: uruchamia testy targetu z agentem JaCoCo i od razu generuje raport pokrycia |
 | `tc_coverage.py` | czyta pokrycie gałęzi dla targetu, porównuje z bramką, wypisuje niepokryte linie |
 | `tc_mutation.py` | uruchamia PIT tylko na targecie, wypisuje przeżywające mutanty, porównuje z bramką |
-| `tc_javadoc.py` | parser metadanych `tc-agent-*` w Javadocu testów |
+| `tc_javadoc.py` | parser linii `AI-generated …` w Javadocu testów |
 | `tc_git.py` | fakty z gita: sha, dirty (bez końcówek linii), wiek commita, zmienione linie, migawka `src/main` |
 | `tc_common.py` | wspólne: znajdowanie targetu i modułu, profil projektu, wywołania mavena, wersja JUnit, JaCoCo/PIT |
 | `tc_evidence_strength.py` | klasyfikuje siłę dowodów scenariusza (strong / medium / weak) — LLM tego nie szacuje |
@@ -156,17 +156,16 @@ dotyczące jej przebiegu; każda reguła ma jednego właściciela)
 
 ```java
 /**
- * AI-generated test. Characterizes current behavior of OrderService (a freeze, not a spec).
- * tc-agent-mode: characterization, interactive: false
- * tc-agent-note: human-confirmed: zero fee is rejected
+ * AI-generated test. Mode: characterization, interactive: true
+ * Note: human-confirmed: zero fee is rejected
  */
 ```
 
 | linia | znaczenie |
 |---|---|
-| `tc-agent-mode` | metodę napisał agent; tryb i czy był człowiek |
-| `tc-agent-deferred` | zaślepka: dlaczego scenariusz nie jest testowany |
-| `tc-agent-note` | fakt o teście: znany błąd, odpowiedź człowieka, rozbieżność ze spec |
+| `AI-generated test. Mode: …` | metodę napisał agent; tryb i czy był człowiek (interactive) |
+| `AI-generated placeholder. Mode: …` | zaślepka; powód w `@Disabled("AI deferred: …")` |
+| `Note: …` | opcjonalnie: zamrożony znany błąd albo odpowiedź człowieka |
 
 Co test zamroził, mówi git: to kod z chwili ostatniego commitu tej metody testowej.
 

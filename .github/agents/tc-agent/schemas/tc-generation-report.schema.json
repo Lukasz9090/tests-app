@@ -71,7 +71,7 @@
               "PLACEHOLDER",
               "SKIPPED"
             ],
-            "description": "IMPLEMENTED = a working test was written or repaired. PLACEHOLDER = an @Disabled method with tc-agent-deferred: was written (deferred scenario, or one that cannot be implemented soundly, including a compile error you could not fix). SKIPPED = a repair round left this method untouched."
+            "description": "IMPLEMENTED = a working test was written or repaired. PLACEHOLDER = an empty AI-generated placeholder with @Disabled(\"AI deferred: <reason>\") was written (deferred scenario, or one that cannot be implemented soundly, including a compile error you could not fix). SKIPPED = a repair round left this method untouched."
           },
           "test_method": {
             "type": "string",
@@ -98,7 +98,7 @@
                 "reason"
               ]
             },
-            "errorMessage": "a PLACEHOLDER must say why (`reason`) - the same text goes into its tc-agent-deferred: tag."
+            "errorMessage": "a PLACEHOLDER must say why (`reason`) - the same text goes into its @Disabled(\"AI deferred: …\")."
           }
         ]
       }

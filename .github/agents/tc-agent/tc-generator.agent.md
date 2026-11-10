@@ -53,8 +53,8 @@ earlier report.
 
 ## How to write each test
 
-- **Metadata:** §A1, with the lines and first prose line of your mode file; each
-  scenario `notes` entry becomes one `tc-agent-note`. No scenario ids, no
+- **Metadata:** the one-line Javadoc of §A1 and your mode file; each scenario
+  `notes` entry becomes one `Note:` line. No scenario ids, no
   `// TC-nn`, nothing on the class.
 - **Style:** §B (or REPO CONVENTIONS): the planned name, `@DisplayName` = the
   description, AssertJ, and in EVERY test all three `// given`, `// when`,

@@ -8,7 +8,7 @@ corrupts state silently. Covered:
   * attaching Javadoc to test methods (annotations with strings and parens,
     braces inside string literals, javadoc after annotations, nested classes),
   * every metadata defect the parser reports,
-  * placeholders (@Disabled + tc-agent-deferred + empty body),
+  * placeholders (AI-generated placeholder + @Disabled("AI deferred: …") + empty body),
   * the freeze point: the newest commit of a test's own lines (git blame),
   * sha prefix matching, dirty / age / branch helpers on a real git repo,
   * protected branches read from the project profile.
@@ -47,13 +47,10 @@ class OrderServiceTest {
     void setUp() { }
 
     /**
-     * AI-generated test. Characterizes current behavior of OrderService (a freeze, not a spec).
-     *
-     * tc-agent-mode: characterization, interactive: true
-     * tc-agent-characterizes: OrderService@29aeef6a
-     * tc-agent-note: business-hours guard rejects 17:00 exactly — reported
+     * AI-generated test. Mode: characterization, interactive: true
+     * Note: business-hours guard rejects 17:00 exactly — reported
      *       as a defect
-     * tc-agent-note: second note
+     * Note: second note
      * @see OrderService
      */
     @Test
@@ -70,8 +67,7 @@ class OrderServiceTest {
     @ParameterizedTest
     @ValueSource(ints = {1, 2})
     /**
-     * AI-generated test.
-     * tc-agent-mode: spec-driven, interactive: false
+     * AI-generated test. Mode: spec-driven, interactive: false
      */
     public void paramTest(int x) { }
 
@@ -95,15 +91,16 @@ def test_attaches_javadoc_to_the_right_methods():
                   "OrderServiceTest#paramTest", "OrderServiceTest$Inner#innerHuman"])
     first = methods[0]
     expect("characterization mode", first.meta.mode, "characterization")
-    expect("an older version's tc-agent-characterizes line is ignored", first.meta.defects, [])
+    expect("interactive read from the line", (first.meta.interactive, first.meta.kind, first.meta.defects),
+           (True, "test", []))
     expect("continuation line joins the note",
            first.meta.notes[0], "business-hours guard rejects 17:00 exactly — reported as a defect")
-    expect("repeatable tc-agent-note", len(first.meta.notes), 2)
+    expect("repeatable Note", len(first.meta.notes), 2)
     expect("prose line", first.prose.startswith("AI-generated test."), True)
     expect("the class Javadoc does not leak into a human test", methods[1].meta.ai, False)
     expect("javadoc placed after annotations still attaches", methods[2].meta.mode, "spec-driven")
     expect("no file-level defects", defects, [])
-    expect("line number points at the method name", first.line, 24)
+    expect("line number points at the method name", first.line, 21)
 
 
 def test_placeholder():
@@ -121,36 +118,32 @@ def doc(*lines: str) -> str:
     return "/**\n" + "".join(f" * {l}\n" for l in lines) + " */\n"
 
 
-L, SD = "tc-agent-mode: characterization, interactive: false", "tc-agent-mode: spec-driven, interactive: false"
+L = "AI-generated test. Mode: characterization, interactive: false"
+SD = "AI-generated test. Mode: spec-driven, interactive: false"
+PH = "AI-generated placeholder. Mode: characterization, interactive: false"
+NOT_HEADER = "is not 'AI-generated test|placeholder. Mode: <characterization|spec-driven>, interactive: <true|false>'"
 
 
 def test_defects():
     cases = {
-        "no mode": (doc("tc-agent-note: x") + "@Test void a() {}", "tc-agent metadata without tc-agent-mode"),
-        "bad mode": (doc("tc-agent-mode: tdd") + "@Test void a() {}",
-                     "tc-agent-mode: 'tdd' is not '<mode>, interactive: true|false' "
-                     "with a mode in characterization, spec-driven"),
-        "old mode name": (doc("tc-agent-mode: legacy, interactive: false") + "@Test void a() {}",
-                          "tc-agent-mode: 'legacy, interactive: false' is not '<mode>, interactive: true|false' "
-                          "with a mode in characterization, spec-driven"),
-        "mode without interactive": (doc("tc-agent-mode: characterization") + "@Test void a() {}",
-                                     "tc-agent-mode: 'characterization' is not '<mode>, interactive: true|false' "
-                                     "with a mode in characterization, spec-driven"),
-        "unknown key": (doc(SD, "tc-agent-foo: x") + "@Test void a() {}",
-                        "unknown metadata key 'tc-agent-foo:' (allowed: tc-agent-mode, "
-                        "tc-agent-deferred, tc-agent-note)"),
-        "old marker line": (doc("tc-agent: generated", SD) + "@Test void a() {}",
-                            "unknown metadata key 'tc-agent:' (allowed: tc-agent-mode, "
-                            "tc-agent-deferred, tc-agent-note)"),
-        "old interactive line": (doc(SD, "tc-agent-interactive: true") + "@Test void a() {}",
-                                 "unknown metadata key 'tc-agent-interactive:' (allowed: tc-agent-mode, "
-                                 "tc-agent-deferred, tc-agent-note)"),
-        "deferred without Disabled": (doc(SD, "tc-agent-deferred: why") + "@Test void a() {}",
-                                      "tc-agent-deferred placeholder without @Disabled / @Ignore"),
-        "deferred with body": (doc(SD, "tc-agent-deferred: why") + '@Test @Disabled("AI deferred: why") void a() { x(); }',
-                               "tc-agent-deferred placeholder must have an empty body"),
-        "Disabled marker without deferred": (doc(SD) + '@Test @Disabled("AI deferred: why") void a() { }',
-                                             '@Disabled / @Ignore ("AI deferred: ...") without tc-agent-deferred in the Javadoc'),
+        "no mode": (doc("AI-generated test.") + "@Test void a() {}", f"first line 'AI-generated test.' {NOT_HEADER}"),
+        "bad mode": (doc("AI-generated test. Mode: tdd, interactive: false") + "@Test void a() {}",
+                     f"first line 'AI-generated test. Mode: tdd, interactive: false' {NOT_HEADER}"),
+        "mode without interactive": (doc("AI-generated test. Mode: characterization") + "@Test void a() {}",
+                                     f"first line 'AI-generated test. Mode: characterization' {NOT_HEADER}"),
+        "unexpected line": (doc(L, "tc-agent-foo: x") + "@Test void a() {}",
+                            "unexpected line 'tc-agent-foo: x' in an AI Javadoc (only 'Note: ...' may follow the first line)"),
+        "placeholder without Disabled": (doc(PH) + "@Test void a() {}",
+                                         "AI-generated placeholder without @Disabled / @Ignore"),
+        "placeholder with body": (doc(PH) + '@Test @Disabled("AI deferred: why") void a() { x(); }',
+                                  "AI-generated placeholder must have an empty body"),
+        "placeholder with another reason": (doc(PH) + '@Test @Disabled("later") void a() { }',
+                                            'placeholder @Disabled / @Ignore reason must start with "AI deferred:"'),
+        "placeholder without a reason": (doc(PH) + '@Test @Disabled("AI deferred:") void a() { }',
+                                         'placeholder @Disabled / @Ignore("AI deferred: ...") has no reason'),
+        "deferred marker on a test": (doc(L) + '@Test @Disabled("AI deferred: why") void a() { }',
+                                      '@Disabled / @Ignore ("AI deferred: ...") on a method whose Javadoc '
+                                      'is not "AI-generated placeholder. Mode: ..."'),
     }
     for label, (body, wanted) in cases.items():
         (m,), _ = parse("class T {\n" + body + "\n}\n")
@@ -167,19 +160,21 @@ def test_conditional_disable_is_not_a_disable():
 
 
 def test_junit4_ignore_is_a_placeholder():
-    body = doc(L, "tc-agent-characterizes: OrderService@29aeef6a", "tc-agent-deferred: needs a seam") \
-        + '@Test @Ignore("AI deferred: needs a seam") public void a() {}'
+    body = doc(PH) + '@Test @Ignore("AI deferred: needs a seam") public void a() {}'
     (m,), _ = parse("class T {\n" + body + "\n}\n")
     expect("JUnit 4 @Ignore counts as disabled", (m.disabled, m.is_placeholder), (True, True))
-    expect("no defects", m.meta.defects, [])
+    expect("the reason comes from the annotation", (m.meta.deferred, m.meta.defects), ("needs a seam", []))
 
 
-def test_lines_of_older_versions_are_ignored():
-    body = doc(SD, "tc-agent-spec: docs/order-spec.md#R3", "tc-agent-characterizes: X@1234567") + "@Test void a() {}"
-    (m,), _ = parse("class T {\n" + body + "\n}\n")
-    expect("no defects, nothing kept", (m.meta.mode, m.meta.defects, "spec" in m.as_dict()), ("spec-driven", [], False))
+def test_one_line_is_a_complete_test_and_old_lines_are_not_metadata():
     (m,), _ = parse("class T {\n" + doc(L) + "@Test void a() {}\n}\n")
-    expect("two lines are a complete test", (m.meta.ai, m.meta.defects), (True, []))
+    expect("one line is a complete AI test", (m.meta.ai, m.meta.mode, m.meta.defects), (True, "characterization", []))
+    old = doc("AI-generated test.", "tc-agent-mode: characterization, interactive: false") + "@Test void a() {}"
+    (m,), _ = parse("class T {\n" + old + "\n}\n")
+    expect_true("the old two-line format is a defect, not silently accepted",
+                any(NOT_HEADER in d for d in m.meta.defects))
+    (m,), _ = parse("class T {\n" + doc("tc-agent-mode: spec-driven, interactive: false") + "@Test void a() {}\n}\n")
+    expect("an old marker line alone is a human Javadoc", (m.meta.ai, m.meta.defects), (False, []))
 
 
 def test_old_at_format_is_not_metadata():
@@ -189,11 +184,10 @@ def test_old_at_format_is_not_metadata():
     expect("not AI, no defects", (m.meta.ai, m.meta.defects), (False, []))
 
 
-def test_continuation_stops_at_blank_line():
-    body = doc("AI-generated test.", "", SD, "tc-agent-note: first part", "second part", "", "Trailing prose.") \
-        + "@Test void a() {}"
+def test_notes_continue_and_repeat():
+    body = doc(L, "Note: first part", "second part", "Note: second") + "@Test void a() {}"
     (m,), _ = parse("class T {\n" + body + "\n}\n")
-    expect("continuation joined, trailing prose not", m.meta.notes, ["first part second part"])
+    expect("continuation joined, notes repeat", m.meta.notes, ["first part second part", "second"])
 
 
 def test_class_level_tags_are_a_defect():

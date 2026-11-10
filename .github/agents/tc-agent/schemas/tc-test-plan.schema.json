@@ -547,7 +547,7 @@
             "type": "string",
             "minLength": 3
           },
-          "description": "Each entry becomes an tc-agent-note: line on the test method (a frozen known bug, a human's answer from interactive mode)."
+          "description": "Each entry becomes a Note: line in the test method's Javadoc (a frozen known bug, a human's answer from interactive mode)."
         }
       }
     },
@@ -609,7 +609,7 @@
             "type": "string",
             "minLength": 3
           },
-          "description": "Each entry becomes an tc-agent-note: line on the test method (a frozen known bug, a human's answer from interactive mode)."
+          "description": "Each entry becomes a Note: line in the test method's Javadoc (a frozen known bug, a human's answer from interactive mode)."
         }
       }
     }

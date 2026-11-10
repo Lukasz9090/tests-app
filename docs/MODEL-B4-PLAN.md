@@ -38,6 +38,11 @@ Prompty ról, `references/` i schematy różnią się od B2 tylko nazwami oraz d
   `…Client`, …) nie wciągają już każdej fabryki, która wstrzykuje np. serwis słownikowy; najwyżej 8 builderów,
   najtrafniejsze pierwsze, reszta odnotowana w NOTES.
 
+- 2026-11-10 (decyzja użytkownika): Javadoc testu = jedna linia `AI-generated test|placeholder. Mode: <tryb>,
+  interactive: <bool>` + opcjonalne `Note: …` (zamrożony błąd, odpowiedź człowieka). Znikają `tc-agent-mode`,
+  `tc-agent-deferred`, `tc-agent-note`; powód zaślepki tylko w `@Disabled("AI deferred: …")`, rozbieżność ze spec
+  tylko w `@Disabled("AI spec-mismatch: …")`. Stary format nie jest czytany (decyzja: starymi testami się nie przejmujemy).
+
 ## Nie przeniesione (kandydaci, każdy osobno i tylko po porównaniu)
 
 - plan naprawczy tylko ze zmianami, generator bez recenzji przy nowym planie, `gate_checks` (B3 E0, D98);

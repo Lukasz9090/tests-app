@@ -1,27 +1,27 @@
 """Read and rewrite the per-test metadata the pipeline keeps in the code.
 
 The committed test suite IS the pipeline's database. Every test the
-agent writes carries a Javadoc with metadata lines (conventions §A1):
+agent writes carries a one-line Javadoc (conventions §A1), optionally followed by notes:
 
     /**
-     * AI-generated test. Characterizes current behavior of OrderService (a freeze, not a spec).
-     * tc-agent-mode: characterization, interactive: false
+     * AI-generated test. Mode: characterization, interactive: false
+     * Note: reported as defect: fee 0 is accepted
      */
     @Test
     void shouldCreateOrderWhenCustomerActive() { ... }
 
-`tc-agent-mode` is the marker: a method that has one was written by the agent.
-The lines are plain text, not Javadoc `@tags`, so no IDE or doclint flags them.
-Any other `tc-agent...:` key is a defect, except the lines older versions wrote
-(`tc-agent-characterizes`, `tc-agent-spec`), which are ignored. A test's freeze point
-is the newest commit of its own lines (git blame), not a line in the code.
+That first line is the marker: a method that has one was written by the agent; a
+placeholder says `AI-generated placeholder.` and carries its reason in
+`@Disabled("AI deferred: <reason>")`. Plain text, not Javadoc `@tags`, so no IDE or
+doclint flags it. A test's freeze point is the newest commit of its own lines (git
+blame), not a line in the code.
 
 This module finds test methods in a Java source file, attaches the Javadoc that
 belongs to each one and parses its tags. It is a small character scanner, not a
 regex over raw text: string literals such as `@DisplayName("a (b)")` and comments
 would otherwise break the annotation and brace matching.
 
-It never guesses silently. A key it cannot read, metadata on the class, a
+It never guesses silently. A first line it cannot read, metadata on the class, a
 placeholder without its `@Disabled` / `@Ignore` — each becomes a `defect` that derive-state
 reports instead of dropping the test from the picture.
 
@@ -35,7 +35,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 MODES = ("characterization", "spec-driven")
-MODE_LINE = re.compile(r"^(characterization|spec-driven)\s*,\s*interactive\s*:\s*(true|false)$")
+HEADER = re.compile(r"^AI-generated (test|placeholder)\.\s*Mode:\s*(characterization|spec-driven)\s*,"
+                    r"\s*interactive:\s*(true|false)\s*$")
+AI_PREFIX = re.compile(r"^AI-generated (?:test|placeholder)\b")
+NOTE = re.compile(r"^Note:\s*(.*)$")
+HEADER_FORMAT = "AI-generated test|placeholder. Mode: <characterization|spec-driven>, interactive: <true|false>"
 TEST_ANNOTATIONS = {"Test", "ParameterizedTest", "RepeatedTest", "TestFactory", "TestTemplate"}
 PLACEHOLDER_PREFIX = "AI deferred:"
 
@@ -63,6 +67,7 @@ class Meta:
     """The tags of one Javadoc. `ai` is False for a test written by a human."""
 
     ai: bool = False
+    kind: str | None = None        # "test" | "placeholder"
     mode: str | None = None
     interactive: bool = False
     deferred: str | None = None
@@ -194,72 +199,48 @@ def _enclosing(spans: list, pos: int) -> str:
     return "$".join(chain) if chain else ""
 
 
-# Line keys as written in the code -> internal tag names.
-KEYS = {
-    "tc-agent-mode": "mode",
-    "tc-agent-deferred": "deferred",
-    "tc-agent-note": "note",
-    "tc-agent-characterizes": "legacy",            # written by older versions: ignored
-    "tc-agent-spec": "legacy",
-}
-KEY_LINE = re.compile(r"^(tc-agent(?:-[a-z]+)*)\s*:\s*(.*)$")
-
-
 def parse_javadoc(raw: str) -> tuple[str, list, list]:
-    """(first prose line, [[tag, value], ...], unknown keys).
+    """(first line, [[tag, value], ...], problems) - tags `header` and `note`.
 
-    A non-key line right after a metadata line continues its value.
+    A Javadoc whose first line does not start with "AI-generated test|placeholder" is
+    a human's: no tags, no problems. A line after a `Note:` continues it.
     """
     body = raw[3:-2] if raw.endswith("*/") else raw[3:]
-    prose, tags, unknown = [], [], []
-    closed = False
-    for line in body.splitlines():
-        s = re.sub(r"^\s*\*?\s?", "", line).strip()
-        if not s:
-            closed = bool(tags)
+    lines = [s for s in (re.sub(r"^\s*\*?\s?", "", line).strip() for line in body.splitlines()) if s]
+    first = lines[0] if lines else ""
+    if not AI_PREFIX.match(first):
+        return first, [], []
+    tags, problems = [], []
+    m = HEADER.match(first)
+    if m:
+        tags.append(["header", m.groups()])
+    else:
+        problems.append(f"first line '{first}' is not '{HEADER_FORMAT}'")
+    for s in lines[1:]:
+        note = NOTE.match(s)
+        if note:
+            tags.append(["note", note.group(1).strip()])
+        elif s.startswith("@"):                      # a Javadoc block tag (@see ...)
             continue
-        k = KEY_LINE.match(s)
-        if k:
-            key = k.group(1)
-            if key not in KEYS:
-                unknown.append(key)
-            tags.append([KEYS.get(key, "?"), k.group(2).strip()])
-            closed = False
-        elif s.startswith("@"):                      # a Javadoc block tag (@see ...) ends a value
-            closed = bool(tags)
-        elif tags and not closed:
+        elif tags and tags[-1][0] == "note":
             tags[-1][1] = (tags[-1][1] + " " + s).strip()
-        elif not tags:
-            prose.append(s)
-    return (prose[0] if prose else ""), tags, unknown
+        else:
+            problems.append(f"unexpected line '{s}' in an AI Javadoc (only 'Note: ...' may follow the first line)")
+    return first, tags, problems
 
 
-def build_meta(tags: list, unknown: list | None = None) -> Meta:
+def build_meta(tags: list, problems: list | None = None) -> Meta:
     meta = Meta()
-    meta.has_ai_tags = bool(tags) or bool(unknown)
+    meta.has_ai_tags = bool(tags) or bool(problems)
     if not meta.has_ai_tags:
         return meta
-    for key in unknown or []:
-        meta.defects.append(f"unknown metadata key '{key}:' (allowed: tc-agent-mode, tc-agent-deferred, "
-                            f"tc-agent-note)")
-    for name, value in tags:
-        if name == "mode":
-            m = MODE_LINE.match(value)
-            if m:
-                meta.mode, meta.interactive = m.group(1), m.group(2) == "true"
-            else:
-                meta.defects.append(f"tc-agent-mode: '{value}' is not '<mode>, interactive: true|false' "
-                                    f"with a mode in {', '.join(MODES)}")
-        elif name == "deferred":
-            meta.deferred = value
-            if not value:
-                meta.defects.append("tc-agent-deferred: has no reason")
-        elif name == "note":
-            if value:
-                meta.notes.append(value)
     meta.ai = True
-    if meta.mode is None and not any("tc-agent-mode" in d for d in meta.defects):
-        meta.defects.append("tc-agent metadata without tc-agent-mode")
+    meta.defects.extend(problems or [])
+    for name, value in tags:
+        if name == "header":
+            meta.kind, meta.mode, meta.interactive = value[0], value[1], value[2] == "true"
+        elif name == "note" and value:
+            meta.notes.append(value)
     return meta
 
 
@@ -279,13 +260,13 @@ def parse_text(text: str, file: str = "") -> tuple[list, list]:
         for idx, (start, end) in enumerate(javadocs):
             if start > boundary and end <= name_pos:
                 doc = idx
-        prose, tags, unknown = ("", [], [])
+        prose, tags, problems = ("", [], [])
         span = None
         if doc is not None:
             used.add(doc)
             span = javadocs[doc]
-            prose, tags, unknown = parse_javadoc(text[span[0]:span[1]])
-        meta = build_meta(tags, unknown)
+            prose, tags, problems = parse_javadoc(text[span[0]:span[1]])
+        meta = build_meta(tags, problems)
 
         raw_block = text[block_start:m.end(1)]
         dis = DISABLED.search(raw_block)
@@ -303,15 +284,19 @@ def parse_text(text: str, file: str = "") -> tuple[list, list]:
             body_empty = masked[brace + 1:end].strip() == ""
 
         placeholder_marked = bool(reason and reason.startswith(PLACEHOLDER_PREFIX))
-        if meta.ai and meta.deferred is not None:
+        if meta.kind == "placeholder":
+            meta.deferred = reason[len(PLACEHOLDER_PREFIX):].strip() if placeholder_marked else ""
             if not disabled:
-                meta.defects.append(f"tc-agent-deferred placeholder without {DISABLE_ANNOTATION}")
+                meta.defects.append(f"AI-generated placeholder without {DISABLE_ANNOTATION}")
             elif not placeholder_marked:
                 meta.defects.append(f'placeholder {DISABLE_ANNOTATION} reason must start with "{PLACEHOLDER_PREFIX}"')
+            elif not meta.deferred:
+                meta.defects.append(f'placeholder {DISABLE_ANNOTATION}("{PLACEHOLDER_PREFIX} ...") has no reason')
             if not body_empty:
-                meta.defects.append("tc-agent-deferred placeholder must have an empty body")
+                meta.defects.append("AI-generated placeholder must have an empty body")
         elif placeholder_marked:
-            meta.defects.append(f'{DISABLE_ANNOTATION} ("{PLACEHOLDER_PREFIX} ...") without tc-agent-deferred in the Javadoc')
+            meta.defects.append(f'{DISABLE_ANNOTATION} ("{PLACEHOLDER_PREFIX} ...") on a method whose Javadoc '
+                                f'is not "AI-generated placeholder. Mode: ..."')
 
         methods.append(TestMethod(
             file=file,
@@ -333,10 +318,10 @@ def parse_text(text: str, file: str = "") -> tuple[list, list]:
     for idx, (start, end) in enumerate(javadocs):
         if idx in used:
             continue
-        _, tags, unknown = parse_javadoc(text[start:end])
-        if unknown or tags:
+        _, tags, problems = parse_javadoc(text[start:end])
+        if problems or tags:
             line = text.count("\n", 0, start) + 1
-            defects.append(f"{file}:{line}: tc-agent metadata outside a test method's Javadoc "
+            defects.append(f"{file}:{line}: an AI-generated Javadoc outside a test method "
                            f"(it belongs on test METHODS only, never on the class)")
     return methods, defects
 

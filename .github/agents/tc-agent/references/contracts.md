@@ -9,7 +9,7 @@ special about your role.
 pipeline writes to `.test-agent/` is ever read as state by a later run.
 
 - Between runs, `tc_orchestrate.py start` derives what a target needs from the
-  code, the test methods and their `tc-agent-` metadata, git, coverage and
+  code, the test methods and their `AI-generated …` Javadoc line, git, coverage and
   mutations (`tc_derive_state.py`).
 - Inside one run, the roles hand work to each other through files in that run's
   directory, `.test-agent/runs/<target>/<run-id>/`. Never read, cite or continue
@@ -78,8 +78,8 @@ Never overwrite an artifact of the run; write the next number.
 
 ## 4. The code is the database
 
-Every test the pipeline writes carries its metadata as `tc-agent-<key>: <value>`
-lines in the Javadoc of the test METHOD — format in `conventions.md` §A1,
+Every test the pipeline writes carries its metadata in the one-line Javadoc of the
+test METHOD (`AI-generated test. Mode: …`) — format in `conventions.md` §A1,
 placeholders in §A2.
 
 - **Invariant:** every scenario of a plan ends up in the code as a test OR as a

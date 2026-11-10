@@ -9,12 +9,12 @@ of its own, so the agent works here exactly as on any other repository.
 
 Reading a generated test:
 
-- a Javadoc line `tc-agent-mode: <characterization|spec-driven>, interactive: <true|false>`
-  marks a method written by the agent;
-- `tc-agent-mode: characterization` means the test froze what the code did when the test
+- a Javadoc line `AI-generated test. Mode: <characterization|spec-driven>, interactive: <true|false>`
+  marks a method written by the agent (a `Note: …` line may follow);
+- `Mode: characterization` means the test froze what the code did when the test
   was committed, bugs included — when it fails after a change, first ask whether the
   old behavior was right, not how to make the test green;
-- an empty `@Disabled("AI deferred: …")` method with `tc-agent-deferred` is a scenario
+- an empty `AI-generated placeholder` method with `@Disabled("AI deferred: <reason>")` is a scenario
   deliberately left untested; delete it (or fix the seam it names) to let the
   agent try again.
 

@@ -33,8 +33,8 @@ po `applyTo`, `AGENTS.md`, `instruction_paths`) > domyślne §B.
 
 | | wyrocznia | metadane | gdy test pada |
 |---|---|---|---|
-| `characterization` (domyślny) | obecny kod, błędy włącznie | `tc-agent-mode: characterization, …` | naprawa testu (albo planu) |
-| `spec-driven` | specyfikacja `--spec` (sekcja SPEC w packu), tylko jej wymagania | `tc-agent-mode: spec-driven, …` (wymaganie tylko w planie) | rozbieżność: test zostaje wyłączony `AI spec-mismatch` z ciałem, raport ją wymienia |
+| `characterization` (domyślny) | obecny kod, błędy włącznie | `AI-generated test. Mode: characterization, …` | naprawa testu (albo planu) |
+| `spec-driven` | specyfikacja `--spec` (sekcja SPEC w packu), tylko jej wymagania | `AI-generated test. Mode: spec-driven, …` (wymaganie tylko w planie) | rozbieżność: test zostaje wyłączony `AI spec-mismatch` z ciałem, raport ją wymienia |
 
 `--interactive` to modyfikator obu trybów: planer pyta człowieka (najpierw o dane, potem o to, co zamrozić
 albo jak rozumieć wymaganie) i zapisuje pytania także jako `CONFIRM:`. W characterization zdejmuje
@@ -42,15 +42,15 @@ blokadę świeżego kodu.
 
 ## 4. Metadane w kodzie
 
-Javadoc nad METODĄ testu (nigdy nad klasą): linia prozy, a pod nią bez pustej linii `tc-agent-<klucz>: <wartość>`:
+Javadoc nad METODĄ testu (nigdy nad klasą), jedna linia:
 
 | linia | kiedy |
 |---|---|
-| `tc-agent-mode: <characterization\|spec-driven>, interactive: <true\|false>` | zawsze — marker testu agenta |
-| `tc-agent-deferred: <powód>` | placeholder: pusta metoda `@Disabled("AI deferred: …")` (`@Ignore` w JUnit 4) |
-| `tc-agent-note: <tekst>` | fakt o tym teście (znany błąd, odpowiedź człowieka, spec mismatch) |
+| `AI-generated test. Mode: <characterization\|spec-driven>, interactive: <true\|false>` | zawsze — marker testu agenta |
+| `AI-generated placeholder. Mode: …` | placeholder: pusta metoda `@Disabled("AI deferred: <powód>")` (`@Ignore` w JUnit 4) |
+| `Note: <tekst>` | opcjonalnie: zamrożony znany błąd albo odpowiedź człowieka |
 
-Inny klucz `tc-agent…:` = defekt metadanych (`tc-agent-characterizes` / `tc-agent-spec` ze starszych wersji są ignorowane). Każdy scenariusz planu kończy w kodzie jako test albo
+Każda inna linia w takim Javadocu = defekt metadanych. Każdy scenariusz planu kończy w kodzie jako test albo
 placeholder. Scenariusz ↔ test łączy nazwa metody; id scenariusza nigdy nie trafia do kodu.
 
 ## 5. derive-state

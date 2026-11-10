@@ -44,9 +44,9 @@ quote the compiler lines, decide REPAIR_IMPLEMENTATION and stop.
 - an `IMPLEMENTED` method is enabled (unless your mode file allows otherwise) and
   tests the branch its `evidence` points at, with the scenario's `data`;
 - a `PLACEHOLDER` is an empty method shaped as in §A2 (`junit4.md` on JUnit 4);
-- every method this run wrote or repaired carries the §A1 Javadoc with mode and
-  interactive equal to `run.json`, the lines your mode file requires, and the
-  scenario's `notes` as `tc-agent-note` lines — else `metadata_defect` naming
+- every method this run wrote or repaired carries the §A1 one-line Javadoc with mode
+  and interactive equal to `run.json`, and the scenario's `notes` as `Note:` lines,
+  nothing else — else `metadata_defect` naming
   method and line. Defects `derive-state.md` already lists in older tests are not
   this generation's;
 - a placeholder whose reason §A2 does not accept (its "Never for" list — e.g. a

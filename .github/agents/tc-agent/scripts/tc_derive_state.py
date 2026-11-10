@@ -16,7 +16,7 @@ never from an artifact an earlier run left behind:
 It works in tiers, cheapest first, and stops at the first tier that decides:
 
     tier 0  target        name -> file, FQCN, module
-    tier 1  git + Javadoc discovery, tc-agent-mode: / tc-agent-deferred, current sha, dirty,
+    tier 1  git + Javadoc discovery ("AI-generated test|placeholder. Mode: …"), current sha, dirty,
                           age, each test's freeze point     (no build)
     tier 2  tests + coverage                                (build)
     tier 3  mutations (PIT)                                 (slow)

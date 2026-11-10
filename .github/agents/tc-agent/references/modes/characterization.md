@@ -3,7 +3,7 @@
 The oracle is the CURRENT code. A characterization test freezes what the code did
 at a commit, bugs included: it asserts current behavior, never what you think is
 correct. When a human said a behavior is a defect, the test still asserts it and
-carries `tc-agent-note: reported as defect: <what>`.
+carries `Note: reported as defect: <what>`.
 
 ## Planner
 
@@ -92,13 +92,12 @@ Example (`context.test_data` shows the shape of a human answer):
 
 ## Generator
 
-- First Javadoc line: `AI-generated test. Characterizes current behavior of <Class> (a freeze, not a spec).`
-- Metadata (`conventions.md` §A1): `tc-agent-mode: characterization, interactive: <run.json>`
-  — on tests AND placeholders.
+- Javadoc (`conventions.md` §A1): `AI-generated test. Mode: characterization, interactive: <run.json>`
+  (placeholders: §A2).
 
 ## Reviewer
 
-- Stage 1: every method this run wrote carries `tc-agent-mode: characterization`.
+- Stage 1: every method this run wrote carries the §A1 line with `Mode: characterization`.
 - A failing assertion in a test this run wrote is **REPAIR_IMPLEMENTATION** —
   unless the plan misread the code and the expectation itself is wrong:
   **REPAIR_PLAN**. A failing test this run did NOT touch (human, or older AI) is

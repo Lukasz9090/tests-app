@@ -321,12 +321,12 @@ def test_dirty_target_makes_tests_stale():
 
 def test_metadata_defects_are_reported():
     with FixtureRepo() as repo:
-        bad = ("    /**\n     * tc-agent-mode: characterization, interactive: false\n     * tc-agent-foo: bar\n     */\n"
+        bad = ("    /**\n     * AI-generated test. Mode: characterization, interactive: false\n     * tc-agent-foo: bar\n     */\n"
                "    @Test\n    void shouldA() { }\n")
         repo.write_test("OrderServiceTest", bad)
         repo.commit("tests", days_ago=20)
         state = derive(repo)
-        expect_true("defect surfaces", any("unknown metadata key 'tc-agent-foo:'" in d
+        expect_true("defect surfaces", any("unexpected line 'tc-agent-foo: bar'" in d
                                            for d in state["tests"]["metadata_defects"]))
 
 

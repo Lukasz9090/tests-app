@@ -46,6 +46,6 @@ why no question was needed or that the human declined.
 - **Characterization, fresh code:** when `git.age_days` is below the profile's
   `freshness_days`, first ask "the target was last committed N days ago — freeze
   its current behavior as-is?" A "no" is status `BLOCKED` with that reason.
-- Record each answer on its scenario in `notes` → `tc-agent-note`:
+- Record each answer on its scenario in `notes` → a `Note:` line:
   `human-confirmed: <what>` or `reported as defect: <what>`. "I don't know / skip"
   moves the scenario to `deferred` with the question as its `reason`.

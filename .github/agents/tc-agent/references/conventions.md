@@ -19,49 +19,39 @@ class; with none, write JUnit 5 and say so in your artifact's `notes`. The rules
 below are written for JUnit 5; on JUnit 4 `junit4.md` replaces the
 framework-specific parts.
 
-**A1. Metadata.** Every test method you write carries a Javadoc: one prose line,
-then, with no blank line, one `tc-agent-<key>: <value>` line per fact — plain text,
-lowercase key, a colon, a space; never Javadoc `@tags`. On METHODS only, never
-on the test class.
+**A1. Metadata.** Every test method you write carries a Javadoc of ONE line, exactly
+in this form (plain text, never Javadoc `@tags`), on METHODS only, never on the class:
 
 ```java
 /**
- * AI-generated test. Characterizes current behavior of OrderService (a freeze, not a spec).
- * tc-agent-mode: characterization, interactive: false
+ * AI-generated test. Mode: characterization, interactive: false
  */
 ```
 
-| line | when |
-|---|---|
-| `tc-agent-mode: <mode>, interactive: <true\|false>` | always; both values from `run.json`, `interactive` written also when false |
-| `tc-agent-deferred: <reason>` | placeholders only (A2) |
-| `tc-agent-note: <text>` | optional, repeatable: a fact about THIS test (a frozen known bug, a human's answer) |
-
-First prose line: the mode file gives it for tests; for placeholders it is
-`AI-generated placeholder. Scenario deliberately NOT tested — see tc-agent-deferred.`
-Any other `tc-agent...:` key is a defect (a `tc-agent-characterizes` or `tc-agent-spec`
-line an older version wrote is ignored: leave it). Never add these lines to a method you
-did not write, never remove them from one you repair, and when you rewrite a
-method (`replaces`) replace its whole Javadoc.
+`Mode:` is the run's mode, `interactive:` its flag from `run.json` (written also
+when false). A placeholder (A2) says `AI-generated placeholder.` instead of
+`AI-generated test.`. Optionally, one `Note: <text>` line per fact about THIS test
+may follow — only a frozen known bug (`Note: reported as defect: <what>`) or a
+human's answer (`Note: human-confirmed: <what>`). Any other line is a defect.
+Never add these lines to a method you did not write, never remove them from one
+you repair, and when you rewrite a method (`replaces`) replace its whole Javadoc.
 
 **A2. Placeholders.** A scenario that is deferred, or cannot be implemented
 soundly, becomes an empty, disabled method:
 
 ```java
 /**
- * AI-generated placeholder. Scenario deliberately NOT tested — see tc-agent-deferred.
- * tc-agent-mode: characterization, interactive: false
- * tc-agent-deferred: business-hours guard reads LocalDateTime.now() directly; needs an injected java.time.Clock
+ * AI-generated placeholder. Mode: characterization, interactive: false
  */
 @Test
-@Disabled("AI deferred: needs a Clock seam")
+@Disabled("AI deferred: business-hours guard reads LocalDateTime.now(); needs an injected java.time.Clock")
 @DisplayName("appointment outside business hours is rejected")
 void shouldRejectAppointmentWhenOutsideBusinessHours() {
 }
 ```
 
-- the body is empty; the `@Disabled` text starts with `AI deferred:`;
-- `tc-agent-deferred` carries the full reason; for a compile error, the compiler message;
+- the body is empty; the `@Disabled` text is `AI deferred: <reason>` — the reason a
+  human can act on; for a compile error, the compiler message;
 - a placeholder is ONLY for behavior that cannot be tested: no code seam (A5), a
   value whose meaning nothing backs (A4), a compile error that could not be fixed.
   Never for a name clash, a relational value or object shape (A4), a value the
@@ -126,7 +116,7 @@ test. Never delete a test — recommend it instead.
 
 **A7. One scenario, one method.** A parameterized test may cover sibling
 scenarios of the same shape; list each covered scenario's description in a
-`tc-agent-note`.
+`Note:` line.
 
 ## §B — Defaults (a repo instruction may replace any of these)
 
